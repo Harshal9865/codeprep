@@ -125,8 +125,32 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function resolveConfiguredDbPath(): string | null {
+  const dbUrl = (process.env.DATABASE_URL || '').trim();
+  if (!dbUrl.startsWith('file:')) return null;
+  let rawPath = dbUrl.slice(5).split('?')[0];
+  if (!rawPath || rawPath === ':memory:') return null;
+  if (rawPath.startsWith('///')) {
+    rawPath = rawPath.slice(2);
+  }
+  return path.isAbsolute(rawPath)
+    ? path.normalize(rawPath)
+    : path.resolve(process.cwd(), 'prisma', rawPath);
+}
+
+function ensureConfiguredDbDirectory(): void {
+  const configured = resolveConfiguredDbPath();
+  if (!configured) return;
+  const dir = path.dirname(configured);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
 function getSqliteDbPaths(): string[] {
+  const configured = resolveConfiguredDbPath();
   return [
+    ...(configured ? [configured] : []),
     path.resolve(__dirname, '../../prisma/dev.db'),
     path.resolve(process.cwd(), 'prisma', 'dev.db'),
     path.resolve(process.cwd(), 'dev.db'),
@@ -214,44 +238,98 @@ async function quarantineCorruptedDatabases(): Promise<boolean> {
   return allCleared;
 }
 
-async function applySchemaDdl(client: PrismaClient): Promise<void> {
+function isCorruptionError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes('malformed') ||
+    msg.includes('corrupt') ||
+    msg.includes('not a database') ||
+    msg.includes('sqlite_corrupt') ||
+    msg.includes('sqlite_notadb')
+  );
+}
+
+async function applySqlitePragmas(client: PrismaClient): Promise<void> {
   try {
     await client.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
     await client.$queryRawUnsafe('PRAGMA busy_timeout = 5000;');
+    await client.$queryRawUnsafe('PRAGMA journal_mode = WAL;');
+    await client.$executeRawUnsafe('PRAGMA synchronous = NORMAL;');
   } catch {}
+}
+
+async function applySchemaDdl(client: PrismaClient): Promise<void> {
+  await applySqlitePragmas(client);
   for (const stmt of PRISMA_SCHEMA_DDL) {
     await client.$executeRawUnsafe(stmt);
   }
 }
 
-async function verifyDatabaseHealth(client: PrismaClient): Promise<boolean> {
+async function checkIntegrityOk(client: PrismaClient): Promise<{ ok: boolean; corrupted: boolean }> {
   try {
     const check = await client.$queryRawUnsafe<Array<{ quick_check?: string }>>('PRAGMA quick_check;');
     const status = check?.[0]?.quick_check;
     if (status && status.toLowerCase() !== 'ok') {
       Logger.warn('PrismaService', `SQLite quick_check reported: ${status}`);
-      return false;
+      return { ok: false, corrupted: true };
     }
+    return { ok: true, corrupted: false };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    Logger.warn('PrismaService', `SQLite integrity check failed: ${msg}`);
+    return { ok: false, corrupted: isCorruptionError(err) };
+  }
+}
 
+async function verifyDatabaseHealth(client: PrismaClient): Promise<{ healthy: boolean; corrupted: boolean }> {
+  const integrity = await checkIntegrityOk(client);
+  if (!integrity.ok) {
+    return { healthy: false, corrupted: integrity.corrupted };
+  }
+
+  try {
     await client.user.count();
     await client.problem.count();
     await client.refreshToken.count();
     await client.submission.count();
-    return true;
+    return { healthy: true, corrupted: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     Logger.warn('PrismaService', `SQLite health check failed: ${msg}`);
-    return false;
+    return { healthy: false, corrupted: isCorruptionError(err) };
   }
 }
 
 export async function connectPrisma(): Promise<void> {
   try {
+    ensureConfiguredDbDirectory();
     await activeClient.$connect();
 
-    const isHealthy = await verifyDatabaseHealth(activeClient);
-    if (!isHealthy) {
-      Logger.warn('PrismaService', 'SQLite database is malformed or missing tables. Rebuilding clean database...');
+    // Check file integrity BEFORE touching schema; never rebuild a healthy DB just because new tables are missing
+    const preIntegrity = await checkIntegrityOk(activeClient);
+    let needsRebuild = preIntegrity.corrupted;
+
+    if (!needsRebuild) {
+      try {
+        await applySchemaDdl(activeClient);
+        const health = await verifyDatabaseHealth(activeClient);
+        if (!health.healthy) {
+          needsRebuild = health.corrupted;
+          if (!health.corrupted) {
+            throw new Error('SQLite schema health verification failed without file corruption');
+          }
+        }
+      } catch (err) {
+        if (isCorruptionError(err)) {
+          needsRebuild = true;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    if (needsRebuild) {
+      Logger.warn('PrismaService', 'SQLite database file is corrupted. Quarantining and rebuilding clean database...');
       await activeClient.$disconnect();
       await sleep(250);
 
@@ -271,7 +349,7 @@ export async function connectPrisma(): Promise<void> {
       await applySchemaDdl(activeClient);
 
       const postCheck = await verifyDatabaseHealth(activeClient);
-      if (!postCheck) {
+      if (!postCheck.healthy) {
         const emergencyPath = path.resolve(__dirname, `../../prisma/codeprep-${Date.now()}.db`);
         const emergencyUrl = `file:${emergencyPath.replace(/\\/g, '/')}`;
         await activeClient.$disconnect();
@@ -284,8 +362,6 @@ export async function connectPrisma(): Promise<void> {
       }
 
       Logger.info('PrismaService', 'Rebuilt clean SQLite schema successfully.');
-    } else {
-      await applySchemaDdl(activeClient);
     }
 
     Logger.info('PrismaService', 'Connected to SQLite database successfully.');

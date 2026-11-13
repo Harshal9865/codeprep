@@ -24,7 +24,26 @@ const ALLOWED_PIXEL_AVATARS = new Set([
 ]);
 
 export class UserService {
-  private static readonly UPLOADS_DIR = path.resolve(process.cwd(), 'uploads', 'avatars');
+  private static resolveUploadsRoot(): string {
+    if (process.env.UPLOADS_DIR?.trim()) {
+      return path.resolve(process.env.UPLOADS_DIR.trim());
+    }
+    const dbUrl = (process.env.DATABASE_URL || '').trim();
+    if (dbUrl.startsWith('file:')) {
+      const rawPath = dbUrl.slice(5).split('?')[0];
+      if (
+        rawPath &&
+        rawPath !== ':memory:' &&
+        path.isAbsolute(rawPath) &&
+        !path.normalize(rawPath).startsWith(path.resolve(process.cwd()))
+      ) {
+        return path.join(path.dirname(path.normalize(rawPath)), 'uploads');
+      }
+    }
+    return path.resolve(process.cwd(), 'uploads');
+  }
+
+  private static readonly UPLOADS_DIR = path.join(UserService.resolveUploadsRoot(), 'avatars');
 
   /**
    * Initializes uploads directory if it doesn't exist

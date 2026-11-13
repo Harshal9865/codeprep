@@ -32,8 +32,20 @@ app.use(cookieParser(env.COOKIE_SECRET));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-// Static uploads serving with safe headers
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads'), {
+// Static uploads serving with safe headers (colocate with persistent DB disk in production)
+const configuredSqliteFile = (process.env.DATABASE_URL || '').trim().startsWith('file:')
+  ? (process.env.DATABASE_URL || '').trim().slice(5).split('?')[0]
+  : '';
+const uploadsRootDir = process.env.UPLOADS_DIR?.trim()
+  ? path.resolve(process.env.UPLOADS_DIR.trim())
+  : configuredSqliteFile &&
+      configuredSqliteFile !== ':memory:' &&
+      path.isAbsolute(configuredSqliteFile) &&
+      !path.normalize(configuredSqliteFile).startsWith(path.resolve(process.cwd()))
+    ? path.join(path.dirname(path.normalize(configuredSqliteFile)), 'uploads')
+    : path.resolve(process.cwd(), 'uploads');
+
+app.use('/uploads', express.static(uploadsRootDir, {
   dotfiles: 'ignore',
   index: false,
   maxAge: '7d',
