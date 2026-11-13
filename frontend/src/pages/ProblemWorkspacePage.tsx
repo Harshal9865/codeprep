@@ -218,7 +218,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
 
   const handleRun = async (customTestCases?: TestCase[]) => {
     if (!problem) return;
-    await persistDraftNow(problem.id, code);
+    void persistDraftNow(problem.id, code);
     setIsRunning(true);
     try {
       const res = await apiRequest<{ result: ExecutionResult }>('/submissions/run', {
@@ -240,7 +240,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
 
   const handleSubmit = async () => {
     if (!problem) return;
-    await persistDraftNow(problem.id, code);
+    void persistDraftNow(problem.id, code);
     setIsSubmitting(true);
     try {
       const res = await apiRequest<{

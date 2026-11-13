@@ -5,6 +5,50 @@ interface RequestOptions extends RequestInit {
   skipAuthRefresh?: boolean;
 }
 
+let activeRefreshPromise: Promise<boolean> | null = null;
+
+async function refreshSessionSingleFlight(): Promise<boolean> {
+  if (!activeRefreshPromise) {
+    activeRefreshPromise = (async () => {
+      try {
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (!refreshRes.ok) {
+          try {
+            localStorage.removeItem('codeprep_access_token');
+          } catch {}
+          window.dispatchEvent(new CustomEvent('codeprep:auth:logout'));
+          return false;
+        }
+
+        try {
+          const payload = (await refreshRes.json()) as { accessToken?: string };
+          if (payload?.accessToken) {
+            localStorage.setItem('codeprep_access_token', payload.accessToken);
+          }
+        } catch {
+          // Cookie-only refresh is still valid
+        }
+
+        return true;
+      } catch {
+        try {
+          localStorage.removeItem('codeprep_access_token');
+        } catch {}
+        window.dispatchEvent(new CustomEvent('codeprep:auth:logout'));
+        return false;
+      } finally {
+        activeRefreshPromise = null;
+      }
+    })();
+  }
+  return activeRefreshPromise;
+}
+
 export class ApiError extends Error {
   status: number;
   data: unknown;
@@ -41,7 +85,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     credentials: 'include', // Includes httpOnly cookies
   });
 
-  // Handle Token Refresh on 401
+  // Handle Token Refresh on 401 (single-flight + localStorage token sync)
   if (
     response.status === 401 &&
     !options.skipAuthRefresh &&
@@ -51,22 +95,9 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     !endpoint.includes('/auth/status') &&
     !endpoint.includes('/auth/register')
   ) {
-    try {
-      const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-
-      if (refreshRes.ok) {
-        // Retry the original request
-        return apiRequest<T>(endpoint, { ...options, skipAuthRefresh: true });
-      } else {
-        // Token refresh failed, broadcast logout event
-        window.dispatchEvent(new CustomEvent('codeprep:auth:logout'));
-      }
-    } catch {
-      window.dispatchEvent(new CustomEvent('codeprep:auth:logout'));
+    const refreshed = await refreshSessionSingleFlight();
+    if (refreshed) {
+      return apiRequest<T>(endpoint, { ...options, skipAuthRefresh: true });
     }
   }
 

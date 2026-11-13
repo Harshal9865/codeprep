@@ -16,6 +16,8 @@ import analyticsRoutes from './routes/analytics.routes';
 import { ProblemService } from './services/problem.service';
 import { LessonService } from './services/lesson.service';
 import { AuthService } from './services/auth.service';
+import { SandboxRunner } from './judge/sandboxRunner';
+import { SqlRunner } from './judge/sqlRunner';
 import fs from 'fs';
 import path from 'path';
 
@@ -112,7 +114,10 @@ async function startServer(): Promise<void> {
       Logger.info('ExpressApp', `Health check available at http://localhost:${env.PORT}/health`);
     });
 
-    // Seed default account, then curriculum problems, then verified lessons sequentially
+    // Pre-warm C++17 precompiled header and seed default account / problems in background
+    SandboxRunner.warmupCompilerCache().catch((error) => {
+      Logger.warn('ExpressApp', 'C++17 PCH warmup skipped', error);
+    });
     AuthService.seedDefaultUser().catch((error) => {
       Logger.error('ExpressApp', 'Failed default owner account verification', error);
     });
@@ -132,11 +137,13 @@ const gracefulShutdown = async (signal: string) => {
   Logger.info('ExpressApp', `Received ${signal}. Shutting down gracefully...`);
   if (server) {
     server.close(async () => {
+      await SqlRunner.shutdown();
       await disconnectPrisma();
       Logger.info('ExpressApp', 'HTTP server and database connections closed. Process terminating.');
       process.exit(0);
     });
   } else {
+    await SqlRunner.shutdown();
     await disconnectPrisma();
     process.exit(0);
   }

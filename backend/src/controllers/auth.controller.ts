@@ -26,27 +26,45 @@ export class AuthController {
 
       // Check optional session silently without returning 401
       let currentUser = null;
-      try {
-        let token: string | undefined;
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          token = authHeader.substring(7);
-        } else if (req.cookies && req.cookies.access_token) {
-          token = req.cookies.access_token;
-        }
+      let refreshedAccessToken: string | undefined;
 
-        if (token) {
+      const candidateTokens: string[] = [];
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        candidateTokens.push(authHeader.substring(7));
+      }
+      if (req.cookies?.access_token) {
+        candidateTokens.push(req.cookies.access_token);
+      }
+
+      for (const token of candidateTokens) {
+        try {
           const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { sub: string };
           currentUser = await AuthService.getUserProfile(decoded.sub);
+          if (currentUser) break;
+        } catch {
+          currentUser = null;
         }
-      } catch {
-        currentUser = null;
+      }
+
+      // Silently rotate valid refresh_token cookie on status check (avoids 401 /auth/refresh noise)
+      if (!currentUser && req.cookies?.refresh_token) {
+        try {
+          const tokenPair = await AuthService.refresh(req.cookies.refresh_token);
+          setTokenCookies(res, tokenPair.accessToken, tokenPair.refreshToken, true);
+          currentUser = tokenPair.user;
+          refreshedAccessToken = tokenPair.accessToken;
+        } catch {
+          clearTokenCookies(res);
+          currentUser = null;
+        }
       }
 
       res.json({
         isRegistrationAllowed,
         authenticated: Boolean(currentUser),
         user: currentUser,
+        ...(refreshedAccessToken ? { accessToken: refreshedAccessToken } : {}),
         instanceType: 'single-user-private',
       });
     } catch (error) {

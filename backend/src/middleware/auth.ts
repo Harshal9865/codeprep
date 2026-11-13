@@ -18,37 +18,41 @@ declare global {
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    let token: string | undefined;
+    const candidateTokens: string[] = [];
 
-    // Check Authorization header: Bearer <token>
+    // Collect Authorization Bearer token and httpOnly cookie fallback
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    } else if (req.cookies && req.cookies.access_token) {
-      token = req.cookies.access_token;
+      candidateTokens.push(authHeader.substring(7));
+    }
+    if (req.cookies && req.cookies.access_token) {
+      candidateTokens.push(req.cookies.access_token);
     }
 
-    if (!token) {
+    if (candidateTokens.length === 0) {
       res.status(401).json({ error: 'Authentication required. No session token provided.' });
       return;
     }
 
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { sub: string; email: string };
-    
-    // Verify user still exists in database
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.sub },
-      select: { id: true, email: true },
-    });
-
-    if (!user) {
-      res.status(401).json({ error: 'User account no longer exists.' });
-      return;
+    for (const token of candidateTokens) {
+      try {
+        const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { sub: string; email: string };
+        const user = await prisma.user.findUnique({
+          where: { id: decoded.sub },
+          select: { id: true, email: true },
+        });
+        if (user) {
+          req.user = user;
+          next();
+          return;
+        }
+      } catch {
+        // Try fallback token source if available
+      }
     }
 
-    req.user = user;
-    next();
-  } catch (error) {
+    res.status(401).json({ error: 'Session expired or invalid token.' });
+  } catch {
     res.status(401).json({ error: 'Session expired or invalid token.' });
   }
 }

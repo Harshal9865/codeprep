@@ -29,25 +29,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isRegistrationAllowed: boolean;
         authenticated?: boolean;
         user?: User | null;
+        accessToken?: string;
       }>('/auth/status');
       setIsRegistrationAllowed(statusRes.isRegistrationAllowed);
+
+      if (statusRes.accessToken) {
+        try {
+          localStorage.setItem('codeprep_access_token', statusRes.accessToken);
+        } catch {}
+      }
 
       if (statusRes.user) {
         applyUserSession(statusRes.user);
         return;
       }
 
-      let hasLocalToken = false;
       try {
-        hasLocalToken = !!localStorage.getItem('codeprep_access_token');
+        localStorage.removeItem('codeprep_access_token');
       } catch {}
-
-      if (hasLocalToken) {
-        const meRes = await apiRequest<{ user: User }>('/auth/me');
-        applyUserSession(meRes.user);
-      } else {
-        applyUserSession(null);
-      }
+      applyUserSession(null);
     } catch {
       applyUserSession(null);
     } finally {

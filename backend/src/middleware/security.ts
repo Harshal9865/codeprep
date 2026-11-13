@@ -57,7 +57,7 @@ export function setTokenCookies(res: Response, accessToken: string, refreshToken
     secure: isSecure,
     sameSite,
     maxAge: refreshMaxAge,
-    path: '/api/auth/refresh',
+    path: '/api/auth',
   });
 }
 
@@ -72,6 +72,14 @@ export function clearTokenCookies(res: Response): void {
     path: '/',
   });
 
+  res.clearCookie('refresh_token', {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite,
+    path: '/api/auth',
+  });
+
+  // Also clear legacy cookie path if present
   res.clearCookie('refresh_token', {
     httpOnly: true,
     secure: isSecure,

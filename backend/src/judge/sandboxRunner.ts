@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -22,6 +23,172 @@ export class SandboxRunner {
   private static readonly DEFAULT_TIMEOUT_MS = 2000;
   private static readonly DEFAULT_COMPILE_TIMEOUT_MS = 12000;
   private static readonly MAX_OUTPUT_BYTES = 2 * 1024 * 1024; // 2 MB limit
+  private static readonly MAX_BINARY_CACHE_SIZE = 24;
+  private static readonly CPP_COMPILE_FLAGS = [
+    '-O2',
+    '-std=c++17',
+    '-Wall',
+    '-Wextra',
+    '-Wno-unused-variable',
+    '-Wno-sign-compare',
+    '-Werror=return-type',
+  ];
+
+  private static readonly PCH_DIR = path.join(os.tmpdir(), 'codeprep-pch-v1');
+  private static readonly BIN_CACHE_DIR = path.join(os.tmpdir(), 'codeprep-bincache');
+  private static pchReady = false;
+  private static pchWarmupPromise: Promise<boolean> | null = null;
+  private static readonly binaryCache = new Map<string, string>();
+  private static readonly inFlightCompiles = new Map<
+    string,
+    Promise<{ success: boolean; stderr: string; binaryPath: string }>
+  >();
+
+  static isPchReady(): boolean {
+    return this.pchReady;
+  }
+
+  /**
+   * Precompiles standard C++17 STL + CodePrepHelper header once per process
+   * so user submissions only parse ~30 lines instead of 37 STL headers.
+   */
+  static async warmupCompilerCache(): Promise<boolean> {
+    if (this.pchReady) return true;
+    if (this.pchWarmupPromise) return this.pchWarmupPromise;
+
+    this.pchWarmupPromise = (async () => {
+      try {
+        const compiler = this.getCompilerBinary();
+        if (compiler.toLowerCase().includes('clang')) {
+          return false;
+        }
+
+        fs.mkdirSync(this.PCH_DIR, { recursive: true });
+        fs.mkdirSync(this.BIN_CACHE_DIR, { recursive: true });
+
+        const headerSource = HarnessGenerator.getSharedPchHeaderSource();
+        const headerHash = crypto.createHash('sha256').update(headerSource).update(compiler).digest('hex');
+        const headerPath = path.join(this.PCH_DIR, 'codeprep_std.hpp');
+        const pchPath = path.join(this.PCH_DIR, 'codeprep_std.hpp.gch');
+        const hashFile = path.join(this.PCH_DIR, 'codeprep_std.sha256');
+
+        if (fs.existsSync(pchPath) && fs.existsSync(hashFile)) {
+          try {
+            if (fs.readFileSync(hashFile, 'utf8').trim() === headerHash) {
+              this.pchReady = true;
+              Logger.info('SandboxRunner', 'Reused existing C++17 precompiled header (.gch).');
+              return true;
+            }
+          } catch {}
+        }
+
+        fs.writeFileSync(headerPath, headerSource, 'utf8');
+        const buildRes = await this.runCompilerProcess(
+          [...this.CPP_COMPILE_FLAGS, '-x', 'c++-header', headerPath, '-o', pchPath],
+          20000
+        );
+
+        if (buildRes.success && fs.existsSync(pchPath)) {
+          fs.writeFileSync(hashFile, headerHash, 'utf8');
+          this.pchReady = true;
+          Logger.info('SandboxRunner', 'Warmed up C++17 precompiled header (.gch) successfully.');
+          return true;
+        }
+
+        Logger.warn('SandboxRunner', 'C++17 PCH warmup skipped (falling back to standard compile)', buildRes.stderr);
+        return false;
+      } catch (err) {
+        Logger.warn('SandboxRunner', 'C++17 PCH warmup error (falling back to standard compile)', err);
+        return false;
+      } finally {
+        this.pchWarmupPromise = null;
+      }
+    })();
+
+    return this.pchWarmupPromise;
+  }
+
+  /**
+   * Returns a cached compiled binary or compiles once with in-flight deduplication.
+   */
+  static async getOrCompileBinary(
+    fullCode: string,
+    usePch: boolean,
+    compileTimeoutMs = this.DEFAULT_COMPILE_TIMEOUT_MS
+  ): Promise<{ success: boolean; stderr: string; binaryPath: string }> {
+    const ext = process.platform === 'win32' ? '.exe' : '';
+    const cacheKey = crypto
+      .createHash('sha256')
+      .update(usePch ? 'pch1|' : 'pch0|')
+      .update(fullCode)
+      .digest('hex')
+      .slice(0, 24);
+
+    const cachedPath = this.binaryCache.get(cacheKey);
+    if (cachedPath && fs.existsSync(cachedPath)) {
+      // Touch LRU order
+      this.binaryCache.delete(cacheKey);
+      this.binaryCache.set(cacheKey, cachedPath);
+      return { success: true, stderr: '', binaryPath: cachedPath };
+    }
+
+    const pending = this.inFlightCompiles.get(cacheKey);
+    if (pending) {
+      return pending;
+    }
+
+    const compilePromise = (async () => {
+      fs.mkdirSync(this.BIN_CACHE_DIR, { recursive: true });
+      const tmpCompileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codeprep-src-'));
+      const sourceFilePath = path.join(tmpCompileDir, 'solution.cpp');
+      const outputBinaryPath = path.join(this.BIN_CACHE_DIR, `${cacheKey}${ext}`);
+
+      try {
+        fs.writeFileSync(sourceFilePath, fullCode, 'utf8');
+        const compileResult = await this.compileCpp(
+          sourceFilePath,
+          outputBinaryPath,
+          compileTimeoutMs,
+          usePch ? this.PCH_DIR : undefined
+        );
+
+        if (!compileResult.success) {
+          try {
+            if (fs.existsSync(outputBinaryPath)) fs.unlinkSync(outputBinaryPath);
+          } catch {}
+          return { success: false, stderr: compileResult.stderr, binaryPath: '' };
+        }
+
+        // Maintain bounded LRU binary cache
+        if (this.binaryCache.size >= this.MAX_BINARY_CACHE_SIZE) {
+          const oldestKey = this.binaryCache.keys().next().value;
+          if (oldestKey) {
+            const oldestPath = this.binaryCache.get(oldestKey);
+            this.binaryCache.delete(oldestKey);
+            if (oldestPath && fs.existsSync(oldestPath)) {
+              try {
+                fs.unlinkSync(oldestPath);
+              } catch {}
+            }
+          }
+        }
+        this.binaryCache.set(cacheKey, outputBinaryPath);
+
+        return { success: true, stderr: compileResult.stderr, binaryPath: outputBinaryPath };
+      } finally {
+        try {
+          fs.rmSync(tmpCompileDir, { recursive: true, force: true });
+        } catch {}
+      }
+    })();
+
+    this.inFlightCompiles.set(cacheKey, compilePromise);
+    try {
+      return await compilePromise;
+    } finally {
+      this.inFlightCompiles.delete(cacheKey);
+    }
+  }
 
   static async runCppSubmission(
     userCode: string,
@@ -32,81 +199,89 @@ export class SandboxRunner {
     const perTestTimeoutMs = options.timeoutMs || this.DEFAULT_TIMEOUT_MS;
     const compileTimeoutMs = options.compileTimeoutMs || this.DEFAULT_COMPILE_TIMEOUT_MS;
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codeprep-run-'));
-    const sourceFilePath = path.join(tmpDir, 'solution.cpp');
-    const binaryFilePath = path.join(
-      tmpDir,
-      process.platform === 'win32' ? 'solution.exe' : 'solution'
+    // 1. Generate compilable C++17 harness (use PCH when warmed up for ~10x faster compiles)
+    const usePch = this.pchReady;
+    let harness: GeneratedHarness;
+    try {
+      harness = HarnessGenerator.generateHarness(
+        userCode,
+        functionSignature,
+        testCases,
+        {
+          allowStandaloneMain: options.allowStandaloneMain,
+          usePrecompiledHeader: usePch,
+        }
+      );
+    } catch (err: unknown) {
+      return {
+        verdict: 'Compile Error',
+        runtimeMs: 0,
+        memoryKb: 0,
+        compileError: err instanceof Error ? err.message : 'Invalid code structure',
+        totalTestCases: testCases.length,
+        passedTestCases: 0,
+      };
+    }
+
+    // 2. Compile once (or reuse cached binary if unchanged across Run / Submit / Custom Input)
+    let compileResult = await this.getOrCompileBinary(harness.fullCode, usePch, compileTimeoutMs);
+    if (!compileResult.success && usePch && compileResult.stderr.includes('codeprep_std.hpp')) {
+      this.pchReady = false;
+      harness = HarnessGenerator.generateHarness(
+        userCode,
+        functionSignature,
+        testCases,
+        { allowStandaloneMain: options.allowStandaloneMain, usePrecompiledHeader: false }
+      );
+      compileResult = await this.getOrCompileBinary(harness.fullCode, false, compileTimeoutMs);
+    }
+
+    if (!compileResult.success) {
+      const remappedError = LineMapper.remapCompilerOutput(
+        compileResult.stderr,
+        harness.userCodeStartLine,
+        harness.userCodeEndLine
+      );
+      return {
+        verdict: 'Compile Error',
+        runtimeMs: 0,
+        memoryKb: 0,
+        compileError: remappedError || compileResult.stderr || 'Compilation failed with unknown error',
+        totalTestCases: testCases.length,
+        passedTestCases: 0,
+      };
+    }
+
+    const binaryFilePath = compileResult.binaryPath;
+
+    // 3A. Standalone main() mode (allowed on Run for flexible C++ testing)
+    if (harness.isStandaloneMain) {
+      return await this.executeStandaloneCases(
+        binaryFilePath,
+        testCases,
+        perTestTimeoutMs,
+        options
+      );
+    }
+
+    // 3B. LeetCode-style single-process batch execution with crash & debug isolation
+    if (testCases.length === 0) {
+      return {
+        verdict: 'Accepted',
+        runtimeMs: 0,
+        memoryKb: 14200,
+        totalTestCases: 0,
+        passedTestCases: 0,
+      };
+    }
+
+    const batchStdin = InputParser.buildDriverStdin(testCases, functionSignature);
+    const batchTimeoutMs = Math.min(
+      15000,
+      Math.max(perTestTimeoutMs + 500, testCases.length * Math.min(perTestTimeoutMs, 1000))
     );
 
-    try {
-      // 1. Generate compilable C++17 harness
-      let harness: GeneratedHarness;
-      try {
-        harness = HarnessGenerator.generateHarness(
-          userCode,
-          functionSignature,
-          testCases,
-          { allowStandaloneMain: options.allowStandaloneMain }
-        );
-        fs.writeFileSync(sourceFilePath, harness.fullCode, 'utf8');
-      } catch (err: unknown) {
-        return {
-          verdict: 'Compile Error',
-          runtimeMs: 0,
-          memoryKb: 0,
-          compileError: err instanceof Error ? err.message : 'Invalid code structure',
-          totalTestCases: testCases.length,
-          passedTestCases: 0,
-        };
-      }
-
-      // 2. Compile once with g++ -O2 -std=c++17
-      const compileResult = await this.compileCpp(sourceFilePath, binaryFilePath, compileTimeoutMs);
-      if (!compileResult.success) {
-        const remappedError = LineMapper.remapCompilerOutput(
-          compileResult.stderr,
-          harness.userCodeStartLine,
-          harness.userCodeEndLine
-        );
-        return {
-          verdict: 'Compile Error',
-          runtimeMs: 0,
-          memoryKb: 0,
-          compileError: remappedError || compileResult.stderr || 'Compilation failed with unknown error',
-          totalTestCases: testCases.length,
-          passedTestCases: 0,
-        };
-      }
-
-      // 3A. Standalone main() mode (allowed on Run for flexible C++ testing)
-      if (harness.isStandaloneMain) {
-        return await this.executeStandaloneCases(
-          binaryFilePath,
-          testCases,
-          perTestTimeoutMs,
-          options
-        );
-      }
-
-      // 3B. LeetCode-style single-process batch execution with crash & debug isolation
-      if (testCases.length === 0) {
-        return {
-          verdict: 'Accepted',
-          runtimeMs: 0,
-          memoryKb: 14200,
-          totalTestCases: 0,
-          passedTestCases: 0,
-        };
-      }
-
-      const batchStdin = InputParser.buildDriverStdin(testCases, functionSignature);
-      const batchTimeoutMs = Math.min(
-        15000,
-        Math.max(perTestTimeoutMs + 500, testCases.length * Math.min(perTestTimeoutMs, 1000))
-      );
-
-      const runRes = await this.executeBinary(binaryFilePath, batchStdin, batchTimeoutMs);
+    const runRes = await this.executeBinary(binaryFilePath, batchStdin, batchTimeoutMs);
 
       const { lastCaseIndex, cleanStderr } = this.parseStderrCaseMarkers(
         runRes.stderr,
@@ -283,13 +458,6 @@ export class SandboxRunner {
         totalTestCases: testCases.length,
         passedTestCases: passedCount,
       };
-    } finally {
-      try {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch (e) {
-        Logger.warn('SandboxRunner', 'Failed to clean temporary directory', e);
-      }
-    }
   }
 
   private static async executeStandaloneCases(
@@ -470,27 +638,13 @@ export class SandboxRunner {
     return env;
   }
 
-  public static compileCpp(
-    sourcePath: string,
-    outputPath: string,
-    timeoutMs = this.DEFAULT_COMPILE_TIMEOUT_MS
+  private static runCompilerProcess(
+    args: string[],
+    timeoutMs: number
   ): Promise<{ success: boolean; stderr: string }> {
     return new Promise((resolve) => {
       const compiler = this.getCompilerBinary();
       const env = this.getExecutionEnv();
-      const args = [
-        '-O2',
-        '-std=c++17',
-        '-Wall',
-        '-Wextra',
-        '-Wno-unused-variable',
-        '-Wno-sign-compare',
-        '-Werror=return-type',
-        sourcePath,
-        '-o',
-        outputPath,
-      ];
-
       let stderr = '';
       let timedOut = false;
 
@@ -524,13 +678,29 @@ export class SandboxRunner {
     });
   }
 
+  public static compileCpp(
+    sourcePath: string,
+    outputPath: string,
+    timeoutMs = this.DEFAULT_COMPILE_TIMEOUT_MS,
+    pchIncludeDir?: string
+  ): Promise<{ success: boolean; stderr: string }> {
+    const args = [
+      ...this.CPP_COMPILE_FLAGS,
+      ...(pchIncludeDir ? ['-I', pchIncludeDir] : []),
+      sourcePath,
+      '-o',
+      outputPath,
+    ];
+    return this.runCompilerProcess(args, timeoutMs);
+  }
+
   public static executeBinary(
     binaryPath: string,
     input: string,
     timeoutMs: number
   ): Promise<{ verdict: Verdict; stdout: string; stderr: string; runtimeMs: number; memoryKb: number }> {
     return new Promise((resolve) => {
-      const startTime = Date.now();
+      const startNs = process.hrtime.bigint();
       let stdout = '';
       let stderr = '';
       let timedOut = false;
@@ -558,7 +728,7 @@ export class SandboxRunner {
 
       proc.on('close', (code, signal) => {
         clearTimeout(timer);
-        const elapsed = Date.now() - startTime;
+        const elapsed = Number((process.hrtime.bigint() - startNs) / 1000000n);
 
         if (timedOut) {
           resolve({

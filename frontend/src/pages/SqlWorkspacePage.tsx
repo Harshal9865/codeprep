@@ -151,7 +151,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 
   const handleRunQuery = async () => {
     if (!problem) return;
-    await persistDraftNow(problem.id, query);
+    void persistDraftNow(problem.id, query);
     setIsRunning(true);
     try {
       const res = await apiRequest<{ result: SqlQueryResult }>('/submissions/run', {
@@ -175,7 +175,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 
   const handleSubmitQuery = async () => {
     if (!problem) return;
-    await persistDraftNow(problem.id, query);
+    void persistDraftNow(problem.id, query);
     setIsRunning(true);
     try {
       const res = await apiRequest<{ result: SqlQueryResult; submissionId: string }>('/submissions/submit', {

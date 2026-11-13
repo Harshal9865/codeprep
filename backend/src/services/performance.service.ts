@@ -1,6 +1,3 @@
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
 import { SandboxRunner } from '../judge/sandboxRunner';
 import { HarnessGenerator } from '../judge/harnessGenerator';
 import { InputParser } from '../judge/inputParser';
@@ -55,72 +52,67 @@ export class PerformanceService {
       }
     }
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codeprep-perf-'));
-    const sourceFilePath = path.join(tmpDir, 'solution.cpp');
-    const binaryFilePath = path.join(
-      tmpDir,
-      process.platform === 'win32' ? 'solution.exe' : 'solution'
+    const usePch = SandboxRunner.isPchReady();
+    let harness = HarnessGenerator.generateHarness(
+      userCode,
+      problem.functionSignature,
+      benchmarkCases,
+      { allowStandaloneMain: false, usePrecompiledHeader: usePch }
     );
+
+    let compileRes = await SandboxRunner.getOrCompileBinary(harness.fullCode, usePch, 12000);
+    if (!compileRes.success && usePch && compileRes.stderr.includes('codeprep_std.hpp')) {
+      harness = HarnessGenerator.generateHarness(
+        userCode,
+        problem.functionSignature,
+        benchmarkCases,
+        { allowStandaloneMain: false, usePrecompiledHeader: false }
+      );
+      compileRes = await SandboxRunner.getOrCompileBinary(harness.fullCode, false, 12000);
+    }
+
+    if (!compileRes.success) {
+      throw new Error('Compilation failed — fix syntax errors before running complexity benchmark.');
+    }
 
     const groupedTrials: number[][] = sizes.map(() => []);
     let measuredPeakMemKb = 14200;
 
-    try {
-      const harness = HarnessGenerator.generateHarness(
-        userCode,
-        problem.functionSignature,
-        benchmarkCases,
-        { allowStandaloneMain: false }
-      );
-      fs.writeFileSync(sourceFilePath, harness.fullCode, 'utf8');
+    const stdinPayload = InputParser.buildDriverStdin(
+      benchmarkCases,
+      problem.functionSignature
+    );
+    const runRes = await SandboxRunner.executeBinary(compileRes.binaryPath, stdinPayload, 8000);
 
-      const compileRes = await SandboxRunner.compileCpp(sourceFilePath, binaryFilePath, 12000);
-      if (!compileRes.success) {
-        throw new Error('Compilation failed — fix syntax errors before running complexity benchmark.');
+    const caseEndMarker = harness.caseEndMarker || '';
+    const memMarker = harness.memMarker || '';
+
+    if (memMarker) {
+      const memMatch = runRes.stdout.match(
+        new RegExp(`${memMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:(\\d+)`)
+      );
+      if (memMatch) {
+        const parsedMem = parseInt(memMatch[1], 10);
+        if (parsedMem > 0) measuredPeakMemKb = parsedMem;
       }
+    }
 
-      const stdinPayload = InputParser.buildDriverStdin(
-        benchmarkCases,
-        problem.functionSignature
-      );
-      const runRes = await SandboxRunner.executeBinary(binaryFilePath, stdinPayload, 8000);
-
-      const caseEndMarker = harness.caseEndMarker || '';
-      const memMarker = harness.memMarker || '';
-
-      if (memMarker) {
-        const memMatch = runRes.stdout.match(
-          new RegExp(`${memMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:(\\d+)`)
+    for (let idx = 0; idx < benchmarkCases.length; idx++) {
+      const sIdx = caseSizeIndex[idx];
+      const token = `${caseEndMarker}:${idx}:`;
+      const pos = runRes.stdout.indexOf(token);
+      if (pos !== -1) {
+        const start = pos + token.length;
+        const end = runRes.stdout.indexOf('\n', start);
+        const msVal = parseFloat(
+          (end !== -1 ? runRes.stdout.slice(start, end) : runRes.stdout.slice(start)).trim()
         );
-        if (memMatch) {
-          const parsedMem = parseInt(memMatch[1], 10);
-          if (parsedMem > 0) measuredPeakMemKb = parsedMem;
+        if (Number.isFinite(msVal)) {
+          groupedTrials[sIdx].push(Math.max(0.001, msVal));
+          continue;
         }
       }
-
-      for (let idx = 0; idx < benchmarkCases.length; idx++) {
-        const sIdx = caseSizeIndex[idx];
-        const token = `${caseEndMarker}:${idx}:`;
-        const pos = runRes.stdout.indexOf(token);
-        if (pos !== -1) {
-          const start = pos + token.length;
-          const end = runRes.stdout.indexOf('\n', start);
-          const msVal = parseFloat(
-            (end !== -1 ? runRes.stdout.slice(start, end) : runRes.stdout.slice(start)).trim()
-          );
-          if (Number.isFinite(msVal)) {
-            groupedTrials[sIdx].push(Math.max(0.001, msVal));
-            continue;
-          }
-        }
-        groupedTrials[sIdx].push(this.estimateFallbackRuntime(sizes[sIdx]));
-      }
-    } finally {
-      try {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch {
-        // ignore cleanup error
-      }
+      groupedTrials[sIdx].push(this.estimateFallbackRuntime(sizes[sIdx]));
     }
 
     const dataPoints: PerformanceDataPoint[] = sizes.map((n, sIdx) => {

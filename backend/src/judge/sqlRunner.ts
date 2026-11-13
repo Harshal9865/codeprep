@@ -32,6 +32,53 @@ INSERT INTO Employee (id, name, salary, departmentId) VALUES
 `;
 
 export class SqlRunner {
+  private static warmClient: PrismaClient | null = null;
+  private static readonly warmDbPath = path.join(os.tmpdir(), 'codeprep-sql-sandbox.db');
+  private static executionChain: Promise<void> = Promise.resolve();
+
+  private static async getWarmClient(): Promise<PrismaClient> {
+    if (!this.warmClient) {
+      const dbUrl = `file:${this.warmDbPath.replace(/\\/g, '/')}`;
+      const client = new PrismaClient({
+        log: ['error'],
+        datasources: { db: { url: dbUrl } },
+      });
+      await client.$connect();
+      this.warmClient = client;
+    }
+    return this.warmClient;
+  }
+
+  private static async resetWarmSchema(client: PrismaClient): Promise<void> {
+    await client.$executeRawUnsafe('PRAGMA foreign_keys = OFF;');
+    const objects = await client.$queryRawUnsafe<Array<{ name: string; type: string }>>(
+      "SELECT name, type FROM sqlite_master WHERE type IN ('view', 'table') AND name NOT LIKE 'sqlite_%';"
+    );
+    for (const obj of objects) {
+      const escaped = obj.name.replace(/"/g, '""');
+      const kind = obj.type.toUpperCase() === 'VIEW' ? 'VIEW' : 'TABLE';
+      await client.$executeRawUnsafe(`DROP ${kind} IF EXISTS "${escaped}";`);
+    }
+    await client.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
+  }
+
+  static async shutdown(): Promise<void> {
+    if (this.warmClient) {
+      try {
+        await this.warmClient.$disconnect();
+      } catch {}
+      this.warmClient = null;
+    }
+    for (const suffix of ['', '-wal', '-shm', '-journal']) {
+      const candidate = `${this.warmDbPath}${suffix}`;
+      if (fs.existsSync(candidate)) {
+        try {
+          fs.unlinkSync(candidate);
+        } catch {}
+      }
+    }
+  }
+
   private static readonly DISALLOWED_KEYWORDS = [
     'DROP',
     'ALTER',
@@ -227,7 +274,7 @@ export class SqlRunner {
   }
 
   /**
-   * Executes SQL query inside an ephemeral, isolated per-submission SQLite sandbox.
+   * Executes SQL query inside a serialized warm SQLite sandbox (avoiding per-query engine cold start).
    */
   static async executeQuery(
     userQuery: string,
@@ -235,109 +282,111 @@ export class SqlRunner {
     expectedQuery: string,
     expectedOutputJson: string
   ): Promise<SqlExecutionResult> {
-    const startTime = Date.now();
-
     const security = SqlRunner.validateQuerySecurity(userQuery);
     if (!security.safe) {
       return {
         verdict: 'Query Error',
         columns: [],
         rows: [],
-        runtimeMs: Math.max(1, Date.now() - startTime),
+        runtimeMs: 1,
         error: security.error,
       };
     }
 
-    const tmpDbPath = path.join(os.tmpdir(), `codeprep-sql-${crypto.randomUUID()}.db`);
-    const dbUrl = `file:${tmpDbPath.replace(/\\/g, '/')}`;
-    const sandboxDb = new PrismaClient({
-      log: ['error'],
-      datasources: { db: { url: dbUrl } },
-    });
-
-    try {
-      await sandboxDb.$connect();
-
-      // 1. Seed isolated tables from schemaDdl (with Employee fallback)
-      const ddlSource = schemaDdl && schemaDdl.trim().length > 0 ? schemaDdl : DEFAULT_EMPLOYEE_DDL;
-      const ddlStatements = SqlRunner.splitSqlStatements(SqlRunner.normalizePostgresDdl(ddlSource));
-      for (const stmt of ddlStatements) {
-        await sandboxDb.$executeRawUnsafe(stmt);
-      }
-
-      // 2. Run user query cleanly
-      const cleanedUserSql = SqlRunner.normalizePostgresQuery(SqlRunner.stripComments(userQuery));
-      const execStart = Date.now();
-      const rawActualRows = await sandboxDb.$queryRawUnsafe<Array<Record<string, unknown>>>(cleanedUserSql);
-      const queryElapsedMs = Math.max(1, Date.now() - execStart);
-      const actualRows = SqlRunner.sanitizeRows(rawActualRows);
-      const actualColumns = actualRows.length > 0 ? Object.keys(actualRows[0]) : [];
-
-      // 3. Determine expected result set: run expectedQuery on the exact seeded DB first, fallback to JSON
-      let expectedRows: Array<Record<string, unknown>> = [];
-      let parsedFallback: Array<Record<string, unknown>> = [];
+    const runIsolated = async (): Promise<SqlExecutionResult> => {
+      let sandboxDb: PrismaClient;
       try {
-        parsedFallback = JSON.parse(expectedOutputJson || '[]');
+        sandboxDb = await SqlRunner.getWarmClient();
       } catch {
-        parsedFallback = [];
+        // Fallback to fresh client if warm client failed to initialize
+        SqlRunner.warmClient = null;
+        sandboxDb = await SqlRunner.getWarmClient();
       }
 
-      const trimmedExpectedQuery = SqlRunner.stripComments(expectedQuery || '');
-      if (trimmedExpectedQuery) {
+      try {
+        await SqlRunner.resetWarmSchema(sandboxDb);
+
+        // 1. Seed isolated tables from schemaDdl (with Employee fallback)
+        const ddlSource = schemaDdl && schemaDdl.trim().length > 0 ? schemaDdl : DEFAULT_EMPLOYEE_DDL;
+        const ddlStatements = SqlRunner.splitSqlStatements(SqlRunner.normalizePostgresDdl(ddlSource));
+        for (const stmt of ddlStatements) {
+          await sandboxDb.$executeRawUnsafe(stmt);
+        }
+
+        // 2. Run user query cleanly and time only SQL query execution
+        const cleanedUserSql = SqlRunner.normalizePostgresQuery(SqlRunner.stripComments(userQuery));
+        const execStartNs = process.hrtime.bigint();
+        const rawActualRows = await sandboxDb.$queryRawUnsafe<Array<Record<string, unknown>>>(cleanedUserSql);
+        const queryElapsedMs = Math.max(1, Number((process.hrtime.bigint() - execStartNs) / 1000000n));
+        const actualRows = SqlRunner.sanitizeRows(rawActualRows);
+        const actualColumns = actualRows.length > 0 ? Object.keys(actualRows[0]) : [];
+
+        // 3. Determine expected result set: run expectedQuery on the exact seeded DB first, fallback to JSON
+        let expectedRows: Array<Record<string, unknown>> = [];
+        let parsedFallback: Array<Record<string, unknown>> = [];
         try {
-          const normalizedExpectedSql = SqlRunner.normalizePostgresQuery(trimmedExpectedQuery);
-          const rawExpected = await sandboxDb.$queryRawUnsafe<Array<Record<string, unknown>>>(normalizedExpectedSql);
-          expectedRows = SqlRunner.sanitizeRows(rawExpected);
-        } catch (expectedErr) {
-          Logger.warn('SqlRunner', 'Expected query execution fell back to expectedOutputJson', expectedErr);
+          parsedFallback = JSON.parse(expectedOutputJson || '[]');
+        } catch {
+          parsedFallback = [];
+        }
+
+        const trimmedExpectedQuery = SqlRunner.stripComments(expectedQuery || '');
+        if (trimmedExpectedQuery) {
+          try {
+            const normalizedExpectedSql = SqlRunner.normalizePostgresQuery(trimmedExpectedQuery);
+            const rawExpected = await sandboxDb.$queryRawUnsafe<Array<Record<string, unknown>>>(normalizedExpectedSql);
+            expectedRows = SqlRunner.sanitizeRows(rawExpected);
+          } catch (expectedErr) {
+            Logger.warn('SqlRunner', 'Expected query execution fell back to expectedOutputJson', expectedErr);
+            expectedRows = parsedFallback;
+          }
+        } else {
           expectedRows = parsedFallback;
         }
-      } else {
-        expectedRows = parsedFallback;
-      }
 
-      const expectedColumns = expectedRows.length > 0 ? Object.keys(expectedRows[0]) : [];
-      const requireOrder = /\bORDER\s+BY\b/i.test(trimmedExpectedQuery || cleanedUserSql);
+        const expectedColumns = expectedRows.length > 0 ? Object.keys(expectedRows[0]) : [];
+        const requireOrder = /\bORDER\s+BY\b/i.test(trimmedExpectedQuery || cleanedUserSql);
 
-      const isMatch = SqlRunner.compareResults(actualRows, expectedRows, requireOrder);
+        const isMatch = SqlRunner.compareResults(actualRows, expectedRows, requireOrder);
 
-      return {
-        verdict: isMatch ? 'Accepted' : 'Wrong Answer',
-        columns: actualColumns.length > 0 ? actualColumns : expectedColumns,
-        rows: actualRows,
-        runtimeMs: queryElapsedMs,
-        expectedColumns,
-        expectedRows,
-        error: isMatch
-          ? undefined
-          : actualRows.length !== expectedRows.length
-          ? `Row count mismatch: returned ${actualRows.length} row${actualRows.length === 1 ? '' : 's'}, expected ${expectedRows.length}.`
-          : 'Output columns or values do not match the expected result set.',
-      };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Database execution failed.';
-      // Clean Prisma wrapper noise so SQL syntax / column errors are easy to read
-      const conciseError = msg.replace(/[\s\S]*Message:\s*/i, '').trim() || msg;
-      return {
-        verdict: 'Query Error',
-        columns: [],
-        rows: [],
-        runtimeMs: Math.max(1, Date.now() - startTime),
-        error: conciseError,
-      };
-    } finally {
-      try {
-        await sandboxDb.$disconnect();
-      } catch {}
-      for (const suffix of ['', '-wal', '-shm', '-journal']) {
-        const candidate = `${tmpDbPath}${suffix}`;
-        if (fs.existsSync(candidate)) {
+        return {
+          verdict: isMatch ? 'Accepted' : 'Wrong Answer',
+          columns: actualColumns.length > 0 ? actualColumns : expectedColumns,
+          rows: actualRows,
+          runtimeMs: queryElapsedMs,
+          expectedColumns,
+          expectedRows,
+          error: isMatch
+            ? undefined
+            : actualRows.length !== expectedRows.length
+            ? `Row count mismatch: returned ${actualRows.length} row${actualRows.length === 1 ? '' : 's'}, expected ${expectedRows.length}.`
+            : 'Output columns or values do not match the expected result set.',
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Database execution failed.';
+        const conciseError = msg.replace(/[\s\S]*Message:\s*/i, '').trim() || msg;
+        if (msg.toLowerCase().includes('engine') || msg.toLowerCase().includes('closed')) {
           try {
-            fs.unlinkSync(candidate);
+            await sandboxDb.$disconnect();
           } catch {}
+          SqlRunner.warmClient = null;
         }
+        return {
+          verdict: 'Query Error',
+          columns: [],
+          rows: [],
+          runtimeMs: 1,
+          error: conciseError,
+        };
       }
-    }
+    };
+
+    const resultPromise = SqlRunner.executionChain.then(runIsolated, runIsolated);
+    SqlRunner.executionChain = resultPromise.then(
+      () => undefined,
+      () => undefined
+    );
+    return resultPromise;
   }
 
   /**

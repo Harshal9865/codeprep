@@ -17,9 +17,43 @@ export interface GeneratedHarness {
 
 export interface HarnessOptions {
   allowStandaloneMain?: boolean;
+  usePrecompiledHeader?: boolean;
 }
 
 export class HarnessGenerator {
+  private static readonly SERVER_RUN_SALT = crypto.randomBytes(8).toString('hex');
+
+  static getSharedPchHeaderSource(): string {
+    return `#ifndef CODEPREP_STD_HPP
+#define CODEPREP_STD_HPP
+
+${this.buildStandardIncludes()}
+using namespace std;
+
+// Standard Algorithm Data Structures
+struct ListNode {
+    int val;
+    ListNode *next;
+    ListNode() : val(0), next(nullptr) {}
+    ListNode(int x) : val(x), next(nullptr) {}
+    ListNode(int x, ListNode *next) : val(x), next(next) {}
+};
+
+struct TreeNode {
+    int val;
+    TreeNode *left;
+    TreeNode *right;
+    TreeNode() : val(0), left(nullptr), right(nullptr) {}
+    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+    TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
+};
+
+${this.buildCodePrepHelper()}
+
+#endif
+`;
+  }
+
   private static stripCommentsAndStrings(code: string): string {
     return code
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
@@ -50,10 +84,10 @@ export class HarnessGenerator {
           'Defining custom main() is prohibited for graded submissions. Please implement your solution inside class Solution (you can still run standalone main() programs using Run).'
         );
       }
-      return this.generateStandaloneHarness(rawNormalized);
+      return this.generateStandaloneHarness(rawNormalized, options.usePrecompiledHeader);
     }
 
-    const runId = crypto.randomBytes(8).toString('hex');
+    const runId = this.SERVER_RUN_SALT;
     const startMarker = `__CODEPREP_OUT_START_${runId}__`;
     const endMarker = `__CODEPREP_OUT_END_${runId}__`;
     const testSeparator = `__CODEPREP_TEST_SEP_${runId}__`;
@@ -72,7 +106,24 @@ export class HarnessGenerator {
     const strippedUser = this.stripCommentsAndStrings(processedUserCode);
     const hasSolutionClass = /\b(?:class|struct)\s+Solution\b/.test(strippedUser);
 
-    const prelude = `${this.buildStandardIncludes()}
+    const graphNodeBlock = needsGraphNode
+      ? `
+class Node {
+public:
+    int val;
+    vector<Node*> neighbors;
+    Node() { val = 0; neighbors = vector<Node*>(); }
+    Node(int _val) { val = _val; neighbors = vector<Node*>(); }
+    Node(int _val, vector<Node*> _neighbors) { val = _val; neighbors = _neighbors; }
+};`
+      : '';
+
+    const prelude = options.usePrecompiledHeader
+      ? `#include "codeprep_std.hpp"${graphNodeBlock}
+
+// User Solution Code Injected Below
+`
+      : `${this.buildStandardIncludes()}
 using namespace std;
 
 // Standard Algorithm Data Structures
@@ -92,19 +143,7 @@ struct TreeNode {
     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
 };
-${
-  needsGraphNode
-    ? `
-class Node {
-public:
-    int val;
-    vector<Node*> neighbors;
-    Node() { val = 0; neighbors = vector<Node*>(); }
-    Node(int _val) { val = _val; neighbors = vector<Node*>(); }
-    Node(int _val, vector<Node*> _neighbors) { val = _val; neighbors = _neighbors; }
-};`
-    : ''
-}
+${graphNodeBlock}
 
 ${this.buildCodePrepHelper()}
 
@@ -195,13 +234,18 @@ ${invocationBlock}
     };
   }
 
-  private static generateStandaloneHarness(userCode: string): GeneratedHarness {
-    const runId = crypto.randomBytes(8).toString('hex');
+  private static generateStandaloneHarness(
+    userCode: string,
+    usePrecompiledHeader = false
+  ): GeneratedHarness {
+    const runId = this.SERVER_RUN_SALT;
     const hasIncludes = /^\s*#include\b/m.test(userCode);
 
     let prelude = '';
     if (!hasIncludes) {
-      prelude = `${this.buildStandardIncludes()}
+      prelude = usePrecompiledHeader
+        ? `#include "codeprep_std.hpp"\n\n`
+        : `${this.buildStandardIncludes()}
 using namespace std;
 
 `;
