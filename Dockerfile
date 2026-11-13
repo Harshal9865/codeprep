@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     ca-certificates \
     curl \
+    openssl \
   && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \
