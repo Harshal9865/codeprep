@@ -21,11 +21,11 @@ export interface RunnerOptions {
 
 export class SandboxRunner {
   private static readonly DEFAULT_TIMEOUT_MS = 2000;
-  private static readonly DEFAULT_COMPILE_TIMEOUT_MS = 12000;
+  private static readonly DEFAULT_COMPILE_TIMEOUT_MS = 30000;
   private static readonly MAX_OUTPUT_BYTES = 2 * 1024 * 1024; // 2 MB limit
   private static readonly MAX_BINARY_CACHE_SIZE = 24;
   private static readonly CPP_COMPILE_FLAGS = [
-    '-O2',
+    process.env.CPP_OPT_LEVEL || '-O1',
     '-std=c++17',
     '-Wall',
     '-Wextra',
@@ -34,7 +34,9 @@ export class SandboxRunner {
     '-Werror=return-type',
   ];
 
-  private static readonly PCH_DIR = path.join(os.tmpdir(), 'codeprep-pch-v1');
+  private static readonly PCH_DIR = process.env.CODEPREP_PCH_DIR
+    ? path.resolve(process.env.CODEPREP_PCH_DIR)
+    : path.join(os.tmpdir(), 'codeprep-pch-v1');
   private static readonly BIN_CACHE_DIR = path.join(os.tmpdir(), 'codeprep-bincache');
   private static pchReady = false;
   private static pchWarmupPromise: Promise<boolean> | null = null;
@@ -67,7 +69,12 @@ export class SandboxRunner {
         fs.mkdirSync(this.BIN_CACHE_DIR, { recursive: true });
 
         const headerSource = HarnessGenerator.getSharedPchHeaderSource();
-        const headerHash = crypto.createHash('sha256').update(headerSource).update(compiler).digest('hex');
+        const headerHash = crypto
+          .createHash('sha256')
+          .update(headerSource)
+          .update(compiler)
+          .update(this.CPP_COMPILE_FLAGS.join('|'))
+          .digest('hex');
         const headerPath = path.join(this.PCH_DIR, 'codeprep_std.hpp');
         const pchPath = path.join(this.PCH_DIR, 'codeprep_std.hpp.gch');
         const hashFile = path.join(this.PCH_DIR, 'codeprep_std.sha256');
@@ -76,7 +83,7 @@ export class SandboxRunner {
           try {
             if (fs.readFileSync(hashFile, 'utf8').trim() === headerHash) {
               this.pchReady = true;
-              Logger.info('SandboxRunner', 'Reused existing C++17 precompiled header (.gch).');
+              Logger.info('SandboxRunner', `Reused existing C++17 precompiled header (.gch) at ${this.PCH_DIR}.`);
               return true;
             }
           } catch {}
@@ -85,7 +92,7 @@ export class SandboxRunner {
         fs.writeFileSync(headerPath, headerSource, 'utf8');
         const buildRes = await this.runCompilerProcess(
           [...this.CPP_COMPILE_FLAGS, '-x', 'c++-header', headerPath, '-o', pchPath],
-          20000
+          45000
         );
 
         if (buildRes.success && fs.existsSync(pchPath)) {
@@ -199,8 +206,11 @@ export class SandboxRunner {
     const perTestTimeoutMs = options.timeoutMs || this.DEFAULT_TIMEOUT_MS;
     const compileTimeoutMs = options.compileTimeoutMs || this.DEFAULT_COMPILE_TIMEOUT_MS;
 
-    // 1. Generate compilable C++17 harness (use PCH when warmed up for ~10x faster compiles)
-    const usePch = this.pchReady;
+    // 1. Generate compilable C++17 harness (use prebuilt Docker/warmed PCH when available)
+    const usePch =
+      this.pchReady ||
+      (fs.existsSync(path.join(this.PCH_DIR, 'codeprep_std.hpp.gch')) &&
+        (await this.warmupCompilerCache()));
     let harness: GeneratedHarness;
     try {
       harness = HarnessGenerator.generateHarness(

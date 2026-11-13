@@ -30,15 +30,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV NODE_ENV=production \
     PORT=5000 \
     SANDBOX_TYPE=local-process \
-    DATABASE_URL="file:/data/codeprep.db"
+    DATABASE_URL="file:/data/codeprep.db" \
+    CODEPREP_PCH_DIR="/app/pch"
 
-RUN mkdir -p /data /app/uploads /app/public
+RUN mkdir -p /data /app/uploads /app/public /app/pch
 
 COPY --from=backend-builder /app/backend/package*.json ./
 COPY --from=backend-builder /app/backend/node_modules ./node_modules
 COPY --from=backend-builder /app/backend/dist ./dist
 COPY --from=backend-builder /app/backend/prisma ./prisma
 COPY --from=frontend-builder /app/frontend/dist ./public
+
+# Pre-compile C++17 standard library PCH during image build so runtime Run/Submit never times out
+RUN node -e "require('./dist/judge/sandboxRunner').SandboxRunner.warmupCompilerCache().then(ok => { console.log('PCH prebuild:', ok); process.exit(ok ? 0 : 1); })"
 
 EXPOSE 5000
 

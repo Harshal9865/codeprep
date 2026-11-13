@@ -18,7 +18,7 @@ interface QueuedTask {
 export class ExecutionQueue {
   private static taskQueue: QueuedTask[] = [];
   private static activeRuns = 0;
-  private static readonly MAX_CONCURRENT = 2;
+  private static readonly MAX_CONCURRENT = process.env.NODE_ENV === 'production' ? 1 : 2;
   private static readonly recentSubmissions = new Map<string, number>();
 
   /**
