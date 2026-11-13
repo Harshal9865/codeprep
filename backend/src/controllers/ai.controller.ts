@@ -92,6 +92,26 @@ export class AiController {
     }
   }
 
+  static async interviewCoach(req: Request, res: Response): Promise<void> {
+    try {
+      const { topic, question, userAnswer, mode } = req.body as {
+        topic?: string;
+        question?: string;
+        userAnswer?: string;
+        mode?: 'critique' | 'ask';
+      };
+      const result = await AiTeacherService.coachInterviewAnswer({
+        topic: (topic || 'General SDE').slice(0, 120),
+        question: (question || '').slice(0, 1200),
+        userAnswer: (userAnswer || '').slice(0, 4000),
+        mode: mode === 'ask' ? 'ask' : 'critique',
+      });
+      res.json(result);
+    } catch {
+      res.status(500).json({ error: 'Failed to run AI interview coach' });
+    }
+  }
+
   static async getLesson(req: Request, res: Response): Promise<void> {
     try {
       const problemId = parseInt(req.params.problemId, 10);

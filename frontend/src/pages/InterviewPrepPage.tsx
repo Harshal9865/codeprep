@@ -78,7 +78,8 @@ type VaultView =
   | 'vault-sys-design'
   | 'vault-coding-mock'
   | 'vault-puzzles-co'
-  | 'vault-star-hr';
+  | 'vault-star-hr'
+  | 'vault-ai-coach';
 
 type SidebarView = 'Home' | InterviewQuizCategory | VaultView;
 
@@ -168,6 +169,7 @@ const VAULT_META: Array<{ id: VaultView; label: string; icon: React.ReactNode }>
   { id: 'vault-coding-mock', label: 'Coding Round Simulator', icon: <Timer className="w-4 h-4" /> },
   { id: 'vault-puzzles-co', label: 'Puzzles & Companies', icon: <Brain className="w-4 h-4" /> },
   { id: 'vault-star-hr', label: 'STAR, Recovery & HR', icon: <MessageSquare className="w-4 h-4" /> },
+  { id: 'vault-ai-coach', label: 'AI Interview Coach', icon: <Sparkles className="w-4 h-4" /> },
 ];
 
 function isQuizCategory(v: SidebarView): v is InterviewQuizCategory {
@@ -287,6 +289,45 @@ export const InterviewPrepPage: React.FC<InterviewPrepPageProps> = ({
   const [starSavedFlash, setStarSavedFlash] = useState(false);
   const [preChecks, setPreChecks] = useState<Record<number, boolean>>({});
 
+  // Gemini AI Interview Coach state
+  const [coachMode, setCoachMode] = useState<'critique' | 'ask'>('critique');
+  const [coachTopic, setCoachTopic] = useState('System Design');
+  const [coachQuestion, setCoachQuestion] = useState('How would you design a distributed rate limiter using Redis?');
+  const [coachAnswer, setCoachAnswer] = useState('');
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [coachReply, setCoachReply] = useState<{
+    reply: string;
+    provider: 'gemini' | 'local';
+    note?: string;
+  } | null>(null);
+
+  const runAiInterviewCoach = async () => {
+    setCoachLoading(true);
+    try {
+      const res = await apiRequest<{
+        reply: string;
+        provider: 'gemini' | 'local';
+        note?: string;
+      }>('/ai/interview-coach', {
+        method: 'POST',
+        body: JSON.stringify({
+          topic: coachTopic,
+          question: coachQuestion,
+          userAnswer: coachAnswer,
+          mode: coachMode,
+        }),
+      });
+      setCoachReply(res);
+    } catch (err) {
+      setCoachReply({
+        reply: err instanceof Error ? err.message : 'Unable to reach AI Coach service right now.',
+        provider: 'local',
+      });
+    } finally {
+      setCoachLoading(false);
+    }
+  };
+
   useEffect(() => {
     try {
       localStorage.setItem(QUIZ_STATS_KEY, JSON.stringify(quizStats));
@@ -381,7 +422,11 @@ export const InterviewPrepPage: React.FC<InterviewPrepPageProps> = ({
     const targetCat: InterviewQuizCategory | 'Mixed' = isQuizCategory(sidebarView)
       ? sidebarView
       : 'Mixed';
-    setCurrentQ(generateInterviewQuestion(targetCat));
+    let next = generateInterviewQuestion(targetCat);
+    for (let i = 0; i < 6 && next.question === currentQ.question; i++) {
+      next = generateInterviewQuestion(targetCat);
+    }
+    setCurrentQ(next);
     setStreamSelected(null);
   };
 
@@ -1845,6 +1890,146 @@ export const InterviewPrepPage: React.FC<InterviewPrepPageProps> = ({
                     })}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* VAULT 6: GEMINI AI INTERVIEW COACH */}
+          {mode === 'stream' && sidebarView === 'vault-ai-coach' && (
+            <div className="space-y-5 animate-fade-up">
+              <div className="bg-surface border border-border-subtle rounded-2xl p-6 space-y-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                      <span>AI Interview Coach &amp; Mock Grader</span>
+                    </h2>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      Powered by Google Gemini — grade your System Design / CS / STAR answers out of 10 or ask any concept doubt.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCoachMode('critique')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                        coachMode === 'critique'
+                          ? 'bg-primary text-[#020202] border-primary'
+                          : 'bg-surface-elevated border-border-subtle text-text-secondary'
+                      }`}
+                    >
+                      Grade My Answer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCoachMode('ask')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+                        coachMode === 'ask'
+                          ? 'bg-primary text-[#020202] border-primary'
+                          : 'bg-surface-elevated border-border-subtle text-text-secondary'
+                      }`}
+                    >
+                      Ask Anything
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-mono uppercase text-text-muted">Topic / Round</label>
+                    <select
+                      value={coachTopic}
+                      onChange={(e) => setCoachTopic(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-surface-subtle border border-border-subtle text-xs text-text-primary focus:outline-none focus:border-primary"
+                    >
+                      <option value="System Design">System Design (HLD / LLD)</option>
+                      <option value="DSA & Complexity">DSA &amp; Time Complexity</option>
+                      <option value="OS & Concurrency">OS &amp; Concurrency</option>
+                      <option value="DBMS & SQL">DBMS &amp; SQL</option>
+                      <option value="C++17 & OOPs">C++17 &amp; OOPs</option>
+                      <option value="STAR Behavioral / HR">STAR Behavioral / HR</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="text-[11px] font-mono uppercase text-text-muted">
+                      {coachMode === 'critique' ? 'Interview Question Prompt' : 'Your Technical Doubt / Question'}
+                    </label>
+                    <input
+                      type="text"
+                      value={coachQuestion}
+                      onChange={(e) => setCoachQuestion(e.target.value)}
+                      placeholder={
+                        coachMode === 'critique'
+                          ? 'e.g., Explain B+ Trees vs Hash Indexes'
+                          : 'e.g., Why does Write Skew happen under Postgres Repeatable Read?'
+                      }
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-subtle border border-border-subtle text-xs text-text-primary focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+
+                {coachMode === 'critique' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-mono uppercase text-text-muted">
+                      Your Spoken / Written Answer Draft
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={coachAnswer}
+                      onChange={(e) => setCoachAnswer(e.target.value)}
+                      placeholder="Write how you would explain this aloud to an interviewer (trade-offs, complexity, edge cases, metrics)..."
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-surface-subtle border border-border-subtle text-xs text-text-primary focus:outline-none focus:border-primary resize-y leading-relaxed"
+                    />
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    disabled={coachLoading}
+                    onClick={runAiInterviewCoach}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-[#020202] text-xs font-bold disabled:opacity-50"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>
+                      {coachLoading
+                        ? 'Analyzing with Gemini...'
+                        : coachMode === 'critique'
+                          ? 'Evaluate & Get Curveball'
+                          : 'Ask Gemini Coach'}
+                    </span>
+                  </button>
+                </div>
+
+                {coachReply && (
+                  <div className="p-5 rounded-xl bg-surface-subtle border border-border-subtle space-y-2.5 animate-fade-up">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold text-text-primary flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-primary" />
+                        <span>Coach Feedback</span>
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full font-mono text-[10px] border ${
+                          coachReply.provider === 'gemini'
+                            ? 'bg-success-subtle border-success/40 text-success'
+                            : 'bg-surface-elevated border-border-subtle text-warning'
+                        }`}
+                      >
+                        {coachReply.provider === 'gemini' ? 'Gemini Live' : 'Offline Fallback'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-text-secondary whitespace-pre-line leading-relaxed">
+                      {coachReply.reply}
+                    </div>
+                    {coachReply.note && (
+                      <div className="text-[11px] font-mono text-warning pt-2 border-t border-border-subtle">
+                        Note: {coachReply.note}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

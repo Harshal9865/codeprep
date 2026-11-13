@@ -22,7 +22,7 @@ const envSchema = z.object({
   DEFAULT_TIMEZONE: z.string().default('Asia/Kolkata'),
   AI_PROVIDER: z.enum(['gemini', 'claude', 'mock']).default('gemini'),
   AI_API_KEY: z.string().optional().default(''),
-  AI_MODEL_NAME: z.string().default('gemini-1.5-flash'),
+  AI_MODEL_NAME: z.string().default('gemini-2.5-flash'),
   SANDBOX_TYPE: z.enum(['docker', 'local-process']).default('docker'),
   SANDBOX_TIMEOUT_MS: z.string().default('2000').transform((val) => parseInt(val, 10)),
   RATE_LIMIT_WINDOW_MS: z.string().default('900000').transform((val) => parseInt(val, 10)),
