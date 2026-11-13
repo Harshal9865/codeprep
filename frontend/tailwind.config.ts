@@ -15,6 +15,7 @@ export default {
         },
         border: {
           subtle: 'var(--border-subtle)',
+          default: 'var(--border-default)',
           DEFAULT: 'var(--border-default)',
           active: 'var(--border-active)',
           hover: 'var(--border-hover)',
@@ -68,6 +69,9 @@ export default {
         md: '8px',
         lg: '12px',
         xl: '16px',
+      },
+      borderColor: {
+        DEFAULT: 'var(--border-default)',
       },
       boxShadow: {
         xs: '0 1px 2px 0 rgba(0, 0, 0, 0.25)',

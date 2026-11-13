@@ -389,12 +389,23 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
               />
             ) : lesson ? (
               <div className="space-y-5">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h3 className="font-bold text-base text-text-primary">Reference Implementation</h3>
+                    <h3 className="font-bold text-base text-text-primary tracking-tight">Reference Implementation</h3>
                     <p className="text-xs text-text-muted">{problem.pattern}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {onLoadCode && (
+                      <button
+                        type="button"
+                        onClick={() => onLoadCode(lesson.verifiedSolution)}
+                        className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors"
+                        title="Load this reference solution into the editor"
+                      >
+                        <Code2 className="w-3.5 h-3.5 text-success" />
+                        <span>Use Code</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -402,7 +413,7 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                         setCopiedSolution(true);
                         setTimeout(() => setCopiedSolution(false), 2000);
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-default text-xs font-mono flex items-center gap-1.5 text-text-primary"
+                      className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono flex items-center gap-1.5 text-text-primary transition-colors"
                     >
                       {copiedSolution ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedSolution ? 'Copied' : 'Copy'}</span>
@@ -411,7 +422,7 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                       <button
                         type="button"
                         onClick={onOpenFullSolution}
-                        className="px-3 py-1.5 rounded-lg bg-primary-subtle hover:bg-primary/20 border border-primary/35 text-xs font-mono flex items-center gap-1.5 text-primary"
+                        className="px-3 py-1.5 rounded-lg bg-primary-subtle hover:bg-primary/20 border border-primary/25 text-xs font-mono flex items-center gap-1.5 text-primary transition-colors"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                         <span>Full Guide</span>
@@ -420,12 +431,25 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-surface-subtle border border-border-default font-mono text-[13px] overflow-x-auto">
-                  <pre className="text-text-primary leading-relaxed select-text">{lesson.verifiedSolution}</pre>
+                <div className="rounded-2xl overflow-hidden border border-border-subtle code-window-card">
+                  <div className="px-4 py-2 bg-surface-elevated/60 border-b border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-danger/60" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-warning/60" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-success/60" />
+                      </span>
+                      <span className="ml-1 text-text-secondary">solution.cpp</span>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-wider text-text-muted/80">C++17 Optimal</span>
+                  </div>
+                  <div className="p-4 font-mono text-[13px] overflow-x-auto bg-canvas/55">
+                    <pre className="text-text-primary leading-relaxed select-text">{lesson.verifiedSolution}</pre>
+                  </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-2">
-                  <h4 className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
+                <div className="p-4 rounded-2xl bg-surface-subtle/80 border border-border-subtle space-y-2">
+                  <h4 className="text-xs font-mono uppercase tracking-wider text-primary/90 font-semibold">
                     Complexity Progression
                   </h4>
                   <p className="text-sm text-text-secondary whitespace-pre-line leading-relaxed">
@@ -433,8 +457,8 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                   </p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-2">
-                  <h4 className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
+                <div className="p-4 rounded-2xl bg-surface-subtle/80 border border-border-subtle space-y-2">
+                  <h4 className="text-xs font-mono uppercase tracking-wider text-sky-400/90 font-semibold">
                     Pattern Walkthrough
                   </h4>
                   <p className="text-sm text-text-secondary whitespace-pre-line leading-relaxed">

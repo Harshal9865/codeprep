@@ -71,11 +71,12 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
   return (
     <div className="h-full flex flex-col bg-canvas overflow-hidden transition-colors">
       {/* Editor Header Toolbar */}
-      <div className="h-10 bg-surface px-3 flex items-center justify-between gap-3 select-none shrink-0 border-b border-border-subtle">
+      <div className="h-10 bg-surface/95 px-3 flex items-center justify-between gap-3 select-none shrink-0 border-b border-border-subtle">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-elevated text-xs font-mono text-text-primary border border-border-subtle">
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-surface-elevated/80 text-xs font-mono text-text-primary border border-border-subtle">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             <Code className="w-3.5 h-3.5 text-primary" />
-            <span>C++ 17 (g++ -O2)</span>
+            <span>C++17 • g++</span>
           </div>
         </div>
 

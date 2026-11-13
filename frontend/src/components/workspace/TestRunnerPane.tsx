@@ -70,15 +70,15 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
   return (
     <div className="h-64 bg-surface flex flex-col overflow-hidden shrink-0 border-t border-border-subtle transition-colors">
       {/* Test Runner Header & Tabs */}
-      <div className="h-11 bg-surface-subtle px-4 flex items-center justify-between gap-4 select-none shrink-0 border-b border-border-subtle">
-        <div className="flex items-center gap-2">
+      <div className="h-11 bg-surface-subtle/90 px-4 flex items-center justify-between gap-4 select-none shrink-0 border-b border-border-subtle">
+        <div className="flex items-center gap-1 p-0.5 rounded-xl bg-surface/80 border border-border-subtle">
           <button
             type="button"
             onClick={() => setActiveTab('cases')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'cases'
-                ? 'bg-surface-elevated text-text-primary shadow-xs border border-border-default'
-                : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+                ? 'bg-surface-elevated text-text-primary shadow-xs border border-border-subtle'
+                : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/50 border border-transparent'
             }`}
           >
             Testcase ({sampleTestCases.length})
@@ -87,10 +87,10 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('custom')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
               activeTab === 'custom'
-                ? 'bg-surface-elevated text-text-primary shadow-xs border border-border-default'
-                : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+                ? 'bg-surface-elevated text-text-primary shadow-xs border border-border-subtle'
+                : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/50 border border-transparent'
             }`}
           >
             Custom Input
@@ -99,10 +99,10 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('result')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
+            className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
               activeTab === 'result'
-                ? 'bg-surface-elevated text-text-primary shadow-xs border border-border-default'
-                : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+                ? 'bg-surface-elevated text-text-primary shadow-xs border border-border-subtle'
+                : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/50 border border-transparent'
             }`}
           >
             {executionResult ? (
@@ -130,7 +130,7 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
             type="button"
             onClick={() => onRun()}
             disabled={isRunning || isSubmitting}
-            className="px-3.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high disabled:opacity-50 text-text-primary font-medium text-xs transition-colors flex items-center gap-1.5 border border-border-default"
+            className="px-3.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high disabled:opacity-50 text-text-primary font-medium text-xs transition-all flex items-center gap-1.5 border border-border-subtle shadow-xs"
           >
             {isRunning ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-warning" />
@@ -144,7 +144,7 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
             type="button"
             onClick={onSubmit}
             disabled={isRunning || isSubmitting}
-            className="px-4 py-1.5 rounded-lg bg-success hover:opacity-90 disabled:opacity-50 text-white font-semibold text-xs transition-all flex items-center gap-1.5 shadow-xs"
+            className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:brightness-110 disabled:opacity-50 text-white font-semibold text-xs transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-500/20"
           >
             {isSubmitting ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
