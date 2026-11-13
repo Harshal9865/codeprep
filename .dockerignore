@@ -20,7 +20,7 @@ uploads/
 .vscode/
 .idea/
 verification/
-data/
-db-data/
-sandbox-tmp/
+/data/
+/db-data/
+/sandbox-tmp/
 
