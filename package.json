@@ -1,0 +1,18 @@
+{
+  "name": "codeprep-platform",
+  "version": "1.0.0",
+  "description": "Personal, single-user, LeetCode-style interview preparation platform",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "reset-password": "node scripts/reset-password.js",
+    "health": "node scripts/test-health.js",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  }
+}
+

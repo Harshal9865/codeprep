@@ -1,0 +1,28 @@
+services:
+  codeprep:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: codeprep-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5000}:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5000}
+      DATABASE_URL: file:/data/codeprep.db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-replace-this-with-a-32-char-random-access-secret}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-replace-this-with-a-32-char-random-refresh-secret}
+      COOKIE_SECRET: ${COOKIE_SECRET:-replace-this-with-a-random-cookie-secret}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      SANDBOX_TYPE: local-process
+      SANDBOX_TIMEOUT_MS: 2000
+      DEFAULT_TIMEZONE: Asia/Kolkata
+    volumes:
+      - codeprep_db:/data
+      - codeprep_uploads:/app/uploads
+
+volumes:
+  codeprep_db:
+  codeprep_uploads:

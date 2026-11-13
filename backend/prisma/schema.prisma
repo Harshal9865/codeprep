@@ -1,0 +1,139 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String          @id @default(uuid())
+  email            String          @unique
+  passwordHash     String
+  displayName      String          @default("Developer")
+  avatarUrl        String?
+  themePreference  String          @default("dark") // "dark" | "light" | "leetcode" | "vscode" | "tokyo" | "monokai"
+  timezone         String          @default("Asia/Kolkata")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  lastLoginAt      DateTime?
+  refreshTokens    RefreshToken[]
+  submissions      Submission[]
+  drafts           ProblemDraft[]
+  timers           ProblemActiveTimer[]
+  badges           UserBadge[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Problem {
+  id                  Int                  @id
+  slug                String               @unique
+  title               String
+  difficulty          String               // "Easy" | "Medium" | "Hard"
+  category            String               // "DSA" | "SQL"
+  topic               String               // e.g. "Arrays and Hashing", "Graphs", "Dynamic Programming"
+  pattern             String               // e.g. "Two Pointers", "Sliding Window"
+  statement           String
+  constraints         String
+  examplesJson        String               // JSON array of examples with input, output, explanation
+  functionSignature   String               // e.g. "int maxSubArray(vector<int>& nums)"
+  cppHarnessTemplate  String?
+  isBookmark          Boolean              @default(false)
+  userNotes           String?
+  unlockedAiSolution  Boolean              @default(false)
+  solvedWithAiHelp    Boolean              @default(false)
+  submissions         Submission[]
+  drafts              ProblemDraft[]
+  timers              ProblemActiveTimer[]
+  aiLesson            AiLesson?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([category, topic])
+  @@index([difficulty])
+}
+
+model ProblemDraft {
+  id        String   @id @default(uuid())
+  problemId Int
+  userId    String
+  code      String
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, userId])
+}
+
+model ProblemActiveTimer {
+  id            String   @id @default(uuid())
+  problemId     Int
+  userId        String
+  activeSeconds Int      @default(0)
+  lastHeartbeat DateTime @default(now())
+  isPaused      Boolean  @default(true)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem       Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, userId])
+}
+
+model Submission {
+  id             String   @id @default(uuid())
+  problemId      Int
+  userId         String
+  language       String   // "cpp17" | "sql"
+  code           String
+  verdict        String   // "Accepted" | "Wrong Answer" | "Time Limit Exceeded" | "Memory Limit Exceeded" | "Output Limit Exceeded" | "Compile Error" | "Runtime Error"
+  runtimeMs      Float?
+  memoryKb       Float?
+  failedTestCase String?  // First failing test input/output JSON if WA
+  stdout         String?
+  stderr         String?
+  submittedAt    DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem        Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([problemId, verdict])
+  @@index([userId, submittedAt])
+}
+
+model AiLesson {
+  id                   String   @id @default(uuid())
+  problemId            Int      @unique
+  problem              Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  techniqueLesson      String
+  visualTraceJson      String   // Deterministic step-by-step trace data
+  workedExamples       String
+  approachProgression  String   // Brute-force -> Better -> Optimal
+  verifiedSolution     String   // Clean annotated C++ reference
+  similarProblemsJson  String
+  createdAt            DateTime @default(now())
+}
+
+model UserBadge {
+  id          String   @id @default(uuid())
+  userId      String
+  badgeKey    String
+  title       String
+  description String
+  category    String   // "solved" | "streak" | "specialty"
+  unlockedAt  DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeKey])
+  @@index([userId])
+}
+
