@@ -21,10 +21,10 @@ export const configureSecurityHeaders = helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"], // Needed for inline theme bootstrap
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'", ...allowedOrigins],
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: env.SECURE_COOKIES ? [] : null,
     },
