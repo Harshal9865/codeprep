@@ -9,6 +9,7 @@ import { HeatmapDay } from '../components/dashboard/ActivityHeatmap';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 import { INTERVIEW_PREP_SETS } from '../data/interviewTracks';
+import { PotdSummary } from '../types/potd';
 import {
   Search,
   Check,
@@ -21,6 +22,7 @@ import {
   ChevronDown,
   ArrowRight,
   X,
+  Flame,
 } from 'lucide-react';
 
 interface ProblemListPageProps {
@@ -60,6 +62,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   const [currentStreak, setCurrentStreak] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
   const [heatmap, setHeatmap] = useState<HeatmapDay[]>([]);
+  const [potd, setPotd] = useState<PotdSummary | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 30;
 
@@ -91,10 +94,12 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
         currentStreak?: number;
         longestStreak?: number;
         heatmap?: HeatmapDay[];
+        potd?: PotdSummary;
       };
       currentStreak?: number;
       longestStreak?: number;
       heatmap?: HeatmapDay[];
+      potd?: PotdSummary;
     }>('/analytics/dashboard')
       .then((res) => {
         if (!cancelled && res) {
@@ -102,6 +107,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
           setCurrentStreak(payload.currentStreak ?? 0);
           setLongestStreak(payload.longestStreak ?? 0);
           setHeatmap(payload.heatmap ?? []);
+          setPotd(payload.potd ?? null);
         }
       })
       .catch(() => {
@@ -469,6 +475,46 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               </button>
             </div>
 
+            {/* Compact POTD Strip (shown on viewports < 2xl where right sidebar hides) */}
+            {potd && (
+              <button
+                type="button"
+                onClick={() => onSelectProblem(potd.id)}
+                className={`2xl:hidden w-full text-left px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 transition-all ${
+                  potd.solvedToday
+                    ? 'bg-surface border-success/35 hover:border-success/60'
+                    : 'bg-surface border-primary/40 hover:border-primary/70'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-subtle text-primary text-[11px] font-mono font-semibold shrink-0">
+                    <Flame className="w-3 h-3 fill-primary/30" />
+                    <span>POTD</span>
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-text-primary truncate">
+                    #{potd.id}. {potd.title}
+                  </span>
+                  <span
+                    className={`hidden sm:inline px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
+                      potd.difficulty === 'Easy'
+                        ? 'bg-success-subtle text-success'
+                        : potd.difficulty === 'Medium'
+                        ? 'bg-warning-subtle text-warning'
+                        : 'bg-danger-subtle text-danger'
+                    }`}
+                  >
+                    {potd.difficulty}
+                  </span>
+                </div>
+                <span className={`text-xs font-mono font-semibold shrink-0 flex items-center gap-1 ${
+                  potd.solvedToday ? 'text-success' : 'text-primary'
+                }`}>
+                  <span>{potd.solvedToday ? 'Solved ✓' : 'Solve'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </span>
+              </button>
+            )}
+
             {/* Search, Difficulty & Status Controls */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 select-none">
               <div className="relative flex-1 max-w-md">
@@ -580,6 +626,12 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                             <span className="font-medium text-text-primary group-hover:text-primary transition-colors">
                               #{prob.id}. {prob.title}
                             </span>
+                            {potd?.id === prob.id && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-primary-subtle text-primary border border-primary/30 shrink-0">
+                                <Flame className="w-3 h-3 fill-primary/30" />
+                                <span>POTD</span>
+                              </span>
+                            )}
                             {prob.isBookmark && (
                               <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-primary-subtle text-primary">
                                 Saved
@@ -630,6 +682,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
             currentStreak={currentStreak}
             longestStreak={longestStreak}
             heatmap={heatmap}
+            potd={potd}
+            onSelectProblem={onSelectProblem}
           />
         </div>
       </div>

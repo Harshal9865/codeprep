@@ -7,6 +7,33 @@ export interface HeatmapDay {
   count: number;
   acceptedCount: number;
   level: number; // 0 (none), 1 (1-2), 2 (3-5), 3 (6-9), 4 (10+)
+  potdSolved?: boolean;
+  potdProblemId?: number;
+}
+
+export interface PotdDayHistoryItem {
+  date: string;
+  problemId: number;
+  title: string;
+  difficulty: string;
+  solved: boolean;
+  isToday: boolean;
+}
+
+export interface PotdSummary {
+  date: string;
+  id: number;
+  slug: string;
+  title: string;
+  difficulty: string;
+  category: string;
+  topic: string;
+  solvedToday: boolean;
+  solvedAt: string | null;
+  streakMaintained: boolean;
+  distributionLabel: string;
+  nextResetIso: string;
+  recentDays: PotdDayHistoryItem[];
 }
 
 export interface TopicStat {
@@ -35,6 +62,7 @@ export interface DashboardAnalytics {
   sqlSolved: number;
   sqlTotal: number;
   dailyProblemId: number;
+  potd: PotdSummary;
   randomPoolIds: number[];
   easySolved: number;
   easyTotal: number;
@@ -197,6 +225,7 @@ export class AnalyticsService {
       prisma.problem.findMany({
         select: {
           id: true,
+          slug: true,
           title: true,
           difficulty: true,
           category: true,
@@ -223,6 +252,7 @@ export class AnalyticsService {
       allProblems = await prisma.problem.findMany({
         select: {
           id: true,
+          slug: true,
           title: true,
           difficulty: true,
           category: true,
@@ -323,6 +353,10 @@ export class AnalyticsService {
       heatmapMap.set(dateStr, { count: 0, acceptedCount: 0 });
     }
 
+    // Track per-date Accepted problems for POTD streak verification
+    const acceptedOnDate = new Map<string, Set<number>>();
+    const firstAcceptedAtOnDate = new Map<string, string>();
+
     // Populate submissions into heatmap
     for (const sub of allSubmissions) {
       const dateStr = AnalyticsService.formatDateInTimezone(new Date(sub.submittedAt), timezone);
@@ -331,9 +365,30 @@ export class AnalyticsService {
         item.count++;
         if (sub.verdict === 'Accepted') {
           item.acceptedCount++;
+          if (!acceptedOnDate.has(dateStr)) {
+            acceptedOnDate.set(dateStr, new Set<number>());
+          }
+          acceptedOnDate.get(dateStr)!.add(sub.problemId);
+          const key = `${dateStr}:${sub.problemId}`;
+          if (!firstAcceptedAtOnDate.has(key)) {
+            firstAcceptedAtOnDate.set(key, sub.submittedAt.toISOString());
+          }
         }
       }
     }
+
+    // Partition DSA curriculum by difficulty for weighted daily POTD (20% Easy, 60% Medium, 20% Hard)
+    const dsaProblems = allProblems.filter((p) => p.category !== 'SQL');
+    const dailyBasePool = dsaProblems.length > 0 ? dsaProblems : allProblems;
+    const potdPools = {
+      all: dailyBasePool,
+      easy: dailyBasePool.filter((p) => p.difficulty === 'Easy'),
+      medium: dailyBasePool.filter((p) => p.difficulty === 'Medium'),
+      hard: dailyBasePool.filter((p) => p.difficulty === 'Hard'),
+    };
+
+    const potdByDate = new Map<string, (typeof allProblems)[number]>();
+    let prevPotdId: number | undefined;
 
     const heatmap: HeatmapDay[] = Array.from(heatmapMap.entries()).map(([date, item]) => {
       let level = 0;
@@ -342,15 +397,24 @@ export class AnalyticsService {
       else if (item.count >= 3) level = 2;
       else if (item.count >= 1) level = 1;
 
+      const potdProb = AnalyticsService.selectPotdForDate(date, potdPools, prevPotdId);
+      if (potdProb) {
+        potdByDate.set(date, potdProb);
+        prevPotdId = potdProb.id;
+      }
+      const potdSolved = Boolean(potdProb && acceptedOnDate.get(date)?.has(potdProb.id));
+
       return {
         date,
         count: item.count,
         acceptedCount: item.acceptedCount,
         level,
+        potdSolved,
+        potdProblemId: potdProb?.id,
       };
     });
 
-    // 4. Compute Streaks
+    // 4. Compute Streaks (maintained by solving each day's Problem of the Day)
     const { currentStreak, longestStreak } = AnalyticsService.calculateStreaks(heatmap);
 
     // 5. Recommended Next Problem
@@ -446,17 +510,41 @@ export class AnalyticsService {
       }
     }
 
-    const todayKey = AnalyticsService.formatDateInTimezone(now, timezone);
-    let dateHash = 0;
-    for (let i = 0; i < todayKey.length; i++) {
-      dateHash = (dateHash * 31 + todayKey.charCodeAt(i)) | 0;
-    }
-    const dsaProblems = allProblems.filter((p) => p.category !== 'SQL');
-    const dailyPool = dsaProblems.length > 0 ? dsaProblems : allProblems;
-    const dailyProblemId =
-      dailyPool.length > 0
-        ? dailyPool[Math.abs(dateHash) % dailyPool.length].id
-        : 1;
+    const todayPotd = potdByDate.get(todayStr) || dailyBasePool[0];
+    const dailyProblemId = todayPotd?.id ?? 1;
+    const todayHeatmapDay = heatmap[heatmap.length - 1];
+    const todayPotdSolved = Boolean(todayHeatmapDay?.potdSolved);
+    const todayPotdSolvedAt = todayPotd
+      ? firstAcceptedAtOnDate.get(`${todayStr}:${todayPotd.id}`) || null
+      : null;
+
+    const recentPotdDays: PotdDayHistoryItem[] = heatmap.slice(-7).map((day) => {
+      const p = potdByDate.get(day.date);
+      return {
+        date: day.date,
+        problemId: p?.id ?? dailyProblemId,
+        title: p?.title ?? `Problem #${dailyProblemId}`,
+        difficulty: p?.difficulty ?? 'Medium',
+        solved: Boolean(day.potdSolved),
+        isToday: day.date === todayStr,
+      };
+    });
+
+    const potd: PotdSummary = {
+      date: todayStr,
+      id: todayPotd?.id ?? 1,
+      slug: todayPotd?.slug ?? 'two-sum',
+      title: todayPotd?.title ?? 'Problem of the Day',
+      difficulty: todayPotd?.difficulty ?? 'Medium',
+      category: todayPotd?.category ?? 'DSA',
+      topic: todayPotd?.topic ?? 'Arrays and Hashing',
+      solvedToday: todayPotdSolved,
+      solvedAt: todayPotdSolvedAt,
+      streakMaintained: todayPotdSolved,
+      distributionLabel: '20% Easy • 60% Medium • 20% Hard',
+      nextResetIso: AnalyticsService.computeNextMidnightIso(now, timezone),
+      recentDays: recentPotdDays,
+    };
 
     const randomPoolSource =
       unsolvedProblems.length > 0 ? unsolvedProblems : allProblems;
@@ -478,6 +566,7 @@ export class AnalyticsService {
       sqlSolved,
       sqlTotal,
       dailyProblemId,
+      potd,
       randomPoolIds,
       easySolved,
       easyTotal,
@@ -564,6 +653,89 @@ export class AnalyticsService {
   }
 
   /**
+   * 32-bit FNV-1a deterministic hash for date-seeded POTD selection
+   */
+  private static hashString(input: string): number {
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  /**
+   * Picks a deterministic daily Problem of the Day following ~20% Easy, 60% Medium, 20% Hard distribution
+   */
+  private static selectPotdForDate<T extends { id: number }>(
+    dateStr: string,
+    pools: { all: T[]; easy: T[]; medium: T[]; hard: T[] },
+    excludeProblemId?: number
+  ): T | null {
+    if (pools.all.length === 0) return null;
+
+    const diffRoll = AnalyticsService.hashString(`${dateStr}:potd-diff`) % 100;
+    let bucket: T[] = pools.all;
+    if (diffRoll < 20 && pools.easy.length > 0) {
+      bucket = pools.easy;
+    } else if (diffRoll < 80 && pools.medium.length > 0) {
+      bucket = pools.medium;
+    } else if (pools.hard.length > 0) {
+      bucket = pools.hard;
+    }
+
+    let idx = AnalyticsService.hashString(`${dateStr}:potd-pick`) % bucket.length;
+    if (excludeProblemId !== undefined && bucket[idx].id === excludeProblemId && bucket.length > 1) {
+      idx = (idx + 1) % bucket.length;
+    }
+    return bucket[idx];
+  }
+
+  /**
+   * Computes next midnight UTC ISO timestamp in the user's timezone for countdown timers
+   */
+  private static computeNextMidnightIso(now: Date, timezone: string): string {
+    try {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: timezone,
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }).formatToParts(now);
+      const getNum = (type: string) => {
+        const val = parseInt(parts.find((p) => p.type === type)?.value || '0', 10);
+        return Number.isFinite(val) ? val : 0;
+      };
+      const h = getNum('hour') % 24;
+      const m = getNum('minute');
+      const s = getNum('second');
+      const elapsedSec = h * 3600 + m * 60 + s;
+      const remainingMs = Math.max(1000, (86400 - elapsedSec) * 1000);
+      return new Date(now.getTime() + remainingMs).toISOString();
+    } catch {
+      const next = new Date(now);
+      next.setUTCHours(24, 0, 0, 0);
+      return next.toISOString();
+    }
+  }
+
+  /**
+   * Checks whether a given problem matches today's POTD and returns updated streak telemetry
+   */
+  static async checkPotdStatusForProblem(
+    userId: string,
+    problemId: number
+  ): Promise<{ isPotd: boolean; solvedToday: boolean; currentStreak: number }> {
+    const analytics = await this.getDashboardAnalytics(userId);
+    return {
+      isPotd: analytics.potd.id === problemId,
+      solvedToday: analytics.potd.solvedToday,
+      currentStreak: analytics.currentStreak,
+    };
+  }
+
+  /**
    * Helper to format a date in the user's specific timezone (YYYY-MM-DD)
    */
   private static formatDateInTimezone(date: Date, timezone: string): string {
@@ -581,7 +753,7 @@ export class AnalyticsService {
   }
 
   /**
-   * Calculates current streak and longest streak from the heatmap
+   * Calculates current streak and longest streak from daily POTD completions
    */
   private static calculateStreaks(heatmap: HeatmapDay[]): { currentStreak: number; longestStreak: number } {
     let longestStreak = 0;
@@ -589,7 +761,7 @@ export class AnalyticsService {
     let tempStreak = 0;
 
     for (let i = 0; i < heatmap.length; i++) {
-      if (heatmap[i].count > 0) {
+      if (heatmap[i].potdSolved) {
         tempStreak++;
         if (tempStreak > longestStreak) {
           longestStreak = tempStreak;
@@ -599,17 +771,15 @@ export class AnalyticsService {
       }
     }
 
-    // Current streak: check from the last day backwards
-    // If today (last element) has submissions, streak counts from today.
-    // If today is 0, but yesterday had submissions, the streak is still active from yesterday.
+    // Current streak: active if today's POTD is solved, or yesterday's POTD was solved (grace window until midnight)
     const lastIdx = heatmap.length - 1;
     if (lastIdx >= 0) {
       let checkIdx = lastIdx;
-      if (heatmap[checkIdx].count === 0 && checkIdx > 0 && heatmap[checkIdx - 1].count > 0) {
+      if (!heatmap[checkIdx].potdSolved && checkIdx > 0 && heatmap[checkIdx - 1].potdSolved) {
         checkIdx = lastIdx - 1;
       }
 
-      while (checkIdx >= 0 && heatmap[checkIdx].count > 0) {
+      while (checkIdx >= 0 && heatmap[checkIdx].potdSolved) {
         currentStreak++;
         checkIdx--;
       }

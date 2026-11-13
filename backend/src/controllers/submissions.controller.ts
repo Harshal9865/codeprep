@@ -146,8 +146,14 @@ export class SubmissionsController {
           },
         });
 
+        let potdStatus: { isPotd: boolean; solvedToday: boolean; currentStreak: number } | undefined;
         if (sqlResult.verdict === 'Accepted') {
-          await AnalyticsService.syncBadgesForUser(userId);
+          const analytics = await AnalyticsService.getDashboardAnalytics(userId);
+          potdStatus = {
+            isPotd: analytics.potd.id === def.id,
+            solvedToday: analytics.potd.solvedToday,
+            currentStreak: analytics.currentStreak,
+          };
         }
 
         const sqlRuntimePercentile =
@@ -157,6 +163,7 @@ export class SubmissionsController {
 
         res.json({
           submissionId: submission.id,
+          potdStatus,
           result: {
             verdict: sqlResult.verdict,
             runtimeMs: sqlResult.runtimeMs,
@@ -204,8 +211,14 @@ export class SubmissionsController {
         },
       });
 
+      let potdStatus: { isPotd: boolean; solvedToday: boolean; currentStreak: number } | undefined;
       if (result.verdict === 'Accepted') {
-        await AnalyticsService.syncBadgesForUser(userId);
+        const analytics = await AnalyticsService.getDashboardAnalytics(userId);
+        potdStatus = {
+          isPotd: analytics.potd.id === def.id,
+          solvedToday: analytics.potd.solvedToday,
+          currentStreak: analytics.currentStreak,
+        };
       }
 
       // Calculate percentile benchmarks against execution latency/memory bounds
@@ -220,6 +233,7 @@ export class SubmissionsController {
 
       res.json({
         submissionId: submission.id,
+        potdStatus,
         result,
         benchmarks: {
           runtimePercentile: Math.round(benchmarkPercentileRuntime * 10) / 10,

@@ -31,6 +31,9 @@ import {
   Award,
   CheckCircle2,
   ArrowRight,
+  Loader2,
+  X,
+  Camera,
 } from 'lucide-react';
 
 interface UserProfile {
@@ -88,10 +91,33 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
   // Status feedback
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingAvatarPreset, setIsSavingAvatarPreset] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [avatarJustUpdated, setAvatarJustUpdated] = useState(false);
+  const [passwordJustUpdated, setPasswordJustUpdated] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null);
+  const toastTimerRef = React.useRef<number | null>(null);
+  const avatarFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const showToast = React.useCallback((type: 'success' | 'error', title: string, message: string) => {
+    setToast({ type, title, message });
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+    }, 4500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     fetchAllProfileData();
@@ -156,7 +182,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
   const handleSelectTheme = (themeId: ThemeMode) => {
     setThemePreference(themeId);
     setTheme(themeId);
-    setProfileSuccess('Theme preference updated and saved.');
+    const chosen = THEME_OPTIONS.find((t) => t.id === themeId);
+    const msg = `Workspace theme switched to ${chosen?.label || themeId}.`;
+    setProfileSuccess(msg);
+    showToast('success', 'Theme Updated', msg);
   };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -173,13 +202,57 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       setProfile(res.user);
       window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: res.user }));
       window.dispatchEvent(new CustomEvent('codeprep-theme-sync', { detail: res.user.themePreference }));
-      setProfileSuccess(res.message || 'Profile settings updated.');
+      const msg = res.message || 'Profile settings updated.';
+      setProfileSuccess(msg);
+      showToast('success', 'Profile Saved', msg);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to update profile settings.');
+      const errText = err instanceof Error ? err.message : 'Failed to update profile settings.';
+      setErrorMsg(errText);
+      showToast('error', 'Profile Save Failed', errText);
     } finally {
       setIsSaving(false);
     }
   };
+
+  const triggerAvatarPulse = () => {
+    setAvatarJustUpdated(true);
+    window.setTimeout(() => setAvatarJustUpdated(false), 3000);
+  };
+
+  const prepareAvatarDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const targetSize = 320;
+          const canvas = document.createElement('canvas');
+          canvas.width = targetSize;
+          canvas.height = targetSize;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('Canvas unavailable'));
+            return;
+          }
+          const minDim = Math.min(img.width, img.height);
+          const sx = (img.width - minDim) / 2;
+          const sy = (img.height - minDim) / 2;
+          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
+          URL.revokeObjectURL(objectUrl);
+          const dataUrl = canvas.toDataURL('image/png');
+          resolve(dataUrl);
+        } catch (err) {
+          URL.revokeObjectURL(objectUrl);
+          reject(err);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Selected file could not be read as an image.'));
+      };
+      img.src = objectUrl;
+    });
 
   const handleSelectPixelAvatar = async (presetId: string) => {
     setIsSavingAvatarPreset(true);
@@ -193,9 +266,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       setProfile(res.user);
       window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: res.user }));
       const selectedPreset = resolvePixelAvatarPreset(res.user.avatarUrl);
-      setProfileSuccess(`Character avatar set to ${selectedPreset.name}.`);
+      const msg = `Avatar switched to ${selectedPreset.name}.`;
+      setProfileSuccess(msg);
+      triggerAvatarPulse();
+      showToast('success', 'Avatar Updated', msg);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to save pixel character.');
+      const errText = err instanceof Error ? err.message : 'Failed to save pixel character.';
+      setErrorMsg(errText);
+      showToast('error', 'Avatar Update Failed', errText);
     } finally {
       setIsSavingAvatarPreset(false);
     }
@@ -203,73 +281,89 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      setErrorMsg('Avatar file size must be less than 2MB.');
-      return;
-    }
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      setErrorMsg('Only JPEG, PNG, and WebP images are allowed.');
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (file.type && !allowedTypes.includes(file.type.toLowerCase())) {
+      const errText = 'Only JPEG, PNG, and WebP images are allowed.';
+      setErrorMsg(errText);
+      showToast('error', 'Unsupported Image', errText);
       return;
     }
 
     setIsUploadingAvatar(true);
     setErrorMsg(null);
+    setProfileSuccess(null);
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64Data = reader.result as string;
-        const res = await apiRequest<{ avatarUrl: string; message: string }>('/user/avatar', {
-          method: 'POST',
-          body: JSON.stringify({ imageBase64: base64Data }),
-        });
+    try {
+      const base64Data = await prepareAvatarDataUrl(file);
+      const res = await apiRequest<{ avatarUrl: string; message: string }>('/user/avatar', {
+        method: 'POST',
+        body: JSON.stringify({ imageBase64: base64Data }),
+      });
 
-        if (profile) {
-          const updatedProfile = { ...profile, avatarUrl: res.avatarUrl };
-          setProfile(updatedProfile);
-          window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: updatedProfile }));
+      setProfile((prev) => {
+        const nextProfile = prev ? { ...prev, avatarUrl: res.avatarUrl } : prev;
+        if (nextProfile) {
+          window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: nextProfile }));
         }
-        setProfileSuccess('Custom avatar uploaded and saved.');
-      } catch (err: unknown) {
-        setErrorMsg(err instanceof Error ? err.message : 'Avatar upload failed.');
-      } finally {
-        setIsUploadingAvatar(false);
-      }
-    };
-    reader.readAsDataURL(file);
+        return nextProfile;
+      });
+      const msg = res.message || 'Custom profile photo uploaded and applied across your workspace.';
+      setProfileSuccess(msg);
+      triggerAvatarPulse();
+      showToast('success', 'Profile Photo Updated', 'Your new avatar is now live in header & profile.');
+    } catch (err: unknown) {
+      const errText = err instanceof Error ? err.message : 'Avatar upload failed.';
+      setErrorMsg(errText);
+      showToast('error', 'Photo Upload Failed', errText);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordSuccess(null);
+    setPasswordError(null);
     setErrorMsg(null);
 
     if (newPassword.length < 10) {
-      setErrorMsg('New password must be at least 10 characters long.');
+      const msg = 'New password must be at least 10 characters long.';
+      setPasswordError(msg);
+      showToast('error', 'Password Too Short', msg);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setErrorMsg('New password and confirmation do not match.');
+      const msg = 'New password and confirmation do not match.';
+      setPasswordError(msg);
+      showToast('error', 'Passwords Do Not Match', msg);
       return;
     }
 
+    setIsUpdatingPassword(true);
     try {
       const res = await apiRequest<{ success: boolean; message: string }>('/user/password', {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
 
-      setPasswordSuccess(res.message);
+      const msg = res.message || 'Password updated successfully.';
+      setPasswordSuccess(msg);
+      setPasswordJustUpdated(true);
+      window.setTimeout(() => setPasswordJustUpdated(false), 3500);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      showToast('success', 'Password Updated', msg);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Password change failed.');
+      const msg = err instanceof Error ? err.message : 'Password change failed.';
+      setPasswordError(msg);
+      showToast('error', 'Password Update Failed', msg);
+    } finally {
+      setIsUpdatingPassword(false);
     }
   };
 
@@ -291,8 +385,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      showToast('success', 'Backup Exported', 'Your complete JSON snapshot has been downloaded.');
     } catch {
-      setErrorMsg('Failed to trigger JSON data export.');
+      const msg = 'Failed to trigger JSON data export.';
+      setErrorMsg(msg);
+      showToast('error', 'Export Failed', msg);
     }
   };
 
@@ -343,7 +440,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
             {/* Avatar & Identity */}
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
               <div className="relative group shrink-0">
-                <div className="w-24 h-24 rounded-2xl border border-border-subtle overflow-hidden bg-surface-elevated flex items-center justify-center shadow-sm transition-transform duration-200 group-hover:scale-[1.02]">
+                <div
+                  className={`w-24 h-24 rounded-2xl overflow-hidden bg-surface-elevated flex items-center justify-center shadow-sm transition-all duration-300 group-hover:scale-[1.02] border ${
+                    avatarJustUpdated
+                      ? 'border-success ring-2 ring-success/50 scale-[1.03]'
+                      : 'border-border-subtle'
+                  }`}
+                >
                   <UserAvatar
                     avatarUrl={profile?.avatarUrl}
                     displayName={profile?.displayName || displayName || 'Harshal Patel'}
@@ -351,17 +454,30 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                     className="w-full h-full"
                   />
                 </div>
-                <label className="absolute inset-0 rounded-2xl bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity text-[11px] text-white gap-1 font-mono">
-                  <Upload className="w-4 h-4 text-primary" />
-                  <span>{isUploadingAvatar ? 'Saving...' : 'Upload'}</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={handleAvatarUpload}
-                    disabled={isUploadingAvatar}
-                  />
-                </label>
+                {isUploadingAvatar ? (
+                  <div className="absolute inset-0 rounded-2xl bg-black/75 flex flex-col items-center justify-center text-[11px] text-white gap-1.5 font-mono">
+                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <span>Saving...</span>
+                  </div>
+                ) : (
+                  <label className="absolute inset-0 rounded-2xl bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity text-[11px] text-white gap-1 font-mono">
+                    <Camera className="w-4 h-4 text-primary" />
+                    <span>Change</span>
+                    <input
+                      ref={avatarFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                      disabled={isUploadingAvatar}
+                    />
+                  </label>
+                )}
+                {avatarJustUpdated && !isUploadingAvatar && (
+                  <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-success text-white text-[10px] font-mono font-semibold shadow-sm whitespace-nowrap animate-fade-up">
+                    Updated ✓
+                  </span>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -373,13 +489,33 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                     <span className="w-1.5 h-1.5 rounded-full bg-success" />
                     Active Workspace
                   </span>
+                  {profile?.avatarUrl && !profile.avatarUrl.startsWith('pixel:') && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-subtle text-primary text-[10px] font-mono font-semibold">
+                      Custom Photo
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs font-mono text-text-secondary">{profile?.email}</div>
                 <div className="text-xs font-mono text-primary">
                   B.Tech ICT • Dhirubhai Ambani University
                 </div>
-                <div className="text-[11px] text-text-muted pt-0.5">
-                  Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString() : 'N/A'} · Hover avatar to upload photo
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={isUploadingAvatar}
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[11px] font-mono text-text-primary transition-colors"
+                  >
+                    {isUploadingAvatar ? (
+                      <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                    ) : (
+                      <Upload className="w-3 h-3 text-primary" />
+                    )}
+                    <span>{isUploadingAvatar ? 'Uploading Photo...' : 'Upload Photo'}</span>
+                  </button>
+                  <span className="text-[11px] text-text-muted">
+                    Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString() : 'N/A'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -591,20 +727,35 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
 
         {/* 4. Pixel Characters + Personal Preferences */}
         <section className="bg-surface border border-border-subtle rounded-2xl p-6 space-y-6 shadow-sm">
-          <div className="flex items-center justify-between gap-2 pb-4 border-b border-border-subtle">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-border-subtle">
             <div className="flex items-center gap-2">
               <UserIcon className="w-4 h-4 text-primary" />
               <h2 className="text-sm font-semibold text-text-primary">Pixel Character Studio & Preferences</h2>
             </div>
-            <button
-              type="button"
-              disabled={isSavingAvatarPreset}
-              onClick={() => handleSelectPixelAvatar('')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs text-text-secondary hover:text-text-primary transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Use Default Bot</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isUploadingAvatar}
+                onClick={() => avatarFileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-subtle hover:bg-primary/20 border border-primary/30 text-xs font-medium text-primary transition-colors"
+              >
+                {isUploadingAvatar ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5" />
+                )}
+                <span>{isUploadingAvatar ? 'Uploading...' : 'Upload Custom Photo'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isSavingAvatarPreset}
+                onClick={() => handleSelectPixelAvatar('')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs text-text-secondary hover:text-text-primary transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Use Default Bot</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -693,9 +844,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
               <h2 className="text-sm font-semibold text-text-primary">Password & Security</h2>
             </div>
 
+            {passwordError && (
+              <div className="p-3 rounded-lg bg-danger-subtle border border-danger/35 text-xs text-danger flex items-center gap-2 font-mono animate-fade-up">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{passwordError}</span>
+              </div>
+            )}
+
             {passwordSuccess && (
-              <div className="p-3 rounded-lg bg-success-subtle border border-success/30 text-xs text-success flex items-center gap-2">
-                <Check className="w-4 h-4" />
+              <div className="p-3 rounded-lg bg-success-subtle border border-success/35 text-xs text-success flex items-center gap-2 font-mono animate-fade-up">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>{passwordSuccess}</span>
               </div>
             )}
@@ -709,7 +867,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                   <input
                     type={showCurrentPwd ? 'text' : 'password'}
                     value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    onChange={(e) => {
+                      setCurrentPassword(e.target.value);
+                      if (passwordError) setPasswordError(null);
+                    }}
                     className="w-full px-3 py-2 pr-9 bg-surface-subtle border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none focus:border-primary transition-colors"
                     required
                   />
@@ -733,7 +894,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                     <input
                       type={showNewPwd ? 'text' : 'password'}
                       value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        if (passwordError) setPasswordError(null);
+                      }}
                       className="w-full px-3 py-2 pr-9 bg-surface-subtle border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none focus:border-primary transition-colors"
                       required
                     />
@@ -756,7 +920,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                     <input
                       type={showConfirmPwd ? 'text' : 'password'}
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (passwordError) setPasswordError(null);
+                      }}
                       className="w-full px-3 py-2 pr-9 bg-surface-subtle border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none focus:border-primary transition-colors"
                       required
                     />
@@ -772,9 +939,43 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                 </div>
               </div>
 
+              {/* Live Validation Checklist */}
+              <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono pt-0.5">
+                <span className={`inline-flex items-center gap-1 ${newPassword.length >= 10 ? 'text-success' : 'text-text-muted'}`}>
+                  <Check className="w-3 h-3" />
+                  <span>10+ characters</span>
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1 ${
+                    confirmPassword.length > 0 && newPassword === confirmPassword ? 'text-success' : 'text-text-muted'
+                  }`}
+                >
+                  <Check className="w-3 h-3" />
+                  <span>Passwords match</span>
+                </span>
+              </div>
+
               <div className="flex justify-end pt-1">
-                <Button type="submit" variant="secondary" size="sm">
-                  Update Password
+                <Button
+                  type="submit"
+                  variant={passwordJustUpdated ? 'primary' : 'secondary'}
+                  size="sm"
+                  disabled={isUpdatingPassword}
+                  className="gap-1.5 min-w-[140px]"
+                >
+                  {isUpdatingPassword ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Updating...</span>
+                    </>
+                  ) : passwordJustUpdated ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Updated ✓</span>
+                    </>
+                  ) : (
+                    <span>Update Password</span>
+                  )}
                 </Button>
               </div>
             </form>
@@ -799,6 +1000,38 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
           </section>
         </div>
       </div>
+
+      {/* Floating Scroll-Independent Toast Notification */}
+      {toast && (
+        <div
+          role="status"
+          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-2xl bg-surface-elevated border shadow-2xl animate-fade-up ${
+            toast.type === 'success' ? 'border-success/50' : 'border-danger/50'
+          }`}
+        >
+          <span
+            className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+              toast.type === 'success' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'
+            }`}
+          >
+            {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className={`text-xs font-semibold ${toast.type === 'success' ? 'text-success' : 'text-danger'}`}>
+              {toast.title}
+            </div>
+            <div className="text-[11px] text-text-secondary mt-0.5 leading-snug">{toast.message}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            aria-label="Dismiss notification"
+            className="text-text-muted hover:text-text-primary transition-colors p-0.5"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </AppLayout>
   );
 };

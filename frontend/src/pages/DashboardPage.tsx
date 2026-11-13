@@ -19,7 +19,9 @@ import { LeetCodeSkillsPanel } from '../components/dashboard/LeetCodeSkillsPanel
 import { LeetCodeSolvedGauge } from '../components/dashboard/LeetCodeSolvedGauge';
 import { LeetCodeBadgesCard } from '../components/dashboard/LeetCodeBadgesCard';
 import { LeetCodeRecentSubmissions } from '../components/dashboard/LeetCodeRecentSubmissions';
+import { PotdBannerCard } from '../components/dashboard/PotdBannerCard';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
+import { PotdSummary } from '../types/potd';
 
 interface BadgeItem {
   badgeKey: string;
@@ -40,6 +42,7 @@ interface DashboardAnalytics {
   sqlSolved: number;
   sqlTotal: number;
   dailyProblemId: number;
+  potd?: PotdSummary;
   randomPoolIds: number[];
   easySolved: number;
   easyTotal: number;
@@ -213,8 +216,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           />
         </div>
 
-        {/* RIGHT COLUMN: Gauge + Badges + Heatmap + Focus & Revision + Activity */}
+        {/* RIGHT COLUMN: POTD + Gauge + Badges + Heatmap + Focus & Revision + Activity */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-5">
+          {data.potd && (
+            <PotdBannerCard
+              potd={data.potd}
+              currentStreak={currentStreak}
+              onSelectProblem={onSelectProblem}
+            />
+          )}
+
           {/* Row 1: Solved Gauge + Achievement Badges */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <LeetCodeSolvedGauge
@@ -253,11 +264,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               className="bg-surface hover:bg-surface-elevated border border-border-subtle hover:border-primary/40 rounded-xl p-3.5 text-left transition-colors group"
             >
               <div className="flex items-center justify-between text-xs font-mono text-primary">
-                <span>Daily Pick</span>
+                <span>Daily POTD</span>
                 <Play className="w-3.5 h-3.5" />
               </div>
-              <div className="text-sm font-semibold text-text-primary mt-1 group-hover:text-primary transition-colors">
-                Problem #{dailyProblemId}
+              <div className="text-sm font-semibold text-text-primary mt-1 group-hover:text-primary transition-colors flex items-center gap-1.5">
+                <span>Problem #{dailyProblemId}</span>
+                {data.potd?.solvedToday && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-success-subtle text-success">
+                    Done
+                  </span>
+                )}
               </div>
             </button>
 

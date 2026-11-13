@@ -19,16 +19,30 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [fetchedStreak, setFetchedStreak] = useState<number>(0);
+  const [potdStatus, setPotdStatus] = useState<{ id: number; solvedToday: boolean } | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchStreak = useCallback(async () => {
-    if (!user || propStreak !== undefined) return;
+    if (!user) return;
     try {
-      const res = await apiRequest<{ analytics: { currentStreak?: number } }>('/analytics/dashboard');
-      setFetchedStreak(res.analytics?.currentStreak ?? 0);
+      const res = await apiRequest<{
+        analytics?: {
+          currentStreak?: number;
+          potd?: { id: number; solvedToday: boolean };
+        };
+      }>('/analytics/dashboard');
+      if (propStreak === undefined) {
+        setFetchedStreak(res.analytics?.currentStreak ?? 0);
+      }
+      if (res.analytics?.potd?.id) {
+        setPotdStatus({
+          id: res.analytics.potd.id,
+          solvedToday: Boolean(res.analytics.potd.solvedToday),
+        });
+      }
     } catch {
       // Keep existing streak silently if analytics endpoint isn't ready
     }
@@ -213,23 +227,45 @@ export const Navbar: React.FC<NavbarProps> = ({
             </form>
           )}
 
-          {/* Real Daily Streak Indicator */}
+          {/* Real Daily POTD Streak Indicator */}
           {user && (
             <button
               type="button"
-              onClick={() => onTabChange?.('dashboard')}
-              title={`Current Daily Streak: ${activeStreak} day${activeStreak === 1 ? '' : 's'}`}
+              onClick={() => {
+                if (potdStatus && !potdStatus.solvedToday) {
+                  window.location.hash = `#problem/${potdStatus.id}`;
+                } else {
+                  onTabChange?.('dashboard');
+                }
+              }}
+              title={
+                potdStatus
+                  ? potdStatus.solvedToday
+                    ? `POTD Streak: ${activeStreak}d (Today's POTD #${potdStatus.id} Solved ✓)`
+                    : `POTD Streak: ${activeStreak}d — Click to solve today's POTD (#${potdStatus.id})`
+                  : `Current Daily Streak: ${activeStreak} day${activeStreak === 1 ? '' : 's'}`
+              }
               aria-label={`Current daily streak: ${activeStreak} days`}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-elevated border border-border-subtle text-xs font-mono hover:border-primary/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               <Flame
                 className={`w-3.5 h-3.5 ${
-                  activeStreak > 0 ? 'text-primary fill-primary/30' : 'text-text-muted'
+                  potdStatus?.solvedToday || activeStreak > 0
+                    ? 'text-primary fill-primary/30'
+                    : 'text-text-muted'
                 }`}
               />
               <span className={activeStreak > 0 ? 'text-text-primary font-bold' : 'text-text-muted'}>
                 {activeStreak}d
               </span>
+              {potdStatus && (
+                <span
+                  aria-hidden="true"
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    potdStatus.solvedToday ? 'bg-success' : 'bg-primary animate-pulse'
+                  }`}
+                />
+              )}
             </button>
           )}
 

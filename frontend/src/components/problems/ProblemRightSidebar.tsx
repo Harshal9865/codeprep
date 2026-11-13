@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { Flame, Terminal } from 'lucide-react';
+import { Flame, Terminal, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
 import { HeatmapDay } from '../dashboard/ActivityHeatmap';
+import { PotdSummary, usePotdCountdown } from '../../types/potd';
 
 interface ProblemRightSidebarProps {
   totalSolved?: number;
@@ -10,6 +11,8 @@ interface ProblemRightSidebarProps {
   currentStreak?: number;
   longestStreak?: number;
   heatmap?: HeatmapDay[];
+  potd?: PotdSummary | null;
+  onSelectProblem?: (problemId: number) => void;
 }
 
 export const ProblemRightSidebar: React.FC<ProblemRightSidebarProps> = ({
@@ -20,7 +23,10 @@ export const ProblemRightSidebar: React.FC<ProblemRightSidebarProps> = ({
   currentStreak = 0,
   longestStreak = 0,
   heatmap = [],
+  potd = null,
+  onSelectProblem,
 }) => {
+  const countdown = usePotdCountdown(potd?.nextResetIso);
   const now = new Date();
   const year = now.getFullYear();
   const monthIndex = now.getMonth();
@@ -62,6 +68,60 @@ export const ProblemRightSidebar: React.FC<ProblemRightSidebarProps> = ({
 
   return (
     <aside className="w-72 shrink-0 hidden 2xl:flex flex-col gap-4 text-xs select-none">
+      {/* Today's Problem of the Day */}
+      {potd && onSelectProblem && (
+        <div
+          className={`bg-surface rounded-2xl p-4 shadow-sm border transition-colors ${
+            potd.solvedToday ? 'border-success/35' : 'border-primary/40'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold text-primary">
+              <Flame className="w-3.5 h-3.5 fill-primary/30" />
+              <span>Today&apos;s POTD</span>
+            </span>
+            <span className="text-[10px] font-mono text-text-muted flex items-center gap-1">
+              <Clock className="w-3 h-3 text-primary" />
+              <span>{countdown}</span>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onSelectProblem(potd.id)}
+            className="w-full text-left group space-y-2"
+          >
+            <div className="text-sm font-bold text-text-primary group-hover:text-primary transition-colors line-clamp-2">
+              #{potd.id}. {potd.title}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                  potd.difficulty === 'Easy'
+                    ? 'bg-success-subtle text-success'
+                    : potd.difficulty === 'Medium'
+                    ? 'bg-warning-subtle text-warning'
+                    : 'bg-danger-subtle text-danger'
+                }`}
+              >
+                {potd.difficulty}
+              </span>
+              {potd.solvedToday ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-mono text-success font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Solved</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-mono text-primary font-semibold group-hover:translate-x-0.5 transition-transform">
+                  <span>Solve</span>
+                  <ArrowRight className="w-3 h-3" />
+                </span>
+              )}
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Real Streak & Monthly Active Days Calendar */}
       <div className="bg-surface rounded-2xl p-4 shadow-sm text-text-primary border border-border-subtle">
         {/* Header */}
@@ -108,15 +168,19 @@ export const ProblemRightSidebar: React.FC<ProblemRightSidebarProps> = ({
             const isToday = cell.day === currentDay;
             const count = cell.activity?.count || 0;
             const accepted = cell.activity?.acceptedCount || 0;
-            const hasActivity = count > 0;
+            const potdSolved = Boolean(cell.activity?.potdSolved);
+            const hasActivity = potdSolved || count > 0;
 
             let cellStyle = 'text-text-muted hover:bg-surface-elevated hover:text-text-primary';
-            if (hasActivity && isToday) {
+            if (potdSolved && isToday) {
               cellStyle =
                 'bg-emerald-500/25 text-emerald-400 font-bold ring-1 ring-primary border border-emerald-500/40';
-            } else if (hasActivity) {
+            } else if (potdSolved) {
               cellStyle =
                 'bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/35';
+            } else if (hasActivity) {
+              cellStyle =
+                'bg-primary/15 text-primary font-medium border border-primary/25';
             } else if (isToday) {
               cellStyle =
                 'bg-primary-subtle text-primary font-bold ring-1 ring-primary';
@@ -126,9 +190,11 @@ export const ProblemRightSidebar: React.FC<ProblemRightSidebarProps> = ({
               <div
                 key={cell.dateStr}
                 title={
-                  hasActivity
+                  potdSolved
+                    ? `${cell.dateStr}: POTD Solved ✓ (${count} submissions)`
+                    : hasActivity
                     ? `${cell.dateStr}: ${count} submission${count === 1 ? '' : 's'} (${accepted} accepted)`
-                    : `${cell.dateStr}: No submissions`
+                    : `${cell.dateStr}: POTD not solved`
                 }
                 className={`h-7 flex items-center justify-center rounded-lg transition-colors cursor-default ${cellStyle}`}
               >

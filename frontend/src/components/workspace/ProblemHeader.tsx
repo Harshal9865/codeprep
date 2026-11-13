@@ -9,6 +9,7 @@ import {
   Play,
   Pause,
   List,
+  Flame,
 } from 'lucide-react';
 
 interface ProblemHeaderProps {
@@ -20,6 +21,8 @@ interface ProblemHeaderProps {
   onBookmarkToggle: () => void;
   onBackToList: () => void;
   rightActions?: React.ReactNode;
+  isPotd?: boolean;
+  potdSolvedToday?: boolean;
 }
 
 export const ProblemHeader: React.FC<ProblemHeaderProps> = ({
@@ -31,6 +34,8 @@ export const ProblemHeader: React.FC<ProblemHeaderProps> = ({
   onBookmarkToggle,
   onBackToList,
   rightActions,
+  isPotd = false,
+  potdSolvedToday = false,
 }) => {
   const [seconds, setSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(true);
@@ -98,6 +103,19 @@ export const ProblemHeader: React.FC<ProblemHeaderProps> = ({
           <span className="text-xs font-semibold text-text-primary truncate max-w-[200px] lg:max-w-xs">
             {problem.title}
           </span>
+          {isPotd && (
+            <span
+              title={potdSolvedToday ? "Today's POTD solved — daily streak maintained!" : "Today's Problem of the Day"}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold shrink-0 border ${
+                potdSolvedToday
+                  ? 'bg-success-subtle text-success border-success/35'
+                  : 'bg-primary-subtle text-primary border-primary/35'
+              }`}
+            >
+              <Flame className="w-3 h-3 fill-current" />
+              <span>{potdSolvedToday ? 'POTD ✓' : 'POTD'}</span>
+            </span>
+          )}
         </div>
       </div>
 

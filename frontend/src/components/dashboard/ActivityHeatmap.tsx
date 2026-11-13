@@ -6,6 +6,8 @@ export interface HeatmapDay {
   count: number;
   acceptedCount: number;
   level: number;
+  potdSolved?: boolean;
+  potdProblemId?: number;
 }
 
 interface ActivityHeatmapProps {
@@ -284,7 +286,7 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({
                             type="button"
                             onClick={() => setSelectedDay(isSelected ? null : cell)}
                             style={cell.level === 0 ? { backgroundColor: 'var(--heatmap-empty)' } : undefined}
-                            title={`${cell.date}: ${cell.count} submission${cell.count === 1 ? '' : 's'} (${cell.acceptedCount} accepted)`}
+                            title={`${cell.date}: ${cell.count} submission${cell.count === 1 ? '' : 's'} (${cell.acceptedCount} accepted)${cell.potdSolved ? ' • POTD Solved ✓' : ''}`}
                             className={`w-[10px] h-[10px] sm:w-[11px] sm:h-[11px] rounded-[2px] border-0 transition-transform duration-150 hover:scale-125 ${levelClass} ${
                               isSelected ? 'ring-1 ring-primary ring-offset-1 ring-offset-surface' : ''
                             }`}
@@ -315,6 +317,11 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({
               <span>
                 {selectedDay.count} submission{selectedDay.count === 1 ? '' : 's'} ({selectedDay.acceptedCount} accepted)
               </span>
+              {selectedDay.potdSolved && (
+                <span className="px-2 py-0.5 rounded-full bg-success-subtle text-success text-[10px] font-semibold">
+                  POTD Solved ✓
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedDay(null)}

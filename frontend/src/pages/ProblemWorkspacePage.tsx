@@ -6,7 +6,7 @@ import { EditorPane } from '../components/workspace/EditorPane';
 import { TestRunnerPane } from '../components/workspace/TestRunnerPane';
 import { HintsDrawer } from '../components/workspace/HintsDrawer';
 import { PerformanceCurveModal } from '../components/workspace/PerformanceCurveModal';
-import { Activity, BookOpen, Lightbulb } from 'lucide-react';
+import { Activity, BookOpen, Lightbulb, Flame, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 
@@ -37,6 +37,12 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
   const [isTeacherLoading, setIsTeacherLoading] = useState<boolean>(false);
   const [isHintsOpen, setIsHintsOpen] = useState<boolean>(false);
   const [hasUnreadGuidance, setHasUnreadGuidance] = useState<boolean>(false);
+  const [potdInfo, setPotdInfo] = useState<{ isPotd: boolean; solvedToday: boolean; currentStreak: number }>({
+    isPotd: false,
+    solvedToday: false,
+    currentStreak: 0,
+  });
+  const [potdBannerMsg, setPotdBannerMsg] = useState<string | null>(null);
 
   const lastActiveTimestampRef = useRef<number>(Date.now());
   const savedCodeRef = useRef<string>('');
@@ -108,8 +114,14 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
   // Load problem details, saved draft, notes & submissions
   const loadProblem = useCallback(async (id: number) => {
     setIsLoading(true);
+    setPotdBannerMsg(null);
     try {
-      const res = await apiRequest<{ problem: Problem }>(`/problems/${id}`);
+      const [res, dashRes] = await Promise.all([
+        apiRequest<{ problem: Problem }>(`/problems/${id}`),
+        apiRequest<{
+          analytics?: { currentStreak?: number; potd?: { id: number; solvedToday: boolean } };
+        }>('/analytics/dashboard').catch(() => null),
+      ]);
       const initialCode = res.problem.userDraftCode || res.problem.defaultCodeStub || '';
       setProblem(res.problem);
       setCode(initialCode);
@@ -118,6 +130,13 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       setExecutionResult(null);
       setTeacherGuidance('');
       setHasUnreadGuidance(false);
+
+      const potd = dashRes?.analytics?.potd;
+      setPotdInfo({
+        isPotd: potd?.id === id,
+        solvedToday: Boolean(potd?.solvedToday),
+        currentStreak: dashRes?.analytics?.currentStreak ?? 0,
+      });
     } catch {
       alert(`Problem #${id} could not be loaded.`);
       onBackToList();
@@ -224,7 +243,11 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     await persistDraftNow(problem.id, code);
     setIsSubmitting(true);
     try {
-      const res = await apiRequest<{ result: ExecutionResult; submissionId: string }>('/submissions/submit', {
+      const res = await apiRequest<{
+        result: ExecutionResult;
+        submissionId: string;
+        potdStatus?: { isPotd: boolean; solvedToday: boolean; currentStreak: number };
+      }>('/submissions/submit', {
         method: 'POST',
         body: JSON.stringify({
           problemId: problem.id,
@@ -254,6 +277,15 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
 
       if (res.result.verdict === 'Accepted') {
         window.dispatchEvent(new CustomEvent('codeprep:progress-updated'));
+        if (res.potdStatus?.isPotd) {
+          setPotdInfo(res.potdStatus);
+          setPotdBannerMsg(
+            `Daily POTD Solved! Streak maintained at ${res.potdStatus.currentStreak} day${
+              res.potdStatus.currentStreak === 1 ? '' : 's'
+            }.`
+          );
+          window.setTimeout(() => setPotdBannerMsg(null), 6000);
+        }
       }
 
       requestTeacherFeedback(res.result.verdict, res.result);
@@ -313,6 +345,8 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         hasNext={problemId < 500}
         onBookmarkToggle={handleBookmarkToggle}
         onBackToList={() => handleNavigateSafely(onBackToList)}
+        isPotd={potdInfo.isPotd}
+        potdSolvedToday={potdInfo.solvedToday}
         rightActions={
           <div className="flex items-center gap-1.5">
             <button
@@ -416,6 +450,24 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         isOpen={isPerformanceModalOpen}
         onClose={() => setIsPerformanceModalOpen(false)}
       />
+
+      {potdBannerMsg && (
+        <div
+          role="status"
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-surface-elevated border border-success/50 text-xs font-mono text-text-primary shadow-2xl animate-fade-up"
+        >
+          <span className="h-7 w-7 rounded-lg bg-success-subtle text-success flex items-center justify-center shrink-0">
+            <Flame className="w-4 h-4 fill-current" />
+          </span>
+          <div className="min-w-0">
+            <div className="font-semibold text-success flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>POTD Complete</span>
+            </div>
+            <div className="text-[11px] text-text-secondary">{potdBannerMsg}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
