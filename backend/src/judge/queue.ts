@@ -1,5 +1,6 @@
+import crypto from 'crypto';
 import { ExecutionResult, TestCase } from './types';
-import { SandboxRunner } from './sandboxRunner';
+import { RunnerOptions, SandboxRunner } from './sandboxRunner';
 import { Logger } from '../utils/logger';
 
 interface QueuedTask {
@@ -9,6 +10,7 @@ interface QueuedTask {
   userCode: string;
   functionSignature: string;
   testCases: TestCase[];
+  options?: RunnerOptions;
   resolve: (res: ExecutionResult) => void;
   reject: (err: unknown) => void;
 }
@@ -20,22 +22,44 @@ export class ExecutionQueue {
   private static readonly recentSubmissions = new Map<string, number>();
 
   /**
-   * Enqueues a submission with double-click idempotency guard.
+   * Enqueues a submission with full-payload double-click idempotency guard.
    */
   static enqueue(
     userId: string,
     problemId: number,
     userCode: string,
     functionSignature: string,
-    testCases: TestCase[]
+    testCases: TestCase[],
+    options?: RunnerOptions
   ): Promise<ExecutionResult> {
-    const idempotencyKey = `${userId}:${problemId}:${userCode.trim().substring(0, 64)}`;
+    const payloadHash = crypto
+      .createHash('sha1')
+      .update(userCode.trim())
+      .update('|')
+      .update(JSON.stringify(testCases))
+      .update('|')
+      .update(options?.isCustomRun ? 'custom' : options?.allowStandaloneMain ? 'run' : 'submit')
+      .digest('hex')
+      .slice(0, 16);
+
+    const idempotencyKey = `${userId}:${problemId}:${payloadHash}`;
     const now = Date.now();
     const lastRunTime = this.recentSubmissions.get(idempotencyKey);
 
     if (lastRunTime && now - lastRunTime < 1500) {
-      Logger.warn('ExecutionQueue', 'Duplicate submission dropped by idempotency guard', { idempotencyKey });
-      return Promise.reject(new Error('Duplicate submission detected. Please wait for the current run to complete.'));
+      Logger.warn('ExecutionQueue', 'Duplicate submission dropped by idempotency guard', {
+        idempotencyKey,
+      });
+      return Promise.reject(
+        new Error('Duplicate submission detected. Please wait for the current run to complete.')
+      );
+    }
+
+    // Periodically prune stale keys
+    if (this.recentSubmissions.size > 200) {
+      for (const [k, ts] of this.recentSubmissions.entries()) {
+        if (now - ts > 10000) this.recentSubmissions.delete(k);
+      }
     }
     this.recentSubmissions.set(idempotencyKey, now);
 
@@ -48,6 +72,7 @@ export class ExecutionQueue {
         userCode,
         functionSignature,
         testCases,
+        options,
         resolve,
         reject,
       });
@@ -70,7 +95,8 @@ export class ExecutionQueue {
       const result = await SandboxRunner.runCppSubmission(
         task.userCode,
         task.functionSignature,
-        task.testCases
+        task.testCases,
+        task.options
       );
       task.resolve(result);
     } catch (err) {
@@ -81,4 +107,3 @@ export class ExecutionQueue {
     }
   }
 }
-

@@ -55,10 +55,10 @@ export const DSA_BATCH_9: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     examples: [
       { input: '[2,3,1,1,4]', output: 'true', explanation: 'Reach the last index with minimum steps.' },
     ],
-    functionSignature: 'int solve(vector<int>& nums)',
+    functionSignature: 'bool solve(vector<int>& nums)',
     paramTypes: ['vector<int>'],
-    returnType: 'int',
-    defaultCodeStub: `class Solution {\npublic:\n    int solve(vector<int>& nums) {\n        // Your code here\n    }\n};`,
+    returnType: 'bool',
+    defaultCodeStub: `class Solution {\npublic:\n    bool solve(vector<int>& nums) {\n        // Your code here\n    }\n};`,
     sampleTestCases: [
       { input: '[2,3,1,1,4]', expectedOutput: 'true' },
       { input: '[3,2,1,0,4]', expectedOutput: 'false' },

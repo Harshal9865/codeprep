@@ -127,7 +127,7 @@ export class SqlRunner {
   }
 
   /**
-   * Converts common PostgreSQL query idioms into SQLite-compatible SQL.
+   * Converts common PostgreSQL / MySQL query idioms into SQLite-compatible SQL.
    */
   private static normalizePostgresQuery(query: string): string {
     return query
@@ -144,6 +144,14 @@ export class SqlRunner {
       )
       .replace(/\bILIKE\b/gi, 'LIKE')
       .replace(/\bNOW\s*\(\s*\)/gi, 'CURRENT_TIMESTAMP')
+      .replace(/\bCHAR_LENGTH\s*\(/gi, 'LENGTH(')
+      .replace(/\bCHARACTER_LENGTH\s*\(/gi, 'LENGTH(')
+      .replace(/\bSUBSTRING\s*\(/gi, 'SUBSTR(')
+      .replace(/\bNVL\s*\(/gi, 'COALESCE(')
+      .replace(/\bIF\s*\(/gi, 'IIF(')
+      .replace(/\bEXTRACT\s*\(\s*YEAR\s+FROM\s+([^)]+)\)/gi, "CAST(strftime('%Y', $1) AS INTEGER)")
+      .replace(/\bEXTRACT\s*\(\s*MONTH\s+FROM\s+([^)]+)\)/gi, "CAST(strftime('%m', $1) AS INTEGER)")
+      .replace(/\bEXTRACT\s*\(\s*DAY\s+FROM\s+([^)]+)\)/gi, "CAST(strftime('%d', $1) AS INTEGER)")
       .replace(/\bYEAR\s*\(([^)]+)\)/gi, "CAST(strftime('%Y', $1) AS INTEGER)")
       .replace(/\bMONTH\s*\(([^)]+)\)/gi, "CAST(strftime('%m', $1) AS INTEGER)")
       .replace(/\bDAY\s*\(([^)]+)\)/gi, "CAST(strftime('%d', $1) AS INTEGER)")
@@ -207,7 +215,7 @@ export class SqlRunner {
       }
     }
 
-    const strippedUpper = unscoped.trim();
+    const strippedUpper = unscoped.trim().replace(/^\(+\s*/, '');
     if (!strippedUpper.startsWith('SELECT') && !strippedUpper.startsWith('WITH')) {
       return {
         safe: false,
@@ -354,8 +362,8 @@ export class SqlRunner {
       if (typeof val === 'number') {
         return Number.isInteger(val) ? String(val) : String(Math.round(val * 100000) / 100000);
       }
-      if (typeof val === 'string' && val !== '' && !Number.isNaN(Number(val))) {
-        const num = Number(val);
+      if (typeof val === 'string' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(val.trim())) {
+        const num = Number(val.trim());
         return Number.isInteger(num) ? String(num) : String(Math.round(num * 100000) / 100000);
       }
       return String(val);

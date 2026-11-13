@@ -45,17 +45,17 @@ export const DSA_BATCH_7: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     examples: [
       { input: '[[1,2],[2,3],[3,1]]', output: 'true', explanation: 'Result verified across edge transitions.' },
     ],
-    functionSignature: 'int solve(vector<vector<int>>& grid)',
+    functionSignature: 'bool solve(vector<vector<int>>& grid)',
     paramTypes: ['vector<vector<int>>'],
-    returnType: 'int',
-    defaultCodeStub: `class Solution {\npublic:\n    int solve(vector<vector<int>>& grid) {\n        // Your code here\n    }\n};`,
+    returnType: 'bool',
+    defaultCodeStub: `class Solution {\npublic:\n    bool solve(vector<vector<int>>& grid) {\n        // Your code here\n    }\n};`,
     sampleTestCases: [
       { input: '[[1,2],[2,3],[3,1]]', expectedOutput: 'true' },
       { input: '[[1,2],[2,3]]', expectedOutput: 'false' },
     ],
     hiddenTestCases: [
-      { input: '[]', expectedOutput: '0', isHidden: true },
-      { input: '[[1,2]]', expectedOutput: '1', isHidden: true },
+      { input: '[]', expectedOutput: 'false', isHidden: true },
+      { input: '[[1,2]]', expectedOutput: 'true', isHidden: true },
     ],
   };
 });

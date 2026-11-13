@@ -93,12 +93,16 @@ export class ProblemService {
         }
       }
 
-      // Synchronize curated famous problems only on initial seed or when curriculum sentinel differs
+      // Synchronize curated famous problems when initial seed runs or canonical examples change
       const { FAMOUS_DSA_PROBLEMS } = await import('../data/famousCurriculum');
+      const sentinel130 = FAMOUS_DSA_PROBLEMS.find((p) => p.id === 130);
       const sentinel = existingCount >= totalTarget
-        ? await prisma.problem.findUnique({ where: { id: 130 }, select: { slug: true } })
+        ? await prisma.problem.findUnique({ where: { id: 130 }, select: { slug: true, examplesJson: true } })
         : null;
-      const needsCuratedSync = existingCount < totalTarget || sentinel?.slug !== '130-job-sequencing-problem-gfg';
+      const needsCuratedSync =
+        existingCount < totalTarget ||
+        sentinel?.slug !== '130-job-sequencing-problem-gfg' ||
+        (sentinel130 && sentinel?.examplesJson !== JSON.stringify(sentinel130.examples));
 
       if (needsCuratedSync) {
         for (const prob of FAMOUS_DSA_PROBLEMS) {

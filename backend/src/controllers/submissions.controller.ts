@@ -5,6 +5,8 @@ import { DSA_500_PROBLEMS } from '../data/dsa500';
 import { SQL_100_PROBLEMS, SqlProblemDefinition } from '../data/sql100';
 import { ExecutionQueue } from '../judge/queue';
 import { SqlRunner } from '../judge/sqlRunner';
+import { InputParser } from '../judge/inputParser';
+import { ProblemJudgePolicy } from '../judge/problemJudgePolicy';
 import { TestCase } from '../judge/types';
 import { Logger } from '../utils/logger';
 
@@ -83,13 +85,27 @@ export class SubmissionsController {
         return;
       }
 
+      const parsedSig = InputParser.parseSignature(def.functionSignature);
+      const paramTypes = parsedSig ? parsedSig.params.map((p) => p.normType) : def.paramTypes || [];
+      const policy = ProblemJudgePolicy.getPolicy(def);
+
       let testCasesToRun: TestCase[] = def.sampleTestCases;
+      let isCustomRun = false;
+
       if (customTestCases && Array.isArray(customTestCases) && customTestCases.length > 0) {
-        testCasesToRun = customTestCases.map((tc, idx) => ({
-          id: idx + 1,
-          input: tc.input,
-          expectedOutput: tc.expectedOutput || '',
-        }));
+        isCustomRun = true;
+        if (customTestCases.length === 1 && !(customTestCases[0].expectedOutput || '').trim()) {
+          testCasesToRun = InputParser.expandCustomTestCases(
+            customTestCases[0].input || '',
+            paramTypes
+          );
+        } else {
+          testCasesToRun = customTestCases.map((tc, idx) => ({
+            id: idx + 1,
+            input: tc.input,
+            expectedOutput: tc.expectedOutput || '',
+          }));
+        }
       }
 
       const result = await ExecutionQueue.enqueue(
@@ -97,7 +113,18 @@ export class SubmissionsController {
         def.id,
         code,
         def.functionSignature,
-        testCasesToRun
+        testCasesToRun,
+        {
+          allowStandaloneMain: true,
+          isCustomRun,
+          comparisonOptions: {
+            orderMode: policy.orderMode,
+            floatTolerance: policy.floatTolerance,
+            isTreeReturn: policy.isTreeReturn,
+            isStringReturn: policy.isStringReturn,
+            allowBoolIntCoercion: policy.allowBoolIntCoercion,
+          },
+        }
       );
 
       res.json({ result });
@@ -186,13 +213,25 @@ export class SubmissionsController {
 
       // Combine sample and hidden tests for final submission verdict
       const fullTestSuites: TestCase[] = [...def.sampleTestCases, ...def.hiddenTestCases];
+      const policy = ProblemJudgePolicy.getPolicy(def);
 
       const result = await ExecutionQueue.enqueue(
         userId,
         def.id,
         code,
         def.functionSignature,
-        fullTestSuites
+        fullTestSuites,
+        {
+          allowStandaloneMain: false,
+          isCustomRun: false,
+          comparisonOptions: {
+            orderMode: policy.orderMode,
+            floatTolerance: policy.floatTolerance,
+            isTreeReturn: policy.isTreeReturn,
+            isStringReturn: policy.isStringReturn,
+            allowBoolIntCoercion: policy.allowBoolIntCoercion,
+          },
+        }
       );
 
       // Record submission in database

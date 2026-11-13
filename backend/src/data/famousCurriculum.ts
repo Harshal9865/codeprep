@@ -817,16 +817,16 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
       'You are given weights and values of N items, put these items in a knapsack of capacity W to get the maximum total value in the knapsack. Note that we have only one quantity of each item.\n\nIn other words, given two integer arrays val[0..N-1] and wt[0..N-1] which represent values and weights associated with N items respectively. Also given an integer W which represents knapsack capacity, find out the maximum value subset of val[] such that sum of the weights of this subset is smaller than or equal to W.',
     constraints: '1 <= N <= 1000\n1 <= W <= 1000\n1 <= wt[i] <= 1000\n1 <= val[i] <= 1000',
     examples: [
-      { input: '4 | [1,2,3] | [10,15,40] | 3', output: '55', explanation: 'Max value item 2 (wt 1, val 10) + item 4 (wt 3, val 40) gives weight 4 and value 55.' },
-      { input: '3 | [4,5,1] | [1,2,3] | 4', output: '3' },
+      { input: '4 | [1,2,3] | [10,15,40] | 3', output: '50', explanation: 'Max value item 1 (wt 1, val 10) + item 3 (wt 3, val 40) gives weight 4 and value 50.' },
+      { input: '4 | [4,5,1] | [1,2,3] | 3', output: '3' },
     ],
     functionSignature: 'int knapSack(int W, vector<int>& wt, vector<int>& val, int n)',
     paramTypes: ['int', 'vector<int>', 'vector<int>', 'int'],
     returnType: 'int',
     defaultCodeStub: `class Solution {\npublic:\n    int knapSack(int W, vector<int>& wt, vector<int>& val, int n) {\n        // 0/1 Knapsack dynamic programming table\n    }\n};`,
     sampleTestCases: [
-      { input: '4 | [1,2,3] | [10,15,40] | 3', expectedOutput: '55' },
-      { input: '3 | [4,5,1] | [1,2,3] | 4', expectedOutput: '3' },
+      { input: '4 | [1,2,3] | [10,15,40] | 3', expectedOutput: '50' },
+      { input: '4 | [4,5,1] | [1,2,3] | 3', expectedOutput: '3' },
     ],
     hiddenTestCases: [
       { input: '50 | [10,20,30] | [60,100,120] | 3', expectedOutput: '220', isHidden: true },
@@ -898,17 +898,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
       'Given a set of N jobs where each job has a deadline and profit associated with it. Each job takes 1 unit of time to complete and only one job can be scheduled at a time. We earn the profit associated with a job if and only if the job is completed by its deadline.\n\nFind the maximum profit and the number of jobs done.',
     constraints: '1 <= N <= 10^5\n1 <= Deadline <= N\n1 <= Profit <= 500',
     examples: [
-      { input: '4 | [[1,4,20],[2,1,10],[3,1,40],[4,1,30]]', output: '[2,60]', explanation: 'Job 3 is done at time 1 (profit 40), Job 1 is done at time 2 (profit 20). Total jobs: 2, total profit: 60.' },
+      { input: '[[1,4,20],[2,1,10],[3,1,40],[4,1,30]] | 4', output: '[2,60]', explanation: 'Job 3 is done at time 1 (profit 40), Job 1 is done at time 2 (profit 20). Total jobs: 2, total profit: 60.' },
     ],
     functionSignature: 'vector<int> JobScheduling(vector<vector<int>>& Jobs, int n)',
     paramTypes: ['vector<vector<int>>', 'int'],
     returnType: 'vector<int>',
     defaultCodeStub: `class Solution {\npublic:\n    vector<int> JobScheduling(vector<vector<int>>& Jobs, int n) {\n        // Sort jobs descending by profit, place in latest available slot\n    }\n};`,
     sampleTestCases: [
-      { input: '4 | [[1,4,20],[2,1,10],[3,1,40],[4,1,30]]', expectedOutput: '[2,60]' },
+      { input: '[[1,4,20],[2,1,10],[3,1,40],[4,1,30]] | 4', expectedOutput: '[2,60]' },
     ],
     hiddenTestCases: [
-      { input: '5 | [[1,2,100],[2,1,19],[3,2,27],[4,1,25],[5,1,15]]', expectedOutput: '[2,127]', isHidden: true },
+      { input: '[[1,2,100],[2,1,19],[3,2,27],[4,1,25],[5,1,15]] | 5', expectedOutput: '[2,127]', isHidden: true },
     ],
   },
 ];
