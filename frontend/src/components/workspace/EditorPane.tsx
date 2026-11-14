@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { RotateCcw, Copy, Check, Eye, EyeOff, Code, CheckCircle2 } from 'lucide-react';
+import { RotateCcw, Copy, Check, Eye, EyeOff, Code, CheckCircle2, AlignLeft, Sparkles } from 'lucide-react';
 import { apiRequest } from '../../services/api';
 import { HighlightedCode, HighlightedCodeEditor } from '../ui/CodeHighlight';
+import { formatCode } from '../../utils/codeFormatter';
 
 interface EditorPaneProps {
   code: string;
@@ -26,8 +27,43 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
   const [fullCodeText, setFullCodeText] = useState('');
   const [isGeneratingFullCode, setIsGeneratingFullCode] = useState(false);
   const [copiedFullCode, setCopiedFullCode] = useState(false);
+  const [justFormatted, setJustFormatted] = useState(false);
+  const [autoFormat, setAutoFormat] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('codeprep_auto_format');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const triggerFormattedToast = () => {
+    setJustFormatted(true);
+    window.setTimeout(() => setJustFormatted(false), 1500);
+  };
+
+  const handleFormatCode = () => {
+    if (showFullCode) return;
+    const formatted = formatCode(code, 'cpp');
+    if (formatted !== code) {
+      onChange(formatted);
+    }
+    triggerFormattedToast();
+  };
+
+  const handleToggleAutoFormat = () => {
+    setAutoFormat((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('codeprep_auto_format', String(next));
+      } catch {
+        // Ignore storage quota errors
+      }
+      return next;
+    });
+  };
 
   const handleShowFullCodeToggle = async () => {
     if (!showFullCode) {
@@ -63,21 +99,6 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
       } else {
         onRunShortcut?.();
       }
-      return;
-    }
-
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const target = e.currentTarget;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-
-      const newCode = code.substring(0, start) + '    ' + code.substring(end);
-      onChange(newCode);
-
-      setTimeout(() => {
-        target.selectionStart = target.selectionEnd = start + 4;
-      }, 0);
     }
   };
 
@@ -96,6 +117,38 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {!showFullCode && (
+            <>
+              <button
+                type="button"
+                onClick={handleToggleAutoFormat}
+                className={`px-2 py-1 rounded-lg text-[11px] font-mono flex items-center gap-1 transition-colors border ${
+                  autoFormat
+                    ? 'bg-success-subtle text-success border-success/35'
+                    : 'bg-surface-elevated text-text-muted hover:text-text-primary border-border-subtle'
+                }`}
+                title="Automatically fix spacing, indentation & pasted code formatting"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span className="hidden sm:inline">Auto-Format {autoFormat ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleFormatCode}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors bg-surface-elevated text-text-muted hover:text-text-primary border border-border-subtle"
+                title="Format code spacing & indentation (Shift+Alt+F)"
+              >
+                {justFormatted ? (
+                  <Check className="w-3.5 h-3.5 text-success" />
+                ) : (
+                  <AlignLeft className="w-3.5 h-3.5 text-primary" />
+                )}
+                <span>{justFormatted ? 'Formatted' : 'Format'}</span>
+              </button>
+            </>
+          )}
+
           <button
             type="button"
             onClick={handleShowFullCodeToggle}
@@ -160,6 +213,8 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
             textareaRef={textareaRef}
             showLineNumbers
             paddingClass="p-3"
+            autoFormat={autoFormat}
+            onFormatted={triggerFormattedToast}
           />
         )}
       </div>
@@ -187,8 +242,8 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden sm:inline text-[11px] text-text-muted/80">
-            Ctrl+Enter to Run • Ctrl+Shift+Enter to Submit
+          <span className="hidden lg:inline text-[11px] text-text-muted/80">
+            Ctrl+Space Complete • Shift+Alt+F Format • Ctrl+Enter Run
           </span>
           <span>Ln {lines.length}</span>
         </div>

@@ -28,6 +28,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'solved' | 'unsolved'>('all');
+  const [sqlSubset, setSqlSubset] = useState<'all' | 'core-sql-100'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredTotal, setFilteredTotal] = useState(400);
   const [sqlTotal, setSqlTotal] = useState(400);
@@ -62,6 +63,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
       if (selectedDifficulty !== 'all') queryParams.append('difficulty', selectedDifficulty);
       if (selectedTopic !== 'all') queryParams.append('topic', selectedTopic);
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
+      if (sqlSubset !== 'all') queryParams.append('track', sqlSubset);
       if (debouncedSearch.trim()) queryParams.append('search', debouncedSearch.trim());
       if (isShuffled) queryParams.append('shuffleSeed', String(shuffleSeed));
 
@@ -96,6 +98,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
     selectedDifficulty,
     selectedTopic,
     statusFilter,
+    sqlSubset,
     debouncedSearch,
     isShuffled,
     shuffleSeed,
@@ -163,6 +166,29 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-full p-0.5 text-xs">
+              {[
+                { id: 'all', label: `All SQL (${sqlTotal})` },
+                { id: 'core-sql-100', label: 'Core 100 (#501–#600)' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    setSqlSubset(opt.id as 'all' | 'core-sql-100');
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1 rounded-full transition-colors ${
+                    sqlSubset === opt.id
+                      ? 'bg-sky-500 text-black font-semibold'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-full p-0.5 text-xs">
               {(['all', 'solved', 'unsolved'] as const).map((status) => (
                 <button

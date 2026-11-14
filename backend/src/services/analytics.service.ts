@@ -55,6 +55,18 @@ export interface BadgeProgressItem {
   target: number;
 }
 
+export interface Core600Summary {
+  total: number;
+  solved: number;
+  dsaTotal: number;
+  dsaSolved: number;
+  sqlTotal: number;
+  sqlSolved: number;
+  nextUnsolvedId: number;
+  nextDsaId: number;
+  nextSqlId: number;
+}
+
 export interface DashboardAnalytics {
   totalSolved: number;
   totalProblems: number;
@@ -64,6 +76,7 @@ export interface DashboardAnalytics {
   sqlTotal: number;
   oopSolved: number;
   oopTotal: number;
+  core600: Core600Summary;
   dailyProblemId: number;
   potd: PotdSummary;
   randomPoolIds: number[];
@@ -520,17 +533,43 @@ export class AnalyticsService {
     let sqlSolved = 0;
     let oopTotal = 0;
     let oopSolved = 0;
+    let core600Total = 0;
+    let core600Solved = 0;
+    let core600DsaTotal = 0;
+    let core600DsaSolved = 0;
+    let core600SqlTotal = 0;
+    let core600SqlSolved = 0;
+    let core600NextUnsolvedId: number | null = null;
+    let core600NextDsaId: number | null = null;
+    let core600NextSqlId: number | null = null;
 
     for (const prob of allProblems) {
+      const isSolved = solvedProblemIds.has(prob.id);
       if (prob.category === 'SQL') {
         sqlTotal++;
-        if (solvedProblemIds.has(prob.id)) sqlSolved++;
+        if (isSolved) sqlSolved++;
       } else if (prob.category === 'OOP') {
         oopTotal++;
-        if (solvedProblemIds.has(prob.id)) oopSolved++;
+        if (isSolved) oopSolved++;
       } else {
         dsaTotal++;
-        if (solvedProblemIds.has(prob.id)) dsaSolved++;
+        if (isSolved) dsaSolved++;
+      }
+
+      if (prob.id >= 1 && prob.id <= 600) {
+        core600Total++;
+        if (isSolved) core600Solved++;
+        else if (core600NextUnsolvedId === null) core600NextUnsolvedId = prob.id;
+
+        if (prob.id <= 500) {
+          core600DsaTotal++;
+          if (isSolved) core600DsaSolved++;
+          else if (core600NextDsaId === null) core600NextDsaId = prob.id;
+        } else {
+          core600SqlTotal++;
+          if (isSolved) core600SqlSolved++;
+          else if (core600NextSqlId === null) core600NextSqlId = prob.id;
+        }
       }
     }
 
@@ -591,6 +630,17 @@ export class AnalyticsService {
       sqlTotal,
       oopSolved,
       oopTotal,
+      core600: {
+        total: core600Total,
+        solved: core600Solved,
+        dsaTotal: core600DsaTotal,
+        dsaSolved: core600DsaSolved,
+        sqlTotal: core600SqlTotal,
+        sqlSolved: core600SqlSolved,
+        nextUnsolvedId: core600NextUnsolvedId ?? 1,
+        nextDsaId: core600NextDsaId ?? 1,
+        nextSqlId: core600NextSqlId ?? 501,
+      },
       dailyProblemId,
       potd,
       randomPoolIds,

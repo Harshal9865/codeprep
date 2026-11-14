@@ -10,6 +10,7 @@ import {
   Binary,
   Database,
   Boxes,
+  Sparkles,
 } from 'lucide-react';
 
 interface ProblemLeftSidebarProps {
@@ -42,6 +43,32 @@ export const ProblemLeftSidebar: React.FC<ProblemLeftSidebarProps> = ({
         >
           <Library className="w-4 h-4 text-text-primary" />
           <span>All {totalProblems} Questions</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onSelectCategory('core-600')}
+          className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium transition-colors border ${
+            activeTab === 'core-600' || activeTab === 'core-dsa-500' || activeTab === 'core-sql-100'
+              ? 'bg-primary/15 text-primary font-semibold border-primary/45'
+              : 'border-transparent hover:bg-surface-elevated hover:text-text-primary'
+          }`}
+        >
+          <Layers className="w-4 h-4 text-primary" />
+          <span>Core 600 (#1–#600)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onSelectCategory('extended')}
+          className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium transition-colors border ${
+            activeTab === 'extended'
+              ? 'bg-surface-elevated text-text-primary font-semibold border-border-default'
+              : 'border-transparent hover:bg-surface-elevated hover:text-text-primary'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>Extended (#601+)</span>
         </button>
 
         <button

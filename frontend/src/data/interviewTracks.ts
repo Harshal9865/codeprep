@@ -81,6 +81,16 @@ const BACKTRACKING_GREEDY_SLUGS = [
 
 export const INTERVIEW_PREP_SETS: InterviewPrepSet[] = [
   {
+    id: 'core-600',
+    title: 'Core 600 Curriculum (#1–#600)',
+    badge: 'Original 600',
+    companies: ['500 DSA', '100 SQL', 'Core Set'],
+    description: 'The original curated 600-problem curriculum (500 C++ DSA #1–#500 + 100 SQL #501–#600), kept separate from extended drills.',
+    targetLabel: '600 Questions',
+    accentColor: 'text-primary',
+    matchProblem: (p) => p.id >= 1 && p.id <= 600,
+  },
+  {
     id: 'top-interview-classics',
     title: 'Most-Asked Company Classics',
     badge: 'Top Picks',

@@ -442,7 +442,7 @@ export const App: React.FC = () => {
         onTabChange={handleTabNavigate}
         onOpenProblemsWithFilter={(filter) => {
           setProblemListPreset((prev) => ({
-            prepSetId: null,
+            prepSetId: filter.track || null,
             statusFilter: 'All',
             difficultyFilter: filter.difficulty || 'All',
             topicFilter: filter.topic || 'All',

@@ -7,6 +7,7 @@ import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 import { SqlSchemaTables } from '../components/workspace/SqlSchemaTables';
 import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
 import { HighlightedCode, HighlightedCodeEditor } from '../components/ui/CodeHighlight';
+import { formatCode } from '../utils/codeFormatter';
 import {
   Database,
   Table as TableIcon,
@@ -22,6 +23,7 @@ import {
   Copy,
   Check,
   Sparkles,
+  AlignLeft,
 } from 'lucide-react';
 
 interface SqlProblemData {
@@ -75,6 +77,15 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   const [isUnlockingSolution, setIsUnlockingSolution] = useState(false);
   const [copiedSolution, setCopiedSolution] = useState(false);
   const [showSqlCheatSheet, setShowSqlCheatSheet] = useState(false);
+  const [justFormattedSql, setJustFormattedSql] = useState(false);
+  const [autoFormatSql, setAutoFormatSql] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('codeprep_auto_format');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
 
   // SQL AI Coach drawer state
   const [isCoachOpen, setIsCoachOpen] = useState(false);
@@ -631,7 +642,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         <div className="w-full md:w-[56%] h-full flex flex-col">
           <div className="h-[50%] flex flex-col border-b border-border-subtle bg-canvas">
             <div className="px-4 py-2 border-b border-border-subtle bg-surface flex items-center justify-between gap-2 text-xs font-mono text-text-secondary">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1.5">
                   <Database className="w-3.5 h-3.5 text-primary" />
                   <span>SQL Query Editor</span>
@@ -643,9 +654,49 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                 >
                   {showSqlCheatSheet ? 'Hide SQL Tips' : 'SQL Tips'}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const formatted = formatCode(query, 'sql');
+                    if (formatted !== query) setQuery(formatted);
+                    setJustFormattedSql(true);
+                    window.setTimeout(() => setJustFormattedSql(false), 1500);
+                  }}
+                  className="px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[10px] text-text-muted hover:text-text-primary transition-colors flex items-center gap-1"
+                  title="Format SQL query spacing & keywords (Shift+Alt+F)"
+                >
+                  {justFormattedSql ? (
+                    <Check className="w-3 h-3 text-success" />
+                  ) : (
+                    <AlignLeft className="w-3 h-3 text-primary" />
+                  )}
+                  <span>{justFormattedSql ? 'Formatted' : 'Format'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoFormatSql((prev) => {
+                      const next = !prev;
+                      try {
+                        localStorage.setItem('codeprep_auto_format', String(next));
+                      } catch {
+                        // Ignore storage errors
+                      }
+                      return next;
+                    });
+                  }}
+                  className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] transition-colors ${
+                    autoFormatSql
+                      ? 'bg-success-subtle text-success border-success/35'
+                      : 'bg-surface-elevated text-text-muted border-border-subtle'
+                  }`}
+                  title="Auto-format pasted SQL queries"
+                >
+                  <span>Auto {autoFormatSql ? 'ON' : 'OFF'}</span>
+                </button>
               </div>
               <div className="flex items-center gap-3">
-                <span className="hidden lg:inline text-[10px] text-text-muted">Ctrl+Enter to Run</span>
+                <span className="hidden lg:inline text-[10px] text-text-muted">Ctrl+Space Complete • Ctrl+Enter Run</span>
                 <span className={saveStatus === 'saved' ? 'text-success' : 'text-warning'}>
                   {saveStatus === 'saving'
                     ? 'Saving...'
@@ -681,6 +732,11 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
               language="sql"
               showLineNumbers
               paddingClass="p-4"
+              autoFormat={autoFormatSql}
+              onFormatted={() => {
+                setJustFormattedSql(true);
+                window.setTimeout(() => setJustFormattedSql(false), 1500);
+              }}
             />
           </div>
 

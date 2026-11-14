@@ -1,4 +1,6 @@
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
+import { getCompletions, CompletionItem, CompletionResult } from '../../utils/codeCompletion';
+import { autoFormatCurrentLineOnTrigger, formatCode } from '../../utils/codeFormatter';
 
 export type CodeLanguage = 'cpp' | 'sql';
 
@@ -521,7 +523,49 @@ interface HighlightedCodeEditorProps {
   placeholder?: string;
   showLineNumbers?: boolean;
   paddingClass?: string;
+  autoFormat?: boolean;
+  onFormatted?: () => void;
 }
+
+const OPEN_TO_CLOSE: Record<string, string> = {
+  '(': ')',
+  '[': ']',
+  '{': '}',
+  '"': '"',
+  "'": "'",
+};
+
+const CLOSING_CHARS = new Set([')', ']', '}', '"', "'"]);
+
+const EMPTY_PAIRS = new Set(['()', '[]', '{}', '""', "''"]);
+
+function countNonWhitespaceBefore(text: string, pos: number): number {
+  let count = 0;
+  for (let i = 0; i < pos && i < text.length; i++) {
+    if (!/\s/.test(text[i])) count++;
+  }
+  return count;
+}
+
+function posFromNonWhitespaceCount(text: string, targetCount: number): number {
+  if (targetCount <= 0) return 0;
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (!/\s/.test(text[i])) {
+      count++;
+      if (count >= targetCount) return i + 1;
+    }
+  }
+  return text.length;
+}
+
+const KIND_BADGE: Record<CompletionItem['kind'], { label: string; cls: string }> = {
+  keyword: { label: 'kw', cls: 'bg-purple-500/20 text-purple-300' },
+  type: { label: 'tp', cls: 'bg-sky-500/20 text-sky-300' },
+  function: { label: 'fn', cls: 'bg-amber-500/20 text-amber-300' },
+  snippet: { label: 'sn', cls: 'bg-emerald-500/20 text-emerald-300' },
+  variable: { label: 'id', cls: 'bg-surface-high text-text-secondary' },
+};
 
 export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   value,
@@ -532,14 +576,112 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   placeholder,
   showLineNumbers = false,
   paddingClass = 'p-3',
+  autoFormat = true,
+  onFormatted,
 }) => {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const resolvedRef = externalRef ?? internalRef;
   const preRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [completion, setCompletion] = useState<CompletionResult | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [caretCoords, setCaretCoords] = useState<{ top: number; left: number }>({ top: 36, left: 16 });
+  const suppressAutocompleteRef = useRef(false);
 
   const tokens = useMemo(() => tokenizeCode(value, language), [value, language]);
   const lineCount = useMemo(() => value.split('\n').length, [value]);
+
+  const setCaretAsync = useCallback(
+    (start: number, end: number = start) => {
+      window.requestAnimationFrame(() => {
+        const ta = resolvedRef.current;
+        if (!ta) return;
+        ta.focus();
+        ta.selectionStart = start;
+        ta.selectionEnd = end;
+      });
+    },
+    [resolvedRef]
+  );
+
+  const computeCaretCoords = useCallback(
+    (text: string, pos: number) => {
+      const ta = resolvedRef.current;
+      const charWidth = measureRef.current
+        ? measureRef.current.getBoundingClientRect().width / 10
+        : 7.8;
+      const padPx = paddingClass === 'p-4' ? 16 : 12;
+      const lineHeight = 24; // leading-6
+      const before = text.slice(0, pos);
+      const lines = before.split('\n');
+      const row = lines.length - 1;
+      const col = lines[row].length;
+      const scrollTop = ta?.scrollTop ?? 0;
+      const scrollLeft = ta?.scrollLeft ?? 0;
+      const containerW = containerRef.current?.clientWidth ?? 480;
+      const containerH = containerRef.current?.clientHeight ?? 320;
+
+      const rawTop = padPx + (row + 1) * lineHeight - scrollTop + 2;
+      const rawLeft = padPx + col * charWidth - scrollLeft;
+      const popupW = 280;
+      const popupH = 220;
+      const top = rawTop + popupH > containerH ? Math.max(8, rawTop - lineHeight - popupH - 4) : Math.max(8, rawTop);
+      const left = Math.max(8, Math.min(rawLeft, Math.max(8, containerW - popupW - 12)));
+      setCaretCoords({ top, left });
+    },
+    [paddingClass, resolvedRef]
+  );
+
+  const refreshCompletions = useCallback(
+    (text: string, pos: number, forceShow = false) => {
+      if (suppressAutocompleteRef.current && !forceShow) {
+        suppressAutocompleteRef.current = false;
+        setCompletion(null);
+        return;
+      }
+      const res = getCompletions(text, pos, language, forceShow);
+      if (res && res.items.length > 0) {
+        computeCaretCoords(text, pos);
+        setCompletion(res);
+        setSelectedIdx(0);
+      } else {
+        setCompletion(null);
+      }
+    },
+    [computeCaretCoords, language]
+  );
+
+  const applyCompletion = useCallback(
+    (item: CompletionItem) => {
+      const ta = resolvedRef.current;
+      if (!ta || !completion) return;
+      const cursorPos = ta.selectionStart;
+      const lineStart = value.lastIndexOf('\n', completion.replaceStart - 1) + 1;
+      const currentIndent = value.slice(lineStart, completion.replaceStart).match(/^[ \t]*/)?.[0] ?? '';
+
+      const adjustedInsert = item.insertText.includes('\n')
+        ? item.insertText.replace(/\n/g, `\n${currentIndent}`)
+        : item.insertText;
+
+      const nextValue =
+        value.slice(0, completion.replaceStart) + adjustedInsert + value.slice(cursorPos);
+
+      const nextCaret =
+        completion.replaceStart + adjustedInsert.length - (item.cursorBackOffset ?? 0);
+
+      setCompletion(null);
+      onChange(nextValue);
+      setCaretAsync(nextCaret);
+    },
+    [completion, onChange, resolvedRef, setCaretAsync, value]
+  );
+
+  useEffect(() => {
+    setCompletion(null);
+  }, [language]);
 
   const handleScroll = useCallback(() => {
     const ta = resolvedRef.current;
@@ -551,14 +693,324 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
     if (gutterRef.current) {
       gutterRef.current.scrollTop = ta.scrollTop;
     }
-  }, [resolvedRef]);
+    if (completion) {
+      computeCaretCoords(value, ta.selectionStart);
+    }
+  }, [completion, computeCaretCoords, resolvedRef, value]);
+
+  const handleValueChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const nextVal = e.target.value;
+    const nextPos = e.target.selectionStart;
+    onChange(nextVal);
+    refreshCompletions(nextVal, nextPos, false);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData('text/plain');
+    if (!pasted || !autoFormat) return;
+    const isMultiLineOrCode = pasted.includes('\n') || /[;{}()=,]/.test(pasted);
+    if (!isMultiLineOrCode) return;
+
+    e.preventDefault();
+    const ta = e.currentTarget;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const normalizedPaste = pasted.replace(/\r\n/g, '\n');
+    const rawCombined = value.slice(0, start) + normalizedPaste + value.slice(end);
+    const nonWsTarget = countNonWhitespaceBefore(rawCombined, start + normalizedPaste.length);
+    const formatted = formatCode(rawCombined, language);
+    const nextPos = posFromNonWhitespaceCount(formatted, nonWsTarget);
+
+    setCompletion(null);
+    onChange(formatted);
+    setCaretAsync(nextPos);
+    onFormatted?.();
+  };
+
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const ta = e.currentTarget;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+
+    // 1. Autocomplete popup navigation & acceptance
+    if (completion && completion.items.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIdx((prev) => (prev + 1) % completion.items.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIdx((prev) => (prev - 1 + completion.items.length) % completion.items.length);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setCompletion(null);
+        return;
+      }
+      if ((e.key === 'Tab' || e.key === 'Enter') && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        applyCompletion(completion.items[selectedIdx] ?? completion.items[0]);
+        return;
+      }
+    }
+
+    // 2. Manual trigger Autocomplete: Ctrl+Space
+    if (e.ctrlKey && e.code === 'Space') {
+      e.preventDefault();
+      refreshCompletions(value, start, true);
+      return;
+    }
+
+    // 3. Format Document shortcut: Shift+Alt+F
+    if (e.shiftKey && e.altKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      const nonWs = countNonWhitespaceBefore(value, start);
+      const formatted = formatCode(value, language);
+      const nextPos = posFromNonWhitespaceCount(formatted, nonWs);
+      setCompletion(null);
+      onChange(formatted);
+      setCaretAsync(nextPos);
+      onFormatted?.();
+      return;
+    }
+
+    // 4. Toggle line comment: Ctrl+/ or Cmd+/
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault();
+      const prefix = language === 'sql' ? '-- ' : '// ';
+      const prefixTrim = language === 'sql' ? '--' : '//';
+      const blockStart = value.lastIndexOf('\n', start - 1) + 1;
+      const nextNl = value.indexOf('\n', end);
+      const blockEnd = nextNl === -1 ? value.length : nextNl;
+      const selectedLines = value.slice(blockStart, blockEnd).split('\n');
+      const allCommented = selectedLines.every((l) => !l.trim() || l.trimStart().startsWith(prefixTrim));
+
+      const updatedLines = selectedLines.map((line) => {
+        if (!line.trim()) return line;
+        if (allCommented) {
+          return line.replace(new RegExp(`^(\\s*)${prefixTrim === '//' ? '\\/\\/' : '--'}\\s?`), '$1');
+        }
+        const indent = line.match(/^\s*/)?.[0] ?? '';
+        return indent + prefix + line.slice(indent.length);
+      });
+
+      const joined = updatedLines.join('\n');
+      const nextVal = value.slice(0, blockStart) + joined + value.slice(blockEnd);
+      setCompletion(null);
+      onChange(nextVal);
+      setCaretAsync(blockStart, blockStart + joined.length);
+      return;
+    }
+
+    // Let parent shortcuts (e.g., Ctrl+Enter Run / Ctrl+Shift+Enter Submit) execute cleanly
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      setCompletion(null);
+      onKeyDown?.(e);
+      return;
+    }
+
+    // 5. Smart Tab & Shift+Tab (4-space indent / unindent)
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey || (start !== end && value.slice(start, end).includes('\n'))) {
+        const blockStart = value.lastIndexOf('\n', start - 1) + 1;
+        const nextNl = value.indexOf('\n', end);
+        const blockEnd = nextNl === -1 ? value.length : nextNl;
+        const lines = value.slice(blockStart, blockEnd).split('\n');
+        let firstLineDelta = 0;
+        let totalDelta = 0;
+
+        const transformed = lines.map((line, idx) => {
+          if (e.shiftKey) {
+            const match = /^( {1,4}|\t)/.exec(line);
+            const removeLen = match ? match[0].length : 0;
+            if (idx === 0) firstLineDelta = -removeLen;
+            totalDelta -= removeLen;
+            return line.slice(removeLen);
+          }
+          if (idx === 0) firstLineDelta = 4;
+          totalDelta += 4;
+          return '    ' + line;
+        });
+
+        const nextVal = value.slice(0, blockStart) + transformed.join('\n') + value.slice(blockEnd);
+        onChange(nextVal);
+        setCaretAsync(
+          Math.max(blockStart, start + firstLineDelta),
+          Math.max(blockStart, end + totalDelta)
+        );
+      } else {
+        const nextVal = value.slice(0, start) + '    ' + value.slice(end);
+        onChange(nextVal);
+        setCaretAsync(start + 4);
+      }
+      return;
+    }
+
+    // 6. Smart Backspace: delete empty bracket/quote pair together
+    if (e.key === 'Backspace' && start === end && start > 0) {
+      const pair = value.slice(start - 1, start + 1);
+      if (EMPTY_PAIRS.has(pair)) {
+        e.preventDefault();
+        suppressAutocompleteRef.current = true;
+        const nextVal = value.slice(0, start - 1) + value.slice(start + 1);
+        onChange(nextVal);
+        setCompletion(null);
+        setCaretAsync(start - 1);
+        return;
+      }
+      if (value[start - 1] === ' ' && /^ {4}$/.test(value.slice(Math.max(0, start - 4), start))) {
+        const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+        if (/^ +$/.test(value.slice(lineStart, start))) {
+          e.preventDefault();
+          const nextVal = value.slice(0, start - 4) + value.slice(start);
+          onChange(nextVal);
+          setCaretAsync(start - 4);
+          return;
+        }
+      }
+    }
+
+    // 7. Smart Enter: `{ | }` expansion + auto-indent
+    if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      setCompletion(null);
+      const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+      const lineBefore = value.slice(lineStart, start);
+      const currentIndent = lineBefore.match(/^[ \t]*/)?.[0] ?? '';
+      const beforeChar = value[start - 1] ?? '';
+      const afterChar = value[end] ?? '';
+
+      if (beforeChar === '{' && afterChar === '}') {
+        const insertion = `\n${currentIndent}    \n${currentIndent}`;
+        const nextVal = value.slice(0, start) + insertion + value.slice(end);
+        onChange(nextVal);
+        setCaretAsync(start + 1 + currentIndent.length + 4);
+        return;
+      }
+
+      const trimmedBefore = lineBefore.trimEnd();
+      const shouldIncreaseIndent =
+        trimmedBefore.endsWith('{') ||
+        trimmedBefore.endsWith('(') ||
+        trimmedBefore.endsWith('[') ||
+        (language === 'cpp' && /^(public|private|protected|default|case\b.*):$/.test(trimmedBefore.trim()));
+
+      const nextIndent = shouldIncreaseIndent ? `${currentIndent}    ` : currentIndent;
+      const nextVal = value.slice(0, start) + '\n' + nextIndent + value.slice(end);
+      onChange(nextVal);
+      setCaretAsync(start + 1 + nextIndent.length);
+      return;
+    }
+
+    // 8. Auto-close pairs `() [] {} "" ''` & wrap selection
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key in OPEN_TO_CLOSE) {
+      const openChar = e.key;
+      const closeChar = OPEN_TO_CLOSE[openChar];
+      const nextChar = value[end] ?? '';
+      const prevChar = start > 0 ? value[start - 1] : '';
+
+      if (start !== end) {
+        e.preventDefault();
+        const selected = value.slice(start, end);
+        const nextVal = value.slice(0, start) + openChar + selected + closeChar + value.slice(end);
+        onChange(nextVal);
+        setCaretAsync(start + 1, end + 1);
+        return;
+      }
+
+      // Overtype closing quote if already sitting before matching quote
+      if ((openChar === '"' || openChar === "'") && nextChar === openChar && prevChar !== '\\') {
+        e.preventDefault();
+        setCaretAsync(start + 1);
+        return;
+      }
+
+      const canAutoCloseNext =
+        nextChar === '' || /[\s)\]},;:]/.test(nextChar);
+      const canAutoCloseQuotePrev =
+        (openChar !== '"' && openChar !== "'") ||
+        (prevChar !== '\\' && !/[A-Za-z0-9_]/.test(prevChar));
+
+      if (canAutoCloseNext && canAutoCloseQuotePrev) {
+        e.preventDefault();
+        const nextVal = value.slice(0, start) + openChar + closeChar + value.slice(end);
+        onChange(nextVal);
+        setCaretAsync(start + 1);
+        return;
+      }
+    }
+
+    // 9. Skip-over closing delimiters `) ] }` + auto-dedent `}`
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && CLOSING_CHARS.has(e.key)) {
+      if (e.key === '}' && autoFormat && start === end) {
+        const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+        const lineBefore = value.slice(lineStart, start);
+        const nextChar = value[start] ?? '';
+        // Case A: skip over auto-inserted `}` and align it cleanly
+        if (nextChar === '}' && /^\s*$/.test(lineBefore)) {
+          e.preventDefault();
+          const formatted = autoFormatCurrentLineOnTrigger(value, start + 1, '}', language);
+          if (formatted) {
+            onChange(formatted.code);
+            setCaretAsync(formatted.cursorPos);
+          } else {
+            setCaretAsync(start + 1);
+          }
+          return;
+        }
+        // Case B: user typed `}` manually on whitespace-only line
+        if (/^\s+$/.test(lineBefore) && nextChar !== '}') {
+          e.preventDefault();
+          const inserted = value.slice(0, start) + '}' + value.slice(end);
+          const formatted = autoFormatCurrentLineOnTrigger(inserted, start + 1, '}', language);
+          if (formatted) {
+            onChange(formatted.code);
+            setCaretAsync(formatted.cursorPos);
+          } else {
+            onChange(inserted);
+            setCaretAsync(start + 1);
+          }
+          return;
+        }
+      }
+
+      if (start === end && value[start] === e.key) {
+        e.preventDefault();
+        setCaretAsync(start + 1);
+        return;
+      }
+    }
+
+    // 10. Auto-fix spacing on `;` when Auto-Format is ON
+    if (e.key === ';' && autoFormat && !e.ctrlKey && !e.metaKey && !e.altKey && start === end) {
+      e.preventDefault();
+      setCompletion(null);
+      const inserted = value.slice(0, start) + ';' + value.slice(end);
+      const formatted = autoFormatCurrentLineOnTrigger(inserted, start + 1, ';', language);
+      if (formatted) {
+        onChange(formatted.code);
+        setCaretAsync(formatted.cursorPos);
+      } else {
+        onChange(inserted);
+        setCaretAsync(start + 1);
+      }
+      return;
+    }
+
+    onKeyDown?.(e);
+  };
+
+  const gutterPadClass = paddingClass === 'p-4' ? 'py-4' : 'py-3';
 
   return (
     <div className="flex-1 h-full relative flex overflow-hidden font-mono text-[13px] bg-canvas">
       {showLineNumbers && (
         <div
           ref={gutterRef}
-          className="w-12 select-none py-3 text-right pr-3 bg-surface-subtle border-r border-border-subtle text-text-muted font-mono text-xs leading-6 shrink-0 overflow-hidden"
+          className={`w-12 select-none ${gutterPadClass} text-right pr-3 bg-surface-subtle border-r border-border-subtle text-text-muted font-mono text-xs leading-6 shrink-0 overflow-hidden`}
         >
           {Array.from({ length: lineCount }, (_, i) => (
             <div key={i}>{i + 1}</div>
@@ -566,7 +1018,17 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         </div>
       )}
 
-      <div className="flex-1 relative overflow-hidden">
+      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        {/* Hidden monospace character width probe */}
+        <span
+          ref={measureRef}
+          aria-hidden="true"
+          className="fixed -top-[9999px] -left-[9999px] font-mono text-[13px] whitespace-pre pointer-events-none"
+          style={{ fontVariantLigatures: 'none' }}
+        >
+          0000000000
+        </span>
+
         {/* Highlighted Underlay (locked scroll to textarea) */}
         <pre
           ref={preRef}
@@ -586,9 +1048,13 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         <textarea
           ref={resolvedRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
+          onChange={handleValueChange}
+          onKeyDown={handleEditorKeyDown}
+          onPaste={handlePaste}
           onScroll={handleScroll}
+          onBlur={() => {
+            window.setTimeout(() => setCompletion(null), 120);
+          }}
           placeholder={placeholder}
           spellCheck={false}
           autoCapitalize="off"
@@ -602,6 +1068,55 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
             tabSize: 4,
           }}
         />
+
+        {/* LeetCode-style Autocomplete Dropdown */}
+        {completion && completion.items.length > 0 && (
+          <div
+            role="listbox"
+            aria-label="Code completions"
+            style={{ top: caretCoords.top, left: caretCoords.left }}
+            className="absolute z-30 w-72 max-h-56 overflow-y-auto rounded-xl bg-surface-elevated border border-border-default shadow-2xl py-1 text-xs font-mono"
+          >
+            {completion.items.map((item, idx) => {
+              const badge = KIND_BADGE[item.kind];
+              const isActive = idx === selectedIdx;
+              return (
+                <button
+                  key={`${item.kind}-${item.label}`}
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    applyCompletion(item);
+                  }}
+                  onMouseEnter={() => setSelectedIdx(idx)}
+                  className={`w-full px-2.5 py-1.5 text-left flex items-center justify-between gap-2 transition-colors ${
+                    isActive
+                      ? 'bg-primary/20 text-text-primary'
+                      : 'text-text-secondary hover:bg-surface-high'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0 ${badge.cls}`}>
+                      {badge.label}
+                    </span>
+                    <span className="truncate font-medium text-text-primary">{item.label}</span>
+                  </div>
+                  {item.detail && (
+                    <span className="text-[10px] text-text-muted truncate max-w-[100px] shrink-0">
+                      {item.detail}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            <div className="px-2.5 py-1 border-t border-border-subtle text-[10px] text-text-muted flex items-center justify-between">
+              <span>Tab / Enter to accept</span>
+              <span>Esc to close</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

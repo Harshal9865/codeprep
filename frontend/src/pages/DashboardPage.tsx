@@ -10,6 +10,7 @@ import {
   Database,
   Brain,
   Code2,
+  Layers,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { apiRequest } from '../services/api';
@@ -43,6 +44,17 @@ interface DashboardAnalytics {
   sqlTotal: number;
   oopSolved?: number;
   oopTotal?: number;
+  core600?: {
+    total: number;
+    solved: number;
+    dsaTotal: number;
+    dsaSolved: number;
+    sqlTotal: number;
+    sqlSolved: number;
+    nextUnsolvedId: number;
+    nextDsaId: number;
+    nextSqlId: number;
+  };
   dailyProblemId: number;
   potd?: PotdSummary;
   randomPoolIds: number[];
@@ -238,6 +250,82 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               onSelectProblem={onSelectProblem}
             />
           )}
+
+          {/* Core 600 Separate Card — Solve Directly or Open Separate 600 List */}
+          {(() => {
+            const core = data.core600 ?? {
+              total: 600,
+              solved: 0,
+              dsaTotal: 500,
+              dsaSolved: 0,
+              sqlTotal: 100,
+              sqlSolved: 0,
+              nextUnsolvedId: 1,
+              nextDsaId: 1,
+              nextSqlId: 501,
+            };
+            const corePct = core.total > 0 ? Math.round((core.solved / core.total) * 100) : 0;
+            return (
+              <div className="bg-surface rounded-2xl p-5 border border-primary/35 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-2 min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary-subtle text-primary text-[11px] font-mono font-semibold uppercase tracking-wider">
+                      <Layers className="w-3 h-3" />
+                      <span>Core 600 Track (#1–#600)</span>
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-[11px] font-mono text-text-primary font-semibold">
+                      {core.solved}/{core.total} Solved ({corePct}%)
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-[11px] font-mono text-text-secondary">
+                      DSA {core.dsaSolved}/{core.dsaTotal}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-[11px] font-mono text-text-secondary">
+                      SQL {core.sqlSolved}/{core.sqlTotal}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-text-primary">
+                      Original 600 Problems — Kept Separate
+                    </h3>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      Solve your core 500 DSA (#1–#500) and 100 SQL (#501–#600) problems directly without mixing into the 2,400 extended problems.
+                    </p>
+                  </div>
+                  <div className="w-full max-w-md h-1.5 rounded-full bg-surface-high overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      style={{ width: `${corePct}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onSelectProblem(core.nextUnsolvedId)}
+                    className="px-4 py-2.5 rounded-xl bg-primary text-black text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Solve Directly (#{core.nextUnsolvedId})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenProblemsWithFilter) {
+                        onOpenProblemsWithFilter({ track: 'core-600' });
+                      } else {
+                        onTabChange('dsa');
+                      }
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono font-semibold text-text-primary flex items-center gap-1.5 transition-colors"
+                  >
+                    <span>Browse 600</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-primary" />
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Row 1: Solved Gauge + Achievement Badges */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">

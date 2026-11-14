@@ -4,7 +4,7 @@ import { AppLayout } from '../components/layout/AppLayout';
 import { apiRequest } from '../services/api';
 import { ProblemLeftSidebar } from '../components/problems/ProblemLeftSidebar';
 import { ProblemRightSidebar } from '../components/problems/ProblemRightSidebar';
-import { ProblemBannersRow } from '../components/problems/ProblemBannersRow';
+import { ProblemBannersRow, Core600Meta } from '../components/problems/ProblemBannersRow';
 import { HeatmapDay } from '../components/dashboard/ActivityHeatmap';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
@@ -27,6 +27,7 @@ import {
   Flame,
   Sparkles,
   Boxes,
+  Play,
 } from 'lucide-react';
 
 interface ProblemListPageProps {
@@ -43,6 +44,10 @@ interface ProblemListPageProps {
 
 type CategoryTab =
   | 'all'
+  | 'core-600'
+  | 'core-dsa-500'
+  | 'core-sql-100'
+  | 'extended'
   | 'algorithms'
   | 'logic-easy'
   | 'database'
@@ -60,6 +65,7 @@ interface CatalogMeta {
   filteredSolvedCount: number;
   topicCounts: Record<string, number>;
   prepCounts: Record<string, { total: number; solved: number }>;
+  core600?: Core600Meta;
   randomMatchId: number | null;
 }
 
@@ -103,12 +109,24 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   const [heatmap, setHeatmap] = useState<HeatmapDay[]>([]);
   const [potd, setPotd] = useState<PotdSummary | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [isShuffled, setIsShuffled] = useState(true);
+  const [isShuffled, setIsShuffled] = useState(
+    () =>
+      initialPrepSetId !== 'core-600' &&
+      initialPrepSetId !== 'core-dsa-500' &&
+      initialPrepSetId !== 'core-sql-100'
+  );
   const [shuffleSeed, setShuffleSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000) + 1);
   const PAGE_SIZE = 30;
 
   useEffect(() => {
     setSelectedPrepSetId(initialPrepSetId || null);
+    if (
+      initialPrepSetId === 'core-600' ||
+      initialPrepSetId === 'core-dsa-500' ||
+      initialPrepSetId === 'core-sql-100'
+    ) {
+      setIsShuffled(false);
+    }
     setCurrentPage(1);
   }, [initialPrepSetId]);
 
@@ -120,20 +138,29 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   useEffect(() => {
     if (initialFilterVersion > 0) {
       setSelectedCategory('all');
-      setSelectedPrepSetId(null);
+      setSelectedPrepSetId(initialPrepSetId || null);
       setSelectedDifficulty(initialDifficultyFilter || 'All');
       setSelectedTopic(initialTopicFilter || 'All');
+      if (
+        initialPrepSetId === 'core-600' ||
+        initialPrepSetId === 'core-dsa-500' ||
+        initialPrepSetId === 'core-sql-100'
+      ) {
+        setIsShuffled(false);
+      }
       setCurrentPage(1);
     }
-  }, [initialDifficultyFilter, initialTopicFilter, initialFilterVersion]);
+  }, [initialPrepSetId, initialDifficultyFilter, initialTopicFilter, initialFilterVersion]);
 
   useEffect(() => {
     if (initialSearchVersion > 0) {
       const nextQ = initialSearchQuery ?? '';
-      setSelectedCategory('all');
-      setSelectedPrepSetId(null);
-      setSelectedTopic('All');
-      setSelectedDifficulty('All');
+      if (nextQ.trim().length > 0) {
+        setSelectedCategory('all');
+        setSelectedPrepSetId(null);
+        setSelectedTopic('All');
+        setSelectedDifficulty('All');
+      }
       setSearchQuery(nextQ);
       setDebouncedSearch(nextQ);
       setCurrentPage(1);
@@ -272,6 +299,28 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   const sqlTotal = meta.sqlTotal || 400;
   const oopTotal = meta.oopTotal || 100;
 
+  const isCoreTrackActive =
+    selectedPrepSetId === 'core-600' ||
+    selectedPrepSetId === 'core-dsa-500' ||
+    selectedPrepSetId === 'core-sql-100' ||
+    selectedCategory === 'core-600' ||
+    selectedCategory === 'core-dsa-500' ||
+    selectedCategory === 'core-sql-100';
+
+  const activeCoreSubTrack =
+    selectedPrepSetId === 'core-dsa-500' || selectedCategory === 'core-dsa-500'
+      ? 'core-dsa-500'
+      : selectedPrepSetId === 'core-sql-100' || selectedCategory === 'core-sql-100'
+      ? 'core-sql-100'
+      : 'core-600';
+
+  const coreNextSolveId =
+    activeCoreSubTrack === 'core-sql-100'
+      ? meta.core600?.nextSqlId ?? 501
+      : activeCoreSubTrack === 'core-dsa-500'
+      ? meta.core600?.nextDsaId ?? 1
+      : meta.core600?.nextUnsolvedId ?? 1;
+
   return (
     <AppLayout currentTab="dsa" onTabChange={onTabChange} currentStreak={currentStreak}>
       <div className="max-w-[1720px] w-full mx-auto px-4 sm:px-6 py-5">
@@ -281,6 +330,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
             activeTab={
               statusFilter === 'Bookmarked'
                 ? 'favorites'
+                : isCoreTrackActive
+                ? 'core-600'
                 : selectedTopic === 'Graph'
                 ? 'graphs'
                 : selectedTopic === 'Dynamic'
@@ -299,10 +350,17 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 setSelectedCategory('all');
                 setSelectedTopic('All');
                 setStatusFilter('Bookmarked');
+              } else if (cat === 'core-600') {
+                setStatusFilter('All');
+                setSelectedCategory('all');
+                setSelectedTopic('All');
+                setSelectedPrepSetId('core-600');
+                setIsShuffled(false);
               } else {
                 setStatusFilter('All');
                 if (
                   cat === 'all' ||
+                  cat === 'extended' ||
                   cat === 'blind75' ||
                   cat === 'neetcode150' ||
                   cat === 'gfg' ||
@@ -334,7 +392,9 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
             <ProblemBannersRow
               problems={problems}
               prepCounts={meta.prepCounts}
+              core600={meta.core600}
               selectedPrepSetId={selectedPrepSetId}
+              onSolveProblem={onSelectProblem}
               onSelectPrepSet={(id) => {
                 setSelectedPrepSetId(id);
                 setCurrentPage(1);
@@ -342,36 +402,93 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                   setSelectedCategory('all');
                   setSelectedTopic('All');
                   setStatusFilter('All');
+                  if (id === 'core-600' || id === 'core-dsa-500' || id === 'core-sql-100') {
+                    setIsShuffled(false);
+                  }
                 }
               }}
             />
 
             {/* Active Prep Card Callout */}
-            {activePrepSet && (
+            {(activePrepSet || isCoreTrackActive) && (
               <div className="p-4 rounded-2xl bg-surface border border-primary/40 flex flex-wrap items-center justify-between gap-3">
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono font-semibold text-primary uppercase">
-                      {activePrepSet.badge}
+                      {isCoreTrackActive ? 'Original 600 • Separate Track' : activePrepSet?.badge}
                     </span>
                     <span className="text-xs font-mono text-text-muted">
                       • {meta.filteredSolvedCount}/{filteredTotal} Solved
                     </span>
                   </div>
-                  <h2 className="text-base font-bold text-text-primary">{activePrepSet.title}</h2>
-                  <p className="text-xs text-text-secondary">{activePrepSet.description}</p>
+                  <h2 className="text-base font-bold text-text-primary">
+                    {isCoreTrackActive
+                      ? activeCoreSubTrack === 'core-dsa-500'
+                        ? 'Core 500 DSA Problems (#1–#500)'
+                        : activeCoreSubTrack === 'core-sql-100'
+                        ? 'Core 100 SQL Problems (#501–#600)'
+                        : 'Core 600 Curriculum (#1–#600)'
+                      : activePrepSet?.title}
+                  </h2>
+                  <p className="text-xs text-text-secondary">
+                    {isCoreTrackActive
+                      ? 'Showing only your original 600 problems (500 DSA + 100 SQL), isolated from the 2,400 extended problems.'
+                      : activePrepSet?.description}
+                  </p>
+
+                  {isCoreTrackActive && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {[
+                        { id: 'core-600', label: `All 600 (${meta.core600?.solved ?? 0}/${meta.core600?.total ?? 600})` },
+                        { id: 'core-dsa-500', label: `500 DSA (${meta.core600?.dsaSolved ?? 0}/${meta.core600?.dsaTotal ?? 500})` },
+                        { id: 'core-sql-100', label: `100 SQL (${meta.core600?.sqlSolved ?? 0}/${meta.core600?.sqlTotal ?? 100})` },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory('all');
+                            setSelectedPrepSetId(tab.id);
+                            setIsShuffled(false);
+                            setCurrentPage(1);
+                          }}
+                          className={`px-3 py-1 rounded-full text-xs font-mono border transition-colors ${
+                            activeCoreSubTrack === tab.id
+                              ? 'bg-primary text-black border-primary font-semibold'
+                              : 'bg-surface-elevated hover:bg-surface-high text-text-secondary border-border-subtle'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPrepSetId(null);
-                    setCurrentPage(1);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-medium text-text-primary flex items-center gap-1.5"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Clear Filter</span>
-                </button>
+
+                <div className="flex items-center gap-2">
+                  {isCoreTrackActive && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectProblem(coreNextSolveId)}
+                      className="px-3.5 py-2 rounded-lg bg-primary text-black text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Solve Next (#{coreNextSolveId})</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPrepSetId(null);
+                      setSelectedCategory('all');
+                      setCurrentPage(1);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-medium text-text-primary flex items-center gap-1.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Clear Filter</span>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -448,12 +565,13 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedPrepSetId(null);
                   setSelectedCategory('all');
                   setStatusFilter('All');
                   setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'all' && statusFilter === 'All'
+                  selectedCategory === 'all' && !selectedPrepSetId && statusFilter === 'All'
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}
@@ -464,12 +582,49 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedCategory('all');
+                  setSelectedPrepSetId('core-600');
+                  setStatusFilter('All');
+                  setIsShuffled(false);
+                  setCurrentPage(1);
+                }}
+                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
+                  isCoreTrackActive
+                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
+                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-primary" />
+                <span>Core 600 (#1–#600)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedPrepSetId(null);
+                  setSelectedCategory('extended');
+                  setStatusFilter('All');
+                  setCurrentPage(1);
+                }}
+                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
+                  selectedCategory === 'extended'
+                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
+                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
+                }`}
+              >
+                <span>Extended ({Math.max(0, totalProblems - 600)})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedPrepSetId(null);
                   setSelectedCategory('logic-easy');
                   setStatusFilter('All');
                   setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'logic-easy'
+                  selectedCategory === 'logic-easy' && !selectedPrepSetId
                     ? 'bg-success-subtle text-success border-success/45 font-semibold'
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}
@@ -481,12 +636,13 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedPrepSetId(null);
                   setSelectedCategory('algorithms');
                   setStatusFilter('All');
                   setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'algorithms'
+                  selectedCategory === 'algorithms' && !selectedPrepSetId
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}
@@ -498,12 +654,13 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedPrepSetId(null);
                   setSelectedCategory('database');
                   setStatusFilter('All');
                   setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'database'
+                  selectedCategory === 'database' && !selectedPrepSetId
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}
@@ -515,12 +672,13 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedPrepSetId(null);
                   setSelectedCategory('oop');
                   setStatusFilter('All');
                   setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'oop'
+                  selectedCategory === 'oop' && !selectedPrepSetId
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}
@@ -548,11 +706,13 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedPrepSetId(null);
                   setSelectedCategory('neetcode150');
+                  setStatusFilter('All');
                   setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'neetcode150'
+                  selectedCategory === 'neetcode150' && !selectedPrepSetId
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}
@@ -564,11 +724,13 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedPrepSetId(null);
                   setSelectedCategory('gfg');
+                  setStatusFilter('All');
                   setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'gfg'
+                  selectedCategory === 'gfg' && !selectedPrepSetId
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}

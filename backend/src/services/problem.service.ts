@@ -85,6 +85,18 @@ function matchesPrepSet(
         p.id <= 140)
     );
   }
+  if (setId === 'core-600' || setId === 'core600') {
+    return p.id >= 1 && p.id <= 600;
+  }
+  if (setId === 'core-dsa-500') {
+    return p.id >= 1 && p.id <= 500;
+  }
+  if (setId === 'core-sql-100') {
+    return p.id >= 501 && p.id <= 600;
+  }
+  if (setId === 'extended' || setId === 'extended-all') {
+    return p.id > 600;
+  }
   if (setId === 'blind75-ladder') {
     return p.category === 'DSA' && p.id >= 1 && p.id <= 75;
   }
@@ -417,7 +429,15 @@ export class ProblemService {
       }
 
       if (trackFilter && trackFilter !== 'all') {
-        if (trackFilter === 'database' || trackFilter === 'sql') {
+        if (trackFilter === 'core-600' || trackFilter === 'core600') {
+          if (p.id < 1 || p.id > 600) return false;
+        } else if (trackFilter === 'core-dsa-500') {
+          if (p.id < 1 || p.id > 500) return false;
+        } else if (trackFilter === 'core-sql-100') {
+          if (p.id < 501 || p.id > 600) return false;
+        } else if (trackFilter === 'extended' || trackFilter === 'extended-all') {
+          if (p.id <= 600) return false;
+        } else if (trackFilter === 'database' || trackFilter === 'sql') {
           if (p.category !== 'SQL') return false;
         } else if (trackFilter === 'algorithms' || trackFilter === 'dsa') {
           if (p.category !== 'DSA') return false;
@@ -547,11 +567,22 @@ export class ProblemService {
       let hardTotal = 0;
       const topicCounts: Record<string, number> = {};
       const prepCounts: Record<string, { total: number; solved: number }> = {
+        'core-600': { total: 0, solved: 0 },
         'top-interview-classics': { total: 0, solved: 0 },
         'arrays-window-stack': { total: 0, solved: 0 },
         'graphs-trees-dp': { total: 0, solved: 0 },
         'backtracking-greedy': { total: 0, solved: 0 },
       };
+
+      let core600Total = 0;
+      let core600Solved = 0;
+      let core600DsaTotal = 0;
+      let core600DsaSolved = 0;
+      let core600SqlTotal = 0;
+      let core600SqlSolved = 0;
+      let core600NextUnsolvedId: number | null = null;
+      let core600NextDsaId: number | null = null;
+      let core600NextSqlId: number | null = null;
 
       for (const p of catalog) {
         const isSolved = solvedSet.has(p.id);
@@ -564,6 +595,22 @@ export class ProblemService {
         } else {
           dsaTotal++;
           if (isSolved) dsaSolved++;
+        }
+
+        if (p.id >= 1 && p.id <= 600) {
+          core600Total++;
+          if (isSolved) core600Solved++;
+          else if (core600NextUnsolvedId === null) core600NextUnsolvedId = p.id;
+
+          if (p.id <= 500) {
+            core600DsaTotal++;
+            if (isSolved) core600DsaSolved++;
+            else if (core600NextDsaId === null) core600NextDsaId = p.id;
+          } else {
+            core600SqlTotal++;
+            if (isSolved) core600SqlSolved++;
+            else if (core600NextSqlId === null) core600NextSqlId = p.id;
+          }
         }
 
         if (!catFilter || catFilter === 'ALL' || p.category.toUpperCase() === catFilter) {
@@ -599,6 +646,17 @@ export class ProblemService {
         difficultyTotals: { Easy: easyTotal, Medium: mediumTotal, Hard: hardTotal },
         topicCounts,
         prepCounts,
+        core600: {
+          total: core600Total,
+          solved: core600Solved,
+          dsaTotal: core600DsaTotal,
+          dsaSolved: core600DsaSolved,
+          sqlTotal: core600SqlTotal,
+          sqlSolved: core600SqlSolved,
+          nextUnsolvedId: core600NextUnsolvedId ?? 1,
+          nextDsaId: core600NextDsaId ?? 1,
+          nextSqlId: core600NextSqlId ?? 501,
+        },
         randomMatchId,
       };
     }
