@@ -24,6 +24,14 @@ const ALLOWED_PIXEL_AVATARS = new Set([
   'pixel:cat-terminal',
 ]);
 
+const SAFE_DATA_IMAGE_REGEX = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/;
+
+function isAllowedAvatarUrl(value: string): boolean {
+  if (ALLOWED_PIXEL_AVATARS.has(value)) return true;
+  if (value.length <= 2_800_000 && SAFE_DATA_IMAGE_REGEX.test(value)) return true;
+  return false;
+}
+
 export class UserService {
   private static resolveUploadsRoot(): string {
     if (process.env.UPLOADS_DIR?.trim()) {
@@ -118,31 +126,24 @@ export class UserService {
   }
 
   /**
-   * Saves uploaded avatar safely
+   * Validates and stores uploaded avatar directly in the database as a safe Base64 data URI
+   * so profile photos persist cleanly across stateless container redeploys.
    */
   static async saveAvatar(userId: string, buffer: Buffer): Promise<string> {
     const validation = UserService.validateImageBuffer(buffer);
-    if (!validation.valid || !validation.extension) {
+    if (!validation.valid || !validation.mimeType) {
       throw new Error(validation.error || 'Invalid image file.');
     }
 
-    UserService.ensureUploadsDir();
-
-    const uniqueId = crypto.randomUUID();
-    const fileName = `avatar_${uniqueId}.${validation.extension}`;
-    const filePath = path.join(UserService.UPLOADS_DIR, fileName);
-
-    fs.writeFileSync(filePath, buffer);
-
-    const relativeUrl = `/uploads/avatars/${fileName}`;
+    const dataUri = `data:${validation.mimeType};base64,${buffer.toString('base64')}`;
 
     await prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl: relativeUrl },
+      data: { avatarUrl: dataUri },
     });
 
-    Logger.info('UserService', `Avatar uploaded and saved for user ${userId}: ${fileName}`);
-    return relativeUrl;
+    Logger.info('UserService', `Avatar stored persistently in database for user ${userId} (${validation.mimeType})`);
+    return dataUri;
   }
 
   /**
@@ -172,7 +173,7 @@ export class UserService {
     if (data.avatarUrl !== undefined) {
       if (data.avatarUrl === null || data.avatarUrl === '') {
         updateData.avatarUrl = null;
-      } else if (ALLOWED_PIXEL_AVATARS.has(data.avatarUrl)) {
+      } else if (isAllowedAvatarUrl(data.avatarUrl)) {
         updateData.avatarUrl = data.avatarUrl;
       }
     }
@@ -210,8 +211,8 @@ export class UserService {
       throw new Error('Current password is incorrect.');
     }
 
-    if (newPass.length < 10) {
-      throw new Error('New password must be at least 10 characters long.');
+    if (newPass.length < 6) {
+      throw new Error('New password must be at least 6 characters long.');
     }
 
     const newHash = await hashPassword(newPass);
@@ -442,7 +443,7 @@ export class UserService {
         if (typeof dump.user.timezone === 'string' && dump.user.timezone.trim()) {
           updateUser.timezone = dump.user.timezone.trim();
         }
-        if (typeof dump.user.avatarUrl === 'string' && ALLOWED_PIXEL_AVATARS.has(dump.user.avatarUrl)) {
+        if (typeof dump.user.avatarUrl === 'string' && isAllowedAvatarUrl(dump.user.avatarUrl)) {
           updateUser.avatarUrl = dump.user.avatarUrl;
         }
         if (Object.keys(updateUser).length > 0) {

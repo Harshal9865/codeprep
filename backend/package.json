@@ -10,7 +10,7 @@
     "seed-user": "ts-node --transpile-only src/scripts/seed-user.ts",
     "seed-problems": "ts-node --transpile-only src/scripts/seed-problems.ts",
     "seed": "npm run seed-user && npm run seed-problems",
-    "prisma:generate": "prisma generate",
+    "prisma:generate": "prisma generate && prisma generate --schema=prisma/schema.postgres.prisma",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
   },

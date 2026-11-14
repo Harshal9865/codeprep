@@ -54,33 +54,92 @@ export class AuthService {
     return status.allowed;
   }
 
+  private static getConfiguredOwnerConfig() {
+    const hasExplicitEmail = Boolean(env.OWNER_EMAIL && env.OWNER_EMAIL.includes('@'));
+    const hasExplicitPassword = Boolean(env.OWNER_PASSWORD && env.OWNER_PASSWORD.length >= 6);
+    const hasExplicitName = Boolean(env.OWNER_NAME);
+    return {
+      email: hasExplicitEmail ? env.OWNER_EMAIL.toLowerCase() : 'admin@codeprep.dev',
+      password: hasExplicitPassword ? env.OWNER_PASSWORD : 'Password123!',
+      name: hasExplicitName ? env.OWNER_NAME : 'Harshal Patel',
+      hasExplicitEmail,
+      hasExplicitPassword,
+      hasExplicitName,
+    };
+  }
+
   static async seedDefaultUser(): Promise<void> {
     try {
+      const cfg = this.getConfiguredOwnerConfig();
       const userCount = await prisma.user.count();
+
       if (userCount === 0) {
-        const passwordHash = await hashPassword('Password123!');
+        const passwordHash = await hashPassword(cfg.password);
         await prisma.user.create({
           data: {
             id: this.OWNER_USER_ID,
-            email: 'admin@codeprep.dev',
+            email: cfg.email,
             passwordHash,
-            displayName: 'Harshal Patel',
+            displayName: cfg.name,
             themePreference: 'dark',
             timezone: env.DEFAULT_TIMEZONE,
           },
         });
-        Logger.info('AuthService', 'Default owner account initialized: admin@codeprep.dev');
-      } else {
-        const legacyDefault = await prisma.user.findUnique({
-          where: { email: 'admin@codeprep.dev' },
-          select: { id: true, displayName: true },
-        });
-        if (legacyDefault && legacyDefault.displayName === 'Lead Engineer') {
-          await prisma.user.update({
-            where: { id: legacyDefault.id },
-            data: { displayName: 'Harshal Patel' },
+        Logger.info('AuthService', `Default owner account initialized: ${cfg.email}`);
+        return;
+      }
+
+      const ownerUser =
+        (await prisma.user.findUnique({ where: { id: this.OWNER_USER_ID } })) ||
+        (await prisma.user.findUnique({ where: { email: cfg.email } })) ||
+        (await prisma.user.findUnique({ where: { email: 'admin@codeprep.dev' } }));
+
+      if (!ownerUser) {
+        if (cfg.hasExplicitEmail || cfg.hasExplicitPassword) {
+          const passwordHash = await hashPassword(cfg.password);
+          await prisma.user.create({
+            data: {
+              id: this.OWNER_USER_ID,
+              email: cfg.email,
+              passwordHash,
+              displayName: cfg.name,
+              themePreference: 'dark',
+              timezone: env.DEFAULT_TIMEZONE,
+            },
           });
+          Logger.info('AuthService', `Configured owner account initialized: ${cfg.email}`);
         }
+        return;
+      }
+
+      const updates: Record<string, string> = {};
+      if (cfg.hasExplicitEmail && ownerUser.email !== cfg.email) {
+        const collision = await prisma.user.findUnique({
+          where: { email: cfg.email },
+          select: { id: true },
+        });
+        if (!collision || collision.id === ownerUser.id) {
+          updates.email = cfg.email;
+        }
+      }
+      if (cfg.hasExplicitPassword) {
+        const alreadyMatches = await verifyPassword(cfg.password, ownerUser.passwordHash);
+        if (!alreadyMatches) {
+          updates.passwordHash = await hashPassword(cfg.password);
+        }
+      }
+      if (cfg.hasExplicitName && ownerUser.displayName !== cfg.name) {
+        updates.displayName = cfg.name;
+      } else if (ownerUser.displayName === 'Lead Engineer') {
+        updates.displayName = cfg.name;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await prisma.user.update({
+          where: { id: ownerUser.id },
+          data: updates,
+        });
+        Logger.info('AuthService', `Synchronized configured owner credentials for ${updates.email || ownerUser.email}`);
       }
     } catch (err) {
       Logger.warn('AuthService', 'Notice during default user check', err);
@@ -173,6 +232,7 @@ export class AuthService {
 
   static async quickLogin(requestedEmail?: string): Promise<TokenPair> {
     const normalizedRequested = requestedEmail?.toLowerCase().trim();
+    const cfg = this.getConfiguredOwnerConfig();
     let user = null;
 
     if (normalizedRequested === this.DEMO_EMAIL) {
@@ -180,41 +240,44 @@ export class AuthService {
       return this.generateTokenPair(user.id, true);
     }
 
-    if (normalizedRequested && normalizedRequested !== 'admin@codeprep.dev') {
+    if (normalizedRequested && normalizedRequested !== 'admin@codeprep.dev' && normalizedRequested !== cfg.email) {
       user = await prisma.user.findUnique({ where: { email: normalizedRequested } });
     }
 
-    if (!user && (!normalizedRequested || normalizedRequested === 'admin@codeprep.dev')) {
+    if (!user && (!normalizedRequested || normalizedRequested === 'admin@codeprep.dev' || normalizedRequested === cfg.email)) {
       user =
+        (await prisma.user.findUnique({ where: { email: cfg.email } })) ||
+        (await prisma.user.findUnique({ where: { id: this.OWNER_USER_ID } })) ||
         (await prisma.user.findUnique({ where: { email: 'admin@codeprep.dev' } })) ||
         (await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } }));
     }
 
     if (!user) {
       await this.seedDefaultUser();
-      const targetLookup = normalizedRequested || 'admin@codeprep.dev';
+      const targetLookup = normalizedRequested || cfg.email;
       user =
         (await prisma.user.findUnique({ where: { email: targetLookup } })) ||
+        (await prisma.user.findUnique({ where: { email: cfg.email } })) ||
         (await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } }));
     }
 
     if (!user) {
-      const passwordHash = await hashPassword('Password123!');
+      const passwordHash = await hashPassword(cfg.password);
       user = await prisma.user.create({
         data: {
           id: this.OWNER_USER_ID,
-          email: 'admin@codeprep.dev',
+          email: cfg.email,
           passwordHash,
-          displayName: 'Harshal Patel',
+          displayName: cfg.name,
           themePreference: 'dark',
           timezone: env.DEFAULT_TIMEZONE,
         },
       });
       Logger.info('AuthService', 'Created default owner account for quick login.');
-    } else if (user.email === 'admin@codeprep.dev' && user.displayName === 'Lead Engineer') {
+    } else if (user.displayName === 'Lead Engineer') {
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { displayName: 'Harshal Patel' },
+        data: { displayName: cfg.name },
       });
     }
     return this.generateTokenPair(user.id, true);
@@ -259,11 +322,12 @@ export class AuthService {
 
   static async login(email: string, plainPassword: string, rememberMe = true): Promise<TokenPair> {
     const normalizedEmail = email.toLowerCase().trim();
+    const cfg = this.getConfiguredOwnerConfig();
     let user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
 
-    if (!user && normalizedEmail === 'admin@codeprep.dev') {
+    if (!user && (normalizedEmail === cfg.email || normalizedEmail === 'admin@codeprep.dev')) {
       await this.seedDefaultUser();
       user = await prisma.user.findUnique({
         where: { email: normalizedEmail },
@@ -276,7 +340,7 @@ export class AuthService {
       const userCount = await prisma.user.count();
       if (userCount === 0) {
         Logger.info('AuthService', 'First login attempt with empty database: automatically creating account.');
-        return this.registerFirstUser(normalizedEmail, plainPassword, 'Harshal Patel');
+        return this.registerFirstUser(normalizedEmail, plainPassword, cfg.name);
       }
       Logger.warn('AuthService', 'Authentication failed: Account not found.', { email: normalizedEmail });
       throw new Error('Account not found. Switch to Create Account or sign in with an existing account.');
@@ -284,10 +348,10 @@ export class AuthService {
 
     const isValid = await verifyPassword(plainPassword, user.passwordHash);
     if (!isValid) {
-      if (normalizedEmail === 'admin@codeprep.dev' && plainPassword === 'Password123!') {
-        const newHash = await hashPassword('Password123!');
+      if (cfg.hasExplicitPassword && normalizedEmail === cfg.email && plainPassword === cfg.password) {
+        const newHash = await hashPassword(cfg.password);
         await prisma.user.update({ where: { id: user.id }, data: { passwordHash: newHash } });
-        Logger.info('AuthService', 'Auto-synchronized default owner password hash.');
+        Logger.info('AuthService', 'Synchronized configured owner password hash.');
         return this.generateTokenPair(user.id, rememberMe);
       }
       Logger.warn('AuthService', 'Authentication failed: Invalid password provided.', { userId: user.id });

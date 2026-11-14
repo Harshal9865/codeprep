@@ -135,6 +135,138 @@ const PRISMA_SCHEMA_DDL: string[] = [
   `CREATE INDEX IF NOT EXISTS "UserProblemState_userId_isBookmark_idx" ON "UserProblemState"("userId", "isBookmark");`,
 ];
 
+function isPostgresUrl(dbUrl = process.env.DATABASE_URL || ''): boolean {
+  const normalized = dbUrl.trim().toLowerCase();
+  return normalized.startsWith('postgres://') || normalized.startsWith('postgresql://');
+}
+
+const POSTGRES_SCHEMA_DDL: string[] = [
+  `CREATE TABLE IF NOT EXISTS "User" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "email" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "displayName" TEXT NOT NULL DEFAULT 'Developer',
+    "avatarUrl" TEXT,
+    "themePreference" TEXT NOT NULL DEFAULT 'dark',
+    "timezone" TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastLoginAt" TIMESTAMP(3)
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");`,
+  `CREATE TABLE IF NOT EXISTS "RefreshToken" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "tokenHash" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "RefreshToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "RefreshToken_tokenHash_key" ON "RefreshToken"("tokenHash");`,
+  `CREATE INDEX IF NOT EXISTS "RefreshToken_userId_idx" ON "RefreshToken"("userId");`,
+  `CREATE TABLE IF NOT EXISTS "Problem" (
+    "id" INTEGER NOT NULL PRIMARY KEY,
+    "slug" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "difficulty" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "topic" TEXT NOT NULL,
+    "pattern" TEXT NOT NULL,
+    "statement" TEXT NOT NULL,
+    "constraints" TEXT NOT NULL,
+    "examplesJson" TEXT NOT NULL,
+    "functionSignature" TEXT NOT NULL,
+    "cppHarnessTemplate" TEXT,
+    "isBookmark" BOOLEAN NOT NULL DEFAULT false,
+    "userNotes" TEXT,
+    "unlockedAiSolution" BOOLEAN NOT NULL DEFAULT false,
+    "solvedWithAiHelp" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Problem_slug_key" ON "Problem"("slug");`,
+  `CREATE INDEX IF NOT EXISTS "Problem_category_topic_idx" ON "Problem"("category", "topic");`,
+  `CREATE INDEX IF NOT EXISTS "Problem_difficulty_idx" ON "Problem"("difficulty");`,
+  `CREATE TABLE IF NOT EXISTS "ProblemDraft" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "problemId" INTEGER NOT NULL,
+    "userId" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ProblemDraft_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ProblemDraft_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "ProblemDraft_problemId_userId_key" ON "ProblemDraft"("problemId", "userId");`,
+  `CREATE TABLE IF NOT EXISTS "ProblemActiveTimer" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "problemId" INTEGER NOT NULL,
+    "userId" TEXT NOT NULL,
+    "activeSeconds" INTEGER NOT NULL DEFAULT 0,
+    "lastHeartbeat" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "isPaused" BOOLEAN NOT NULL DEFAULT true,
+    CONSTRAINT "ProblemActiveTimer_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ProblemActiveTimer_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "ProblemActiveTimer_problemId_userId_key" ON "ProblemActiveTimer"("problemId", "userId");`,
+  `CREATE TABLE IF NOT EXISTS "Submission" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "problemId" INTEGER NOT NULL,
+    "userId" TEXT NOT NULL,
+    "language" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "verdict" TEXT NOT NULL,
+    "runtimeMs" DOUBLE PRECISION,
+    "memoryKb" DOUBLE PRECISION,
+    "failedTestCase" TEXT,
+    "stdout" TEXT,
+    "stderr" TEXT,
+    "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Submission_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "Submission_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE INDEX IF NOT EXISTS "Submission_problemId_verdict_idx" ON "Submission"("problemId", "verdict");`,
+  `CREATE INDEX IF NOT EXISTS "Submission_userId_submittedAt_idx" ON "Submission"("userId", "submittedAt");`,
+  `CREATE TABLE IF NOT EXISTS "AiLesson" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "problemId" INTEGER NOT NULL,
+    "techniqueLesson" TEXT NOT NULL,
+    "visualTraceJson" TEXT NOT NULL,
+    "workedExamples" TEXT NOT NULL,
+    "approachProgression" TEXT NOT NULL,
+    "verifiedSolution" TEXT NOT NULL,
+    "similarProblemsJson" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AiLesson_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "AiLesson_problemId_key" ON "AiLesson"("problemId");`,
+  `CREATE TABLE IF NOT EXISTS "UserBadge" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "badgeKey" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "unlockedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "UserBadge_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserBadge_userId_badgeKey_key" ON "UserBadge"("userId", "badgeKey");`,
+  `CREATE INDEX IF NOT EXISTS "UserBadge_userId_idx" ON "UserBadge"("userId");`,
+  `CREATE TABLE IF NOT EXISTS "UserProblemState" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "problemId" INTEGER NOT NULL,
+    "userId" TEXT NOT NULL,
+    "isBookmark" BOOLEAN NOT NULL DEFAULT false,
+    "userNotes" TEXT,
+    "unlockedAiSolution" BOOLEAN NOT NULL DEFAULT false,
+    "solvedWithAiHelp" BOOLEAN NOT NULL DEFAULT false,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "UserProblemState_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "UserProblemState_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserProblemState_problemId_userId_key" ON "UserProblemState"("problemId", "userId");`,
+  `CREATE INDEX IF NOT EXISTS "UserProblemState_userId_isBookmark_idx" ON "UserProblemState"("userId", "isBookmark");`,
+];
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -171,7 +303,35 @@ function getSqliteDbPaths(): string[] {
   ];
 }
 
+function loadPgPrismaClientConstructor(): typeof PrismaClient {
+  const candidates = [
+    '.prisma/client-pg',
+    path.resolve(__dirname, '../../node_modules/.prisma/client-pg'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require(candidate) as { PrismaClient: typeof PrismaClient };
+      if (mod?.PrismaClient) return mod.PrismaClient;
+    } catch {
+      // Try next candidate
+    }
+  }
+  throw new Error(
+    'PostgreSQL Prisma client (.prisma/client-pg) is not generated. Run: npx prisma generate --schema=prisma/schema.postgres.prisma'
+  );
+}
+
 function createClient(dbUrl?: string): PrismaClient {
+  const targetUrl = dbUrl || process.env.DATABASE_URL || '';
+  if (isPostgresUrl(targetUrl)) {
+    const PgClient = loadPgPrismaClientConstructor();
+    return new PgClient({
+      log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+      ...(dbUrl ? { datasources: { db: { url: dbUrl } } } : {}),
+    });
+  }
+
   return new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
     ...(dbUrl ? { datasources: { db: { url: dbUrl } } } : {}),
@@ -315,6 +475,23 @@ async function verifyDatabaseHealth(client: PrismaClient): Promise<{ healthy: bo
 }
 
 export async function connectPrisma(): Promise<void> {
+  if (isPostgresUrl()) {
+    try {
+      await activeClient.$connect();
+      for (const stmt of POSTGRES_SCHEMA_DDL) {
+        await activeClient.$executeRawUnsafe(stmt);
+      }
+      await activeClient.user.count();
+      await activeClient.problem.count();
+      await activeClient.submission.count();
+      Logger.info('PrismaService', 'Connected to PostgreSQL database successfully.');
+      return;
+    } catch (error) {
+      Logger.error('PrismaService', 'Failed to connect to PostgreSQL database', error);
+      throw error;
+    }
+  }
+
   try {
     ensureConfiguredDbDirectory();
     await activeClient.$connect();
@@ -386,6 +563,7 @@ export async function connectPrisma(): Promise<void> {
 }
 
 export async function checkpointWal(): Promise<void> {
+  if (isPostgresUrl()) return;
   try {
     await activeClient.$queryRawUnsafe('PRAGMA wal_checkpoint(TRUNCATE);');
   } catch {
@@ -396,5 +574,5 @@ export async function checkpointWal(): Promise<void> {
 export async function disconnectPrisma(): Promise<void> {
   await checkpointWal();
   await activeClient.$disconnect();
-  Logger.info('PrismaService', 'Disconnected from SQLite database.');
+  Logger.info('PrismaService', `Disconnected from ${isPostgresUrl() ? 'PostgreSQL' : 'SQLite'} database.`);
 }

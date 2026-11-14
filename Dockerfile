@@ -12,7 +12,7 @@ WORKDIR /app/backend
 COPY backend/package*.json ./
 RUN npm install
 COPY backend/prisma ./prisma
-RUN npx prisma generate
+RUN npx prisma generate && npx prisma generate --schema=prisma/schema.postgres.prisma
 COPY backend/ ./
 RUN npm run build
 

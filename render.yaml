@@ -20,6 +20,14 @@ services:
         value: "2000"
       - key: DEFAULT_TIMEZONE
         value: Asia/Kolkata
+      - key: OWNER_EMAIL
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
+      - key: OWNER_NAME
+        sync: false
+      - key: MAX_USERS
+        value: "100"
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET

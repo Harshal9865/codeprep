@@ -131,7 +131,8 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     (endpoint.includes('/submissions/submit') ||
       endpoint.includes('/problems/') ||
       endpoint.includes('/study/timer/unlock') ||
-      endpoint.includes('/user/profile'))
+      endpoint.includes('/user/profile') ||
+      endpoint.includes('/user/avatar'))
   ) {
     window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
   }

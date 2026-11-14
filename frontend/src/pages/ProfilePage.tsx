@@ -348,8 +348,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
     setPasswordError(null);
     setErrorMsg(null);
 
-    if (newPassword.length < 10) {
-      const msg = 'New password must be at least 10 characters long.';
+    if (newPassword.length < 6) {
+      const msg = 'New password must be at least 6 characters long.';
       setPasswordError(msg);
       showToast('error', 'Password Too Short', msg);
       return;
@@ -390,7 +390,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
     try {
       const dump = await apiRequest<PortableBackupSnapshot>('/user/export');
       saveLocalBackupSnapshot(dump);
-      setLocalSnapshotMeta(getLocalBackupMeta());
+      setLocalSnapshotMeta(getLocalBackupMeta(profile?.email));
 
       const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
@@ -415,7 +415,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
     try {
       const res = await importBackupSnapshot(snapshot);
       saveLocalBackupSnapshot(snapshot);
-      setLocalSnapshotMeta(getLocalBackupMeta());
+      setLocalSnapshotMeta(getLocalBackupMeta(profile?.email));
       await fetchAllProfileData();
       const { submissionsRestored, draftsRestored, savedProblemsRestored } = res.restored;
       showToast(
@@ -951,7 +951,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-xs font-medium text-text-secondary mb-1.5">
-                    New Password (min 10 chars)
+                    New Password (min 6 chars)
                   </label>
                   <div className="relative">
                     <input

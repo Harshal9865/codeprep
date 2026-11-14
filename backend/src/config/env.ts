@@ -20,6 +20,9 @@ const envSchema = z.object({
   COOKIE_SECRET: z.string().default('codeprep-cookie-secret-string'),
   SECURE_COOKIES: z.string().default('false').transform((val) => val === 'true'),
   DEFAULT_TIMEZONE: z.string().default('Asia/Kolkata'),
+  OWNER_EMAIL: z.string().optional().default('').transform((val) => val.trim().toLowerCase()),
+  OWNER_PASSWORD: z.string().optional().default(''),
+  OWNER_NAME: z.string().optional().default('').transform((val) => val.trim()),
   AI_PROVIDER: z.enum(['gemini', 'claude', 'mock']).default('gemini'),
   AI_API_KEY: z
     .string()
