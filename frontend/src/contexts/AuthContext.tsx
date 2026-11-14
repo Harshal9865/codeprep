@@ -23,7 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [maxUsers, setMaxUsers] = useState<number>(3);
   const [remainingSlots, setRemainingSlots] = useState<number>(1);
 
-  const applyUserSession = useCallback((nextUser: User | null) => {
+  const applyUserSession = useCallback((nextUser: User | null, forceThemeSync = false) => {
     setUser(nextUser);
     try {
       sessionStorage.setItem('codeprep_authenticated', nextUser ? '1' : '0');
@@ -32,7 +32,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     if (nextUser?.themePreference) {
       window.dispatchEvent(
-        new CustomEvent('codeprep-theme-sync', { detail: nextUser.themePreference })
+        new CustomEvent('codeprep-theme-sync', {
+          detail: { theme: nextUser.themePreference, force: forceThemeSync },
+        })
       );
     }
   }, []);
@@ -137,7 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.accessToken) {
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
-    applyUserSession(res.user);
+    applyUserSession(res.user, true);
     postAuthSyncMessage('LOGIN');
   };
 
@@ -149,7 +151,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.accessToken) {
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
-    applyUserSession(res.user);
+    applyUserSession(res.user, true);
     await fetchAuthStatus();
     postAuthSyncMessage('LOGIN');
   };
@@ -162,7 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.accessToken) {
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
-    applyUserSession(res.user);
+    applyUserSession(res.user, true);
     postAuthSyncMessage('LOGIN');
   };
 

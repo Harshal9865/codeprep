@@ -6,7 +6,7 @@ import { EditorPane } from '../components/workspace/EditorPane';
 import { TestRunnerPane } from '../components/workspace/TestRunnerPane';
 import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
 import { PerformanceCurveModal } from '../components/workspace/PerformanceCurveModal';
-import { Activity, BookOpen, Lightbulb, Flame, CheckCircle2 } from 'lucide-react';
+import { Activity, Lightbulb, Flame, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { requestStudyGuidance } from '../services/studyGuidance';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
@@ -369,16 +369,6 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
             >
               <Activity className="w-3.5 h-3.5 text-sky-400" />
               <span>Complexity</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleNavigateSafely(onOpenAiSolution)}
-              className="hidden sm:flex px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors bg-surface-elevated hover:bg-surface-high text-text-secondary hover:text-text-primary border border-border-subtle items-center gap-1.5"
-              title="Open Reference Solution & Walkthrough"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-warning" />
-              <span>Solution</span>
             </button>
 
             <button

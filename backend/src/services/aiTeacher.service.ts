@@ -107,6 +107,7 @@ export class StudyGuideService {
     statement: string;
     constraints: string;
     functionSignature: string;
+    examples?: Array<{ input?: string; output?: string }>;
   }): Promise<{
     verifiedSolution: string;
     techniqueLesson: string;
@@ -116,33 +117,49 @@ export class StudyGuideService {
     if (env.AI_PROVIDER !== 'gemini' || !apiKey) return null;
 
     const isSql = params.category === 'SQL';
+    const exampleSnippet = (params.examples || [])
+      .slice(0, 2)
+      .map((ex, i) => `Example ${i + 1}: Input=${ex.input || ''} -> Output=${ex.output || ''}`)
+      .join('\n');
+
     const prompt = isSql
       ? `You are an expert SQL engineer. Generate a verified SQLite reference query and concise walkthrough for problem #${params.problemId}: ${params.title}.
 Statement: ${params.statement.slice(0, 1200)}
 Return STRICT JSON only (no markdown fences) with keys:
 {"verifiedSolution": "...", "techniqueLesson": "...", "approachProgression": "..."}`
-      : `You are a competitive programming & C++17 interviewer. Generate an optimal, compilable LeetCode-style C++17 Solution class for #${params.problemId}: ${params.title}.
+      : `You are a competitive programming & C++17 interviewer. Generate a complete, compilable LeetCode-style C++17 Solution class for #${params.problemId}: ${params.title}.
 Exact signature inside class Solution { public: ... };: ${params.functionSignature}
-Notice: standard C++ STL headers, ListNode, and TreeNode are already included by the judge—do NOT include #include or main().
-Statement: ${params.statement.slice(0, 1400)}
-Constraints: ${params.constraints}
+Notice: standard C++ STL headers, ListNode, and TreeNode are already included by the judge—do NOT include #include or main(), and do NOT leave placeholder comments like "// Your code here".
+Statement: ${params.statement.slice(0, 1200)}
+${exampleSnippet ? `${exampleSnippet}\n` : ''}Constraints: ${params.constraints}
 Return STRICT JSON only (no markdown fences) with keys:
 {"verifiedSolution": "class Solution {\\npublic:\\n    ...\\n};", "techniqueLesson": "short intuition + pitfalls", "approachProgression": "1. Brute Force ...\\n2. Optimal ..."}`;
 
-    const res = await this.invokeGeminiPrompt(prompt, apiKey, 1600);
+    const res = await this.invokeGeminiPrompt(prompt, apiKey, 1600, { jsonMode: true });
     if (!res.text) return null;
+
+    const isUsableCode = (code: string) =>
+      code.trim().length >= 30 &&
+      !code.includes('// Your code here') &&
+      !code.includes('// Implement your solution here');
 
     try {
       const cleaned = res.text
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/\s*```$/i, '')
         .trim();
-      const parsed = JSON.parse(cleaned) as {
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      const jsonCandidate =
+        firstBrace !== -1 && lastBrace > firstBrace
+          ? cleaned.slice(firstBrace, lastBrace + 1)
+          : cleaned;
+      const parsed = JSON.parse(jsonCandidate) as {
         verifiedSolution?: string;
         techniqueLesson?: string;
         approachProgression?: string;
       };
-      if (parsed.verifiedSolution && parsed.verifiedSolution.trim().length > 25) {
+      if (parsed.verifiedSolution && isUsableCode(parsed.verifiedSolution)) {
         return {
           verifiedSolution: parsed.verifiedSolution.trim(),
           techniqueLesson: (parsed.techniqueLesson || '').trim(),
@@ -150,7 +167,16 @@ Return STRICT JSON only (no markdown fences) with keys:
         };
       }
     } catch {
-      // Non-JSON Gemini response ignored gracefully
+      const cppMatch = res.text.match(/```(?:cpp|c\+\+)?\s*([\s\S]*?)```/i);
+      const classMatch = res.text.match(/class\s+Solution\s*\{[\s\S]*?\};/);
+      const extracted = (cppMatch?.[1] || classMatch?.[0] || '').trim();
+      if (extracted && isUsableCode(extracted)) {
+        return {
+          verifiedSolution: extracted,
+          techniqueLesson: '',
+          approachProgression: '',
+        };
+      }
     }
     return null;
   }
@@ -232,7 +258,8 @@ Keep total output concise (under 220 words).`;
   private static async invokeGeminiPrompt(
     prompt: string,
     apiKey: string,
-    maxOutputTokens: number
+    maxOutputTokens: number,
+    options?: { jsonMode?: boolean }
   ): Promise<{ text: string | null; errorReason?: string }> {
     const modelCandidates = Array.from(
       new Set([env.AI_MODEL_NAME || 'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'])
@@ -250,9 +277,12 @@ Keep total output concise (under 220 words).`;
 
     for (const model of modelCandidates) {
       const generationConfig: Record<string, unknown> = {
-        temperature: 0.4,
+        temperature: options?.jsonMode ? 0.2 : 0.4,
         maxOutputTokens,
       };
+      if (options?.jsonMode) {
+        generationConfig.responseMimeType = 'application/json';
+      }
       if (model.includes('2.5')) {
         generationConfig.thinkingConfig = { thinkingBudget: 0 };
       }

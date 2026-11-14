@@ -10,6 +10,7 @@ import { HighlightedCode, HighlightedCodeEditor } from '../components/ui/CodeHig
 import {
   Database,
   Table as TableIcon,
+  FileText,
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
@@ -20,7 +21,6 @@ import {
   Unlock,
   Copy,
   Check,
-  X,
   Sparkles,
 } from 'lucide-react';
 
@@ -68,8 +68,8 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [result, setResult] = useState<SqlQueryResult | null>(null);
 
-  // Reference solution modal state
-  const [showSolution, setShowSolution] = useState(false);
+  // Left pane tabs ('description' | 'solution')
+  const [activeLeftTab, setActiveLeftTab] = useState<'description' | 'solution'>('description');
   const [solutionSql, setSolutionSql] = useState<string | null>(null);
   const [solutionError, setSolutionError] = useState<string | null>(null);
   const [isUnlockingSolution, setIsUnlockingSolution] = useState(false);
@@ -112,7 +112,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     const fetchProblem = async () => {
       setIsLoading(true);
       setResult(null);
-      setShowSolution(false);
+      setActiveLeftTab('description');
       setSolutionSql(null);
       setSolutionError(null);
       setCoachGuidance('');
@@ -387,20 +387,6 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              setShowSolution((prev) => !prev);
-              if (!showSolution && (problem.isSolved || problem.unlockedAiSolution) && !solutionSql) {
-                handleUnlockAndLoadSolution();
-              }
-            }}
-            className="hidden sm:flex px-2.5 py-1.5 rounded-lg text-xs font-mono bg-surface-elevated hover:bg-surface-high text-text-secondary hover:text-text-primary border border-border-subtle items-center gap-1.5"
-          >
-            <BookOpen className="w-3.5 h-3.5 text-warning" />
-            <span>Solution</span>
-          </button>
-
-          <button
-            type="button"
             onClick={handleBookmarkToggle}
             className={`p-1.5 rounded-lg border transition-colors ${
               problem.isBookmark
@@ -440,88 +426,124 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 
       {/* Main Workspace */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        {/* Left Pane: Spec & Schema */}
-        <div className="w-full md:w-[44%] h-full border-r border-border-subtle overflow-y-auto p-6 space-y-6 bg-surface">
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-xs font-mono text-primary uppercase tracking-wider">{problem.topic}</span>
-            </div>
-            <h3 className="text-xl font-bold text-text-primary">Problem Statement</h3>
-            <p className="text-[15px] text-text-secondary mt-2.5 leading-relaxed whitespace-pre-wrap">
-              {problem.statement}
-            </p>
+        {/* Left Pane: Spec, Schema & Solution Tabs */}
+        <div className="w-full md:w-[44%] h-full flex flex-col border-r border-border-subtle bg-surface overflow-hidden">
+          <div className="h-11 border-b border-border-subtle bg-surface/90 px-3 flex items-center gap-1 overflow-x-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveLeftTab('description')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${
+                activeLeftTab === 'description'
+                  ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
+                  : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5 text-primary" />
+              <span>Description</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveLeftTab('solution');
+                if ((problem.isSolved || problem.unlockedAiSolution) && !solutionSql && !isUnlockingSolution) {
+                  void handleUnlockAndLoadSolution();
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${
+                activeLeftTab === 'solution'
+                  ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
+                  : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-warning" />
+              <span>Solution</span>
+            </button>
           </div>
 
-          <SqlSchemaTables
-            schemaDdl={problem.schemaDdl}
-            expectedResult={problem.expectedResult}
-          />
-
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">Query Rules</h4>
-            <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle text-xs font-mono text-text-muted space-y-1">
-              <div>• Isolated SQLite sandbox seeded cleanly per execution</div>
-              <div>• Read-only SELECT or WITH statements permitted</div>
-              <div>• Prohibited: DROP, ALTER, TRUNCATE, INSERT, UPDATE, DELETE</div>
-            </div>
-          </div>
-
-          {showSolution && (
-            <div className="p-4 rounded-xl bg-surface-elevated border border-primary/40 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-text-primary">Reference SQL Solution</span>
-                <button
-                  type="button"
-                  onClick={() => setShowSolution(false)}
-                  className="text-text-muted hover:text-text-primary"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              {!solutionSql ? (
-                <div className="space-y-2.5">
-                  {solutionError ? (
-                    <p className="text-xs font-mono text-danger">{solutionError}</p>
-                  ) : (
-                    <p className="text-xs text-text-secondary">
-                      Reveal the reference query for #{problem.id} cleanly in one click.
-                    </p>
-                  )}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleUnlockAndLoadSolution}
-                    isLoading={isUnlockingSolution}
-                    icon={<Unlock className="w-3.5 h-3.5" />}
-                  >
-                    {solutionError ? 'Retry Loading Solution' : 'Unlock Solution'}
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="p-3 rounded-lg bg-surface border border-border-subtle overflow-x-auto">
-                    <HighlightedCode
-                      code={solutionSql}
-                      language="sql"
-                      className="text-xs leading-relaxed"
-                    />
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {activeLeftTab === 'description' ? (
+              <>
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-mono text-primary uppercase tracking-wider">{problem.topic}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(solutionSql);
-                      setCopiedSolution(true);
-                      setTimeout(() => setCopiedSolution(false), 2000);
-                    }}
-                    className="px-2.5 py-1 rounded-md bg-surface border border-border-subtle text-xs font-mono text-text-primary inline-flex items-center gap-1.5"
-                  >
-                    {copiedSolution ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedSolution ? 'Copied' : 'Copy Query'}</span>
-                  </button>
+                  <h3 className="text-xl font-bold text-text-primary">Problem Statement</h3>
+                  <p className="text-[15px] text-text-secondary mt-2.5 leading-relaxed whitespace-pre-wrap">
+                    {problem.statement}
+                  </p>
                 </div>
-              )}
-            </div>
-          )}
+
+                <SqlSchemaTables
+                  schemaDdl={problem.schemaDdl}
+                  expectedResult={problem.expectedResult}
+                />
+
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">Query Rules</h4>
+                  <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle text-xs font-mono text-text-muted space-y-1">
+                    <div>• Isolated SQLite sandbox seeded cleanly per execution</div>
+                    <div>• Read-only SELECT or WITH statements permitted</div>
+                    <div>• Prohibited: DROP, ALTER, TRUNCATE, INSERT, UPDATE, DELETE</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-bold text-text-primary">Reference SQL Solution</span>
+                </div>
+                {!solutionSql ? (
+                  <div className="p-5 rounded-xl bg-surface-elevated border border-border-subtle space-y-3 text-center">
+                    {solutionError ? (
+                      <p className="text-xs font-mono text-danger">{solutionError}</p>
+                    ) : (
+                      <p className="text-xs text-text-secondary">
+                        Reveal the reference query for #{problem.id} cleanly in one click.
+                      </p>
+                    )}
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleUnlockAndLoadSolution}
+                      isLoading={isUnlockingSolution}
+                      icon={<Unlock className="w-3.5 h-3.5" />}
+                    >
+                      {solutionError ? 'Retry Loading Solution' : 'Unlock Solution'}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="rounded-xl overflow-hidden border border-border-subtle code-window-card">
+                      <div className="px-4 py-2 bg-surface-elevated/60 border-b border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
+                        <span className="text-text-secondary">solution.sql</span>
+                        <span className="text-[10px] uppercase tracking-wider">SQLite Optimal</span>
+                      </div>
+                      <div className="p-4 bg-canvas/55 overflow-x-auto">
+                        <HighlightedCode
+                          code={solutionSql}
+                          language="sql"
+                          className="text-xs leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(solutionSql);
+                        setCopiedSolution(true);
+                        setTimeout(() => setCopiedSolution(false), 2000);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      {copiedSolution ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedSolution ? 'Copied' : 'Copy Query'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right Pane: SQL Editor + Output Table */}

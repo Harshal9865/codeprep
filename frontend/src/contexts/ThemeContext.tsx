@@ -44,29 +44,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     applyThemeToDom(theme);
   }, [theme]);
 
-  // Listen for DB preference sync events emitted when user signs in or loads profile
-  useEffect(() => {
-    const handleSync = (event: Event) => {
-      // Never override an explicit manual theme switch performed recently in this session
-      if (Date.now() - manualSwitchAtRef.current < 10_000) {
-        return;
-      }
-      const custom = event as CustomEvent<string>;
-      const nextTheme = normalizeTheme(custom.detail);
-      applyThemeToDom(nextTheme);
-      setThemeState(nextTheme);
-    };
-    window.addEventListener('codeprep-theme-sync', handleSync);
-    return () => window.removeEventListener('codeprep-theme-sync', handleSync);
-  }, []);
-
-  const setTheme = useCallback((mode: ThemeMode) => {
-    const valid = normalizeTheme(mode);
-    manualSwitchAtRef.current = Date.now();
-    applyThemeToDom(valid);
-    setThemeState(valid);
-
-    // Persist selected theme directly to SQLite User profile when signed in
+  const persistThemePreference = useCallback((valid: ThemeMode) => {
     let hasSession = false;
     try {
       hasSession =
@@ -76,22 +54,74 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       hasSession = false;
     }
 
-    if (hasSession) {
-      apiRequest<{ user?: { id: string } }>('/user/profile', {
-        method: 'PATCH',
-        body: JSON.stringify({ themePreference: valid }),
-        skipAuthRefresh: true,
+    if (!hasSession) return;
+
+    apiRequest<{ user?: { id: string } }>('/user/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ themePreference: valid }),
+    })
+      .then((res) => {
+        try {
+          localStorage.removeItem('codeprep_theme_dirty');
+        } catch {}
+        if (res?.user) {
+          window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: res.user }));
+        }
       })
-        .then((res) => {
-          if (res?.user) {
-            window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: res.user }));
-          }
-        })
-        .catch(() => {
-          // Offline / transient network errors stay locally cached in localStorage
-        });
-    }
+      .catch(() => {
+        // Offline / transient network errors stay cached in localStorage
+      });
   }, []);
+
+  // Listen for DB preference sync events emitted on login or initial status check
+  useEffect(() => {
+    const handleSync = (event: Event) => {
+      const custom = event as CustomEvent<string | { theme?: string; force?: boolean }>;
+      const rawDetail = custom.detail;
+      const incomingRaw = typeof rawDetail === 'string' ? rawDetail : rawDetail?.theme;
+      const isForced = typeof rawDetail === 'object' && rawDetail !== null && Boolean(rawDetail.force);
+      const nextTheme = normalizeTheme(incomingRaw);
+
+      let localSavedRaw: string | null = null;
+      let hasPendingLocalEdit = false;
+      try {
+        localSavedRaw = localStorage.getItem('codeprep_theme');
+        hasPendingLocalEdit = localStorage.getItem('codeprep_theme_dirty') === '1';
+      } catch {}
+
+      const hasValidLocalTheme =
+        typeof localSavedRaw === 'string' && VALID_THEMES.has(localSavedRaw as ThemeMode);
+
+      // Never overwrite an explicit local theme choice on passive page refresh;
+      // instead push the local choice back up to the user's profile if out of sync.
+      if (!isForced && (Date.now() - manualSwitchAtRef.current < 10_000 || hasValidLocalTheme || hasPendingLocalEdit)) {
+        const activeLocal = normalizeTheme(localSavedRaw);
+        if (hasPendingLocalEdit || (hasValidLocalTheme && activeLocal !== nextTheme)) {
+          persistThemePreference(activeLocal);
+        }
+        return;
+      }
+
+      try {
+        localStorage.removeItem('codeprep_theme_dirty');
+      } catch {}
+      applyThemeToDom(nextTheme);
+      setThemeState(nextTheme);
+    };
+    window.addEventListener('codeprep-theme-sync', handleSync);
+    return () => window.removeEventListener('codeprep-theme-sync', handleSync);
+  }, [persistThemePreference]);
+
+  const setTheme = useCallback((mode: ThemeMode) => {
+    const valid = normalizeTheme(mode);
+    manualSwitchAtRef.current = Date.now();
+    try {
+      localStorage.setItem('codeprep_theme_dirty', '1');
+    } catch {}
+    applyThemeToDom(valid);
+    setThemeState(valid);
+    persistThemePreference(valid);
+  }, [persistThemePreference]);
 
   const toggleTheme = useCallback(() => {
     const idx = THEME_OPTIONS.findIndex((t) => t.id === theme);

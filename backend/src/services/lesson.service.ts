@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { VERIFIED_5_LESSONS } from '../data/lessons5';
 import { DSA_500_PROBLEMS } from '../data/dsa500';
 import { SQL_100_PROBLEMS } from '../data/sql100';
-import { findCuratedSolution } from '../data/curatedSolutions';
+import { findCuratedSolution, findBatchFallbackSolution } from '../data/curatedSolutions';
 import { AiTeacherService } from './aiTeacher.service';
 import { ProblemService } from './problem.service';
 import { TimerService } from './timer.service';
@@ -105,7 +105,8 @@ export class LessonService {
       trimmed.includes('// Optimal Strategy Blueprint') ||
       trimmed.includes('// Implement your solution here') ||
       trimmed.includes('// Write your solution here') ||
-      trimmed.includes('// Your code here')
+      trimmed.includes('// Your code here') ||
+      trimmed.includes('// Apply ')
     );
   }
 
@@ -253,21 +254,23 @@ ${guide.mistakes}`;
           statement: dbProblem.statement,
           constraints: dbProblem.constraints,
           functionSignature: dbProblem.functionSignature,
+          examples,
         });
 
-        if (aiGenerated) {
+        if (aiGenerated && !this.isPlaceholderSolution(aiGenerated.verifiedSolution)) {
           verifiedSolution = aiGenerated.verifiedSolution;
           if (aiGenerated.techniqueLesson) baseTechnique = aiGenerated.techniqueLesson;
           if (aiGenerated.approachProgression) approachProgression = aiGenerated.approachProgression;
         } else {
-          verifiedSolution =
-            `// Optimal Strategy Blueprint for #${dbProblem.id}: ${dbProblem.title}\n` +
-            `// Pattern: ${dbProblem.pattern || dbProblem.topic}\n` +
-            `// Intuition: ${guide.intuition}\n` +
-            `// Pitfalls: ${guide.mistakes}\n` +
-            (dbProblem.cppHarnessTemplate ||
-              dsaDef?.defaultCodeStub ||
-              `class Solution {\npublic:\n    ${dbProblem.functionSignature} {\n        // Apply ${dbProblem.pattern || dbProblem.topic}\n    }\n};`);
+          const fallbackSolution = findBatchFallbackSolution({
+            problemId: dbProblem.id,
+            functionSignature: dbProblem.functionSignature,
+            topic: dbProblem.topic,
+          });
+          verifiedSolution = fallbackSolution.code;
+          if (fallbackSolution.complexity) {
+            approachProgression = `${fallbackSolution.complexity}\n\n${guide.progression}`;
+          }
         }
       }
     }
@@ -315,19 +318,9 @@ ${guide.mistakes}`;
       where: { problemId },
     });
 
-    const probMeta = await prisma.problem.findUnique({
-      where: { id: problemId },
-      select: { slug: true },
-    });
-    const curatedOverride =
-      lesson && probMeta ? findCuratedSolution(problemId, probMeta.slug) : null;
-    const hasAiKey = Boolean(
-      env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
-    );
-
     if (
       !lesson ||
-      (this.isPlaceholderSolution(lesson.verifiedSolution) && (curatedOverride || hasAiKey)) ||
+      this.isPlaceholderSolution(lesson.verifiedSolution) ||
       !lesson.visualTraceJson ||
       !lesson.similarProblemsJson
     ) {
