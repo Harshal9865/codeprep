@@ -102,6 +102,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'dsa', label: 'Problems' },
     { id: 'sql', label: 'SQL Lab' },
     { id: 'oops', label: 'OOPs' },
+    { id: 'mock-interview', label: 'Mock Interview' },
     { id: 'aptitude', label: 'Aptitude' },
     { id: 'prep', label: 'Interview Kit' },
     { id: 'about', label: 'About' },

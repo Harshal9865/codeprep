@@ -224,6 +224,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         run: () => onNavigateTab('sql'),
       },
       {
+        id: 'nav-mock-interview',
+        group: 'Navigate',
+        title: 'Mock Interview (Aptitude + Coding)',
+        subtitle: 'Fresh randomized OA round with Aptitude & DSA/SQL/OOP',
+        icon: <Sparkles className="w-4 h-4 text-primary" />,
+        run: () => onNavigateTab('mock-interview'),
+      },
+      {
         id: 'nav-bookmarks',
         group: 'Navigate',
         title: 'Bookmarked Problems',

@@ -242,15 +242,29 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
             <button
               type="button"
               onClick={() => {
+                if (isShuffled) {
+                  setIsShuffled(false);
+                  setCurrentPage(1);
+                  return;
+                }
                 setIsShuffled(true);
                 setShuffleSeed(Math.floor(Math.random() * 1_000_000) + 1);
                 setCurrentPage(1);
               }}
-              className="px-3 py-2 bg-surface-elevated border border-border-default rounded-full text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5"
-              title="Shuffle SQL problem order"
+              aria-pressed={isShuffled}
+              className={`px-3 py-2 border rounded-full text-xs flex items-center gap-1.5 transition-colors ${
+                isShuffled
+                  ? 'bg-primary-subtle border-primary/45 text-primary font-semibold'
+                  : 'bg-surface-elevated border-border-default text-text-secondary hover:text-text-primary'
+              }`}
+              title={
+                isShuffled
+                  ? 'Shuffle is ON — click again to turn off and restore #ID order'
+                  : 'Shuffle SQL problem order'
+              }
             >
               <Shuffle className="w-3.5 h-3.5 text-primary" />
-              <span>Shuffle</span>
+              <span>{isShuffled ? 'Shuffle ON' : 'Shuffle'}</span>
             </button>
           </div>
         </div>

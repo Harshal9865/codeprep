@@ -278,6 +278,11 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   );
 
   const handleShuffleList = () => {
+    if (isShuffled) {
+      setIsShuffled(false);
+      setCurrentPage(1);
+      return;
+    }
     setIsShuffled(true);
     setShuffleSeed(Math.floor(Math.random() * 1_000_000_000) + 1);
     setCurrentPage(1);
@@ -838,11 +843,20 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 <button
                   type="button"
                   onClick={handleShuffleList}
-                  className="px-3 py-1.5 rounded-full bg-primary-subtle hover:bg-primary/20 text-primary transition-colors border border-primary/35 flex items-center gap-1.5 text-xs font-mono font-semibold"
-                  title="Shuffle problem list order"
+                  aria-pressed={isShuffled}
+                  className={`px-3 py-1.5 rounded-full transition-colors border flex items-center gap-1.5 text-xs font-mono font-semibold ${
+                    isShuffled
+                      ? 'bg-primary-subtle hover:bg-primary/20 text-primary border-primary/45'
+                      : 'bg-surface-elevated hover:bg-surface-muted text-text-secondary hover:text-text-primary border-border-default'
+                  }`}
+                  title={
+                    isShuffled
+                      ? 'Shuffle is ON — click again to turn off and restore #ID order'
+                      : 'Shuffle problem list order'
+                  }
                 >
                   <Shuffle className="w-3.5 h-3.5" />
-                  <span>Shuffle</span>
+                  <span>{isShuffled ? 'Shuffle ON' : 'Shuffle'}</span>
                 </button>
 
                 <button

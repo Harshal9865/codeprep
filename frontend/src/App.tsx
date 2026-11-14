@@ -12,6 +12,8 @@ import { SqlListPage } from './pages/SqlListPage';
 import { SqlWorkspacePage } from './pages/SqlWorkspacePage';
 import { OopsPage } from './pages/OopsPage';
 import { AptitudePage } from './pages/AptitudePage';
+import { MockInterviewPage } from './pages/MockInterviewPage';
+import { ActiveMockBanner } from './components/mock/ActiveMockBanner';
 import { InterviewPrepPage } from './pages/InterviewPrepPage';
 import { CodePrepLoader } from './components/ui/CodePrepLoader';
 import { StreakCelebrationOverlay } from './components/workspace/StreakCelebrationOverlay';
@@ -33,7 +35,8 @@ type AppView =
   | 'about'
   | 'profile'
   | 'aptitude'
-  | 'prep';
+  | 'prep'
+  | 'mock-interview';
 
 type ProblemStatusFilter = 'All' | 'Solved' | 'Unsolved' | 'Bookmarked';
 
@@ -63,6 +66,9 @@ function parseRouteFromHash(): {
   }
   if (raw === 'oops') {
     return { view: 'oops', problemId: 631, statusFilter: 'All' };
+  }
+  if (raw === 'mock-interview') {
+    return { view: 'mock-interview', problemId: 1, statusFilter: 'All' };
   }
   if (raw === 'aptitude') {
     return { view: 'aptitude', problemId: 1, statusFilter: 'All' };
@@ -120,6 +126,8 @@ function buildHashForRoute(
       return '#sql';
     case 'oops':
       return '#oops';
+    case 'mock-interview':
+      return '#mock-interview';
     case 'aptitude':
       return '#aptitude';
     case 'prep':
@@ -312,6 +320,8 @@ export const App: React.FC = () => {
       setCurrentView('sql');
     } else if (tab === 'oops') {
       setCurrentView('oops');
+    } else if (tab === 'mock-interview') {
+      setCurrentView('mock-interview');
     } else if (tab === 'aptitude') {
       setCurrentView('aptitude');
     } else if (tab === 'prep') {
@@ -356,6 +366,16 @@ export const App: React.FC = () => {
     activePage = <AboutPage onNavigate={handleTabNavigate} />;
   } else if (currentView === 'aptitude') {
     activePage = <AptitudePage onTabChange={handleTabNavigate} />;
+  } else if (currentView === 'mock-interview') {
+    activePage = (
+      <MockInterviewPage
+        onTabChange={handleTabNavigate}
+        onSelectProblem={(id) => {
+          setActiveProblemId(id);
+          setCurrentView(isSqlProblemId(id) ? 'sql-workspace' : 'workspace');
+        }}
+      />
+    );
   } else if (currentView === 'prep') {
     activePage = (
       <InterviewPrepPage
@@ -460,6 +480,10 @@ export const App: React.FC = () => {
   return (
     <>
       {activePage}
+      <ActiveMockBanner
+        isVisible={currentView === 'workspace' || currentView === 'sql-workspace'}
+        onReturnToMock={() => setCurrentView('mock-interview')}
+      />
       <StreakCelebrationOverlay />
       <CommandPalette
         isWorkspaceActive={currentView === 'workspace' || currentView === 'sql-workspace'}
