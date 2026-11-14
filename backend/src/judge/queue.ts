@@ -39,6 +39,7 @@ export class ExecutionQueue {
       .update(JSON.stringify(testCases))
       .update('|')
       .update(options?.isCustomRun ? 'custom' : options?.allowStandaloneMain ? 'run' : 'submit')
+      .update(options?.debugMode ? '|dbg' : '|rel')
       .digest('hex')
       .slice(0, 16);
 

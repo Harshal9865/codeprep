@@ -37,12 +37,28 @@ export interface Problem {
   defaultCodeStub?: string;
   userDraftCode?: string;
   sampleTestCases: TestCase[];
+  similarProblems?: Array<{ id: number; title: string; difficulty: Difficulty }>;
   isBookmark?: boolean;
   userNotes?: string;
   isSolved?: boolean;
   unlockedAiSolution?: boolean;
   solvedWithAiHelp?: boolean;
   recentSubmissions?: SubmissionHistoryItem[];
+}
+
+export interface CaseExecutionDetail {
+  index: number;
+  input: string;
+  expected: string;
+  actual: string;
+  stdout?: string;
+  passed: boolean;
+  runtimeMs?: number;
+}
+
+export interface ExecutionBenchmarks {
+  runtimePercentile: number;
+  memoryPercentile: number;
 }
 
 export interface ExecutionResult {
@@ -58,6 +74,7 @@ export interface ExecutionResult {
     actual: string;
     testIndex: number;
   };
+  caseResults?: CaseExecutionDetail[];
   totalTestCases: number;
   passedTestCases: number;
 }

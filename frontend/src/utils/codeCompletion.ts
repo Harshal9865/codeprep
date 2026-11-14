@@ -221,26 +221,125 @@ function extractDocumentWords(code: string, currentPrefix: string, language: 'cp
   return items;
 }
 
+function parseSqlSchema(schemaDdl: string): {
+  tables: string[];
+  columnsByTable: Map<string, string[]>;
+  allColumns: Array<{ col: string; table: string }>;
+} {
+  const tables: string[] = [];
+  const columnsByTable = new Map<string, string[]>();
+  const allColumns: Array<{ col: string; table: string }> = [];
+
+  const createTableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"[]?([A-Za-z_][A-Za-z0-9_]*)[`"\]]?\s*\(([\s\S]*?)\)\s*;/gi;
+  let match: RegExpExecArray | null;
+  while ((match = createTableRegex.exec(schemaDdl)) !== null) {
+    const tableName = match[1];
+    const body = match[2];
+    if (!columnsByTable.has(tableName)) {
+      tables.push(tableName);
+      columnsByTable.set(tableName, []);
+    }
+    const cols = columnsByTable.get(tableName)!;
+
+    // Split top-level comma-separated definitions (ignore constraints like PRIMARY KEY (...))
+    let parenDepth = 0;
+    let start = 0;
+    const rawItems: string[] = [];
+    for (let i = 0; i < body.length; i++) {
+      const ch = body[i];
+      if (ch === '(') parenDepth++;
+      else if (ch === ')') parenDepth = Math.max(0, parenDepth - 1);
+      else if (ch === ',' && parenDepth === 0) {
+        rawItems.push(body.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+    const last = body.slice(start).trim();
+    if (last) rawItems.push(last);
+
+    for (const def of rawItems) {
+      if (/^(?:PRIMARY|FOREIGN|UNIQUE|CHECK|CONSTRAINT)\b/i.test(def)) continue;
+      const colMatch = /^[`"[]?([A-Za-z_][A-Za-z0-9_]*)[`"\]]?\s+/.exec(def);
+      if (colMatch) {
+        const colName = colMatch[1];
+        if (!cols.includes(colName)) {
+          cols.push(colName);
+          allColumns.push({ col: colName, table: tableName });
+        }
+      }
+    }
+  }
+
+  return { tables, columnsByTable, allColumns };
+}
+
+function buildSqlSchemaCompletions(schemaDdl: string | undefined, dotTablePrefix: string | null): CompletionItem[] {
+  if (!schemaDdl) return [];
+  const { tables, columnsByTable, allColumns } = parseSqlSchema(schemaDdl);
+
+  if (dotTablePrefix) {
+    const lowerTarget = dotTablePrefix.toLowerCase();
+    for (const [tableName, cols] of columnsByTable.entries()) {
+      if (tableName.toLowerCase() === lowerTarget) {
+        return cols.map((col) => ({
+          label: col,
+          insertText: col,
+          kind: 'variable' as const,
+          detail: `${tableName} col`,
+        }));
+      }
+    }
+    return allColumns.map(({ col, table }) => ({
+      label: col,
+      insertText: col,
+      kind: 'variable' as const,
+      detail: `${table} col`,
+    }));
+  }
+
+  const items: CompletionItem[] = [];
+  for (const table of tables) {
+    items.push({
+      label: table,
+      insertText: table,
+      kind: 'type',
+      detail: 'table',
+    });
+  }
+  for (const { col, table } of allColumns) {
+    items.push({
+      label: col,
+      insertText: col,
+      kind: 'variable',
+      detail: `${table} col`,
+    });
+  }
+  return items;
+}
+
 export function getCompletions(
   code: string,
   cursorPos: number,
   language: 'cpp' | 'sql',
-  forceShow = false
+  forceShow = false,
+  schemaDdl?: string
 ): CompletionResult | null {
   const before = code.slice(0, cursorPos);
   const identMatch = /([A-Za-z_][A-Za-z0-9_]*)$/.exec(before);
   const prefix = identMatch ? identMatch[1] : '';
   const replaceStart = cursorPos - prefix.length;
 
-  // Check if right after `.` or `->` in C++ (member access)
+  // Check if right after `.` or `->` in C++, or `<tableName>.` in SQL
   const beforePrefix = before.slice(0, replaceStart);
   const isMemberAccess =
     language === 'cpp' &&
     (/(?:\.|->)\s*$/.test(beforePrefix) || (prefix.length > 0 && /(?:\.|->)$/.test(beforePrefix)));
+  const sqlDotMatch =
+    language === 'sql' ? /([A-Za-z_][A-Za-z0-9_]*)\.$/.exec(beforePrefix) : null;
 
   if (!forceShow) {
-    if (isMemberAccess) {
-      // Show member completions even with 0 or 1+ chars after `.` / `->`
+    if (isMemberAccess || sqlDotMatch) {
+      // Show member/column completions immediately after `.` / `->`
     } else if (prefix.length < 2) {
       return null;
     }
@@ -258,7 +357,13 @@ export function getCompletions(
 
   const baseCandidates: CompletionItem[] =
     language === 'sql'
-      ? [...SQL_COMPLETIONS, ...extractDocumentWords(code, prefix, 'sql')]
+      ? sqlDotMatch
+        ? buildSqlSchemaCompletions(schemaDdl, sqlDotMatch[1])
+        : [
+            ...buildSqlSchemaCompletions(schemaDdl, null),
+            ...SQL_COMPLETIONS,
+            ...extractDocumentWords(code, prefix, 'sql'),
+          ]
       : isMemberAccess
       ? CPP_MEMBER_COMPLETIONS
       : [...CPP_GENERAL_COMPLETIONS, ...extractDocumentWords(code, prefix, 'cpp')];

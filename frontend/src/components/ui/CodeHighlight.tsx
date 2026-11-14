@@ -514,17 +514,121 @@ export const HighlightedCode: React.FC<HighlightedCodeProps> = ({
   );
 };
 
+export interface EditorErrorLine {
+  line: number;
+  message: string;
+}
+
+interface HistorySnapshot {
+  code: string;
+  start: number;
+  end: number;
+}
+
+export function findDelimiterMismatch(code: string, language: CodeLanguage): string | null {
+  const stack: Array<{ ch: string; line: number }> = [];
+  const matchOpen: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
+  let line = 1;
+  let inSingle = false;
+  let inDouble = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    const next = code[i + 1] || '';
+
+    if (ch === '\n') {
+      line++;
+      inLineComment = false;
+      continue;
+    }
+    if (inLineComment) continue;
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (!inSingle && !inDouble) {
+      if (language === 'cpp' && ch === '/' && next === '/') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+      if (language === 'sql' && ch === '-' && next === '-') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+      if (ch === '/' && next === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+      if (ch === '"' && language === 'cpp') {
+        inDouble = true;
+        continue;
+      }
+      if (ch === "'" && (language === 'cpp' || language === 'sql')) {
+        inSingle = true;
+        continue;
+      }
+      if (ch === '(' || ch === '[' || ch === '{') {
+        stack.push({ ch, line });
+      } else if (ch === ')' || ch === ']' || ch === '}') {
+        const expected = matchOpen[ch];
+        const top = stack[stack.length - 1];
+        if (!top || top.ch !== expected) {
+          return `Unexpected '${ch}' at Ln ${line}`;
+        }
+        stack.pop();
+      }
+    } else if (inDouble) {
+      if (ch === '\\') {
+        i++;
+      } else if (ch === '"') {
+        inDouble = false;
+      }
+    } else if (inSingle) {
+      if (language === 'cpp' && ch === '\\') {
+        i++;
+      } else if (language === 'sql' && ch === "'" && next === "'") {
+        i++;
+      } else if (ch === "'") {
+        inSingle = false;
+      }
+    }
+  }
+
+  if (inBlockComment) return 'Unclosed block comment /* ... */';
+  if (inDouble) return 'Unclosed string literal (")';
+  if (stack.length > 0) {
+    const last = stack[stack.length - 1];
+    return `Unclosed '${last.ch}' from Ln ${last.line}`;
+  }
+  return null;
+}
+
 interface HighlightedCodeEditorProps {
   value: string;
   onChange: (value: string) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   language?: CodeLanguage;
+  schemaDdl?: string;
   textareaRef?: React.RefObject<HTMLTextAreaElement>;
   placeholder?: string;
   showLineNumbers?: boolean;
   paddingClass?: string;
   autoFormat?: boolean;
   onFormatted?: () => void;
+  fontSizePx?: number;
+  tabSize?: number;
+  onCursorChange?: (info: { line: number; col: number; selectedChars: number }) => void;
+  onSaveShortcut?: () => void;
+  errorLines?: EditorErrorLine[];
+  focusLineRequest?: { line: number; nonce: number } | null;
 }
 
 const OPEN_TO_CLOSE: Record<string, string> = {
@@ -572,12 +676,19 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   onChange,
   onKeyDown,
   language = 'cpp',
+  schemaDdl,
   textareaRef: externalRef,
   placeholder,
   showLineNumbers = false,
   paddingClass = 'p-3',
   autoFormat = true,
   onFormatted,
+  fontSizePx = 13,
+  tabSize = 4,
+  onCursorChange,
+  onSaveShortcut,
+  errorLines = [],
+  focusLineRequest = null,
 }) => {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const resolvedRef = externalRef ?? internalRef;
@@ -585,14 +696,55 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   const gutterRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
 
   const [completion, setCompletion] = useState<CompletionResult | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [caretCoords, setCaretCoords] = useState<{ top: number; left: number }>({ top: 36, left: 16 });
+  const [cursorInfo, setCursorInfo] = useState<{ line: number; col: number; selectedChars: number }>({
+    line: 1,
+    col: 1,
+    selectedChars: 0,
+  });
+  const [scrollTopOffset, setScrollTopOffset] = useState(0);
   const suppressAutocompleteRef = useRef(false);
 
+  // Undo / Redo history stack
+  const historyRef = useRef<{ stack: HistorySnapshot[]; index: number; lastTs: number }>({
+    stack: [{ code: value, start: 0, end: 0 }],
+    index: 0,
+    lastTs: 0,
+  });
+  const internalValueRef = useRef(value);
+
+  // Find & Replace bar state
+  const [findOpen, setFindOpen] = useState(false);
+  const [showReplace, setShowReplace] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [replaceQuery, setReplaceQuery] = useState('');
+  const [matchCase, setMatchCase] = useState(false);
+  const [activeMatchIdx, setActiveMatchIdx] = useState(0);
+
+  const indentUnit = ' '.repeat(Math.max(2, Math.min(8, tabSize)));
   const tokens = useMemo(() => tokenizeCode(value, language), [value, language]);
   const lineCount = useMemo(() => value.split('\n').length, [value]);
+
+  const syncCursorInfo = useCallback(
+    (text: string, selStart: number, selEnd: number) => {
+      const before = text.slice(0, selStart);
+      const line = before.split('\n').length;
+      const lastNl = before.lastIndexOf('\n');
+      const col = selStart - lastNl;
+      const info = {
+        line,
+        col,
+        selectedChars: Math.abs(selEnd - selStart),
+      };
+      setCursorInfo(info);
+      onCursorChange?.(info);
+    },
+    [onCursorChange]
+  );
 
   const setCaretAsync = useCallback(
     (start: number, end: number = start) => {
@@ -602,10 +754,163 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         ta.focus();
         ta.selectionStart = start;
         ta.selectionEnd = end;
+        syncCursorInfo(ta.value, start, end);
       });
     },
-    [resolvedRef]
+    [resolvedRef, syncCursorInfo]
   );
+
+  const commitCodeChange = useCallback(
+    (
+      nextVal: string,
+      nextStart: number,
+      nextEnd: number = nextStart,
+      options?: { coalesce?: boolean; skipCaret?: boolean }
+    ) => {
+      const now = Date.now();
+      const hist = historyRef.current;
+      const current = hist.stack[hist.index];
+
+      if (!current || current.code !== nextVal) {
+        const shouldCoalesce =
+          Boolean(options?.coalesce) &&
+          hist.index === hist.stack.length - 1 &&
+          now - hist.lastTs < 650 &&
+          Math.abs(nextVal.length - current.code.length) <= 4;
+
+        if (shouldCoalesce) {
+          hist.stack[hist.index] = { code: nextVal, start: nextStart, end: nextEnd };
+        } else {
+          const sliced = hist.stack.slice(0, hist.index + 1);
+          sliced.push({ code: nextVal, start: nextStart, end: nextEnd });
+          if (sliced.length > 120) sliced.shift();
+          hist.stack = sliced;
+          hist.index = sliced.length - 1;
+        }
+        hist.lastTs = now;
+      }
+
+      internalValueRef.current = nextVal;
+      onChange(nextVal);
+      if (!options?.skipCaret) {
+        setCaretAsync(nextStart, nextEnd);
+      }
+    },
+    [onChange, setCaretAsync]
+  );
+
+  // Sync external updates (e.g., Format button, Reset, Load Submission, Problem switch) into undo stack
+  useEffect(() => {
+    if (value !== internalValueRef.current) {
+      internalValueRef.current = value;
+      const hist = historyRef.current;
+      const sliced = hist.stack.slice(0, hist.index + 1);
+      sliced.push({ code: value, start: 0, end: 0 });
+      if (sliced.length > 120) sliced.shift();
+      hist.stack = sliced;
+      hist.index = sliced.length - 1;
+      hist.lastTs = 0;
+    }
+  }, [value]);
+
+  const handleUndo = useCallback(() => {
+    const hist = historyRef.current;
+    if (hist.index <= 0) return;
+    hist.index -= 1;
+    const snap = hist.stack[hist.index];
+    internalValueRef.current = snap.code;
+    setCompletion(null);
+    onChange(snap.code);
+    setCaretAsync(snap.start, snap.end);
+  }, [onChange, setCaretAsync]);
+
+  const handleRedo = useCallback(() => {
+    const hist = historyRef.current;
+    if (hist.index >= hist.stack.length - 1) return;
+    hist.index += 1;
+    const snap = hist.stack[hist.index];
+    internalValueRef.current = snap.code;
+    setCompletion(null);
+    onChange(snap.code);
+    setCaretAsync(snap.start, snap.end);
+  }, [onChange, setCaretAsync]);
+
+  // Scroll and jump cursor when user clicks a diagnostic error line
+  useEffect(() => {
+    if (!focusLineRequest || focusLineRequest.line < 1) return;
+    const lines = value.split('\n');
+    const targetLine = Math.min(focusLineRequest.line, lines.length);
+    let offset = 0;
+    for (let i = 0; i < targetLine - 1; i++) {
+      offset += lines[i].length + 1;
+    }
+    const ta = resolvedRef.current;
+    if (ta) {
+      const targetTop = Math.max(0, (targetLine - 3) * 24);
+      ta.scrollTop = targetTop;
+      setScrollTopOffset(targetTop);
+      if (preRef.current) preRef.current.scrollTop = targetTop;
+      if (gutterRef.current) gutterRef.current.scrollTop = targetTop;
+    }
+    setCaretAsync(offset, offset + (lines[targetLine - 1]?.length ?? 0));
+  }, [focusLineRequest]);
+
+  // Find & Replace match computation
+  const findMatches = useMemo(() => {
+    if (!findOpen || !findQuery) return [] as number[];
+    const haystack = matchCase ? value : value.toLowerCase();
+    const needle = matchCase ? findQuery : findQuery.toLowerCase();
+    const indices: number[] = [];
+    let pos = 0;
+    while (pos <= haystack.length - needle.length) {
+      const found = haystack.indexOf(needle, pos);
+      if (found === -1) break;
+      indices.push(found);
+      pos = found + Math.max(1, needle.length);
+      if (indices.length >= 500) break;
+    }
+    return indices;
+  }, [findOpen, findQuery, matchCase, value]);
+
+  const jumpToFindMatch = useCallback(
+    (idx: number) => {
+      if (findMatches.length === 0 || !findQuery) return;
+      const wrapped = ((idx % findMatches.length) + findMatches.length) % findMatches.length;
+      setActiveMatchIdx(wrapped);
+      const pos = findMatches[wrapped];
+      const lineIdx = value.slice(0, pos).split('\n').length - 1;
+      const ta = resolvedRef.current;
+      if (ta) {
+        const targetTop = Math.max(0, (lineIdx - 3) * 24);
+        ta.scrollTop = targetTop;
+        setScrollTopOffset(targetTop);
+        if (preRef.current) preRef.current.scrollTop = targetTop;
+        if (gutterRef.current) gutterRef.current.scrollTop = targetTop;
+      }
+      setCaretAsync(pos, pos + findQuery.length);
+    },
+    [findMatches, findQuery, resolvedRef, setCaretAsync, value]
+  );
+
+  const handleReplaceCurrent = () => {
+    if (findMatches.length === 0 || !findQuery) return;
+    const idx = Math.min(activeMatchIdx, findMatches.length - 1);
+    const pos = findMatches[idx];
+    const nextVal = value.slice(0, pos) + replaceQuery + value.slice(pos + findQuery.length);
+    commitCodeChange(nextVal, pos, pos + replaceQuery.length);
+  };
+
+  const handleReplaceAll = () => {
+    if (findMatches.length === 0 || !findQuery) return;
+    let out = '';
+    let last = 0;
+    for (const pos of findMatches) {
+      out += value.slice(last, pos) + replaceQuery;
+      last = pos + findQuery.length;
+    }
+    out += value.slice(last);
+    commitCodeChange(out, 0, 0);
+  };
 
   const computeCaretCoords = useCallback(
     (text: string, pos: number) => {
@@ -642,7 +947,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         setCompletion(null);
         return;
       }
-      const res = getCompletions(text, pos, language, forceShow);
+      const res = getCompletions(text, pos, language, forceShow, schemaDdl);
       if (res && res.items.length > 0) {
         computeCaretCoords(text, pos);
         setCompletion(res);
@@ -651,7 +956,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         setCompletion(null);
       }
     },
-    [computeCaretCoords, language]
+    [computeCaretCoords, language, schemaDdl]
   );
 
   const applyCompletion = useCallback(
@@ -673,19 +978,29 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         completion.replaceStart + adjustedInsert.length - (item.cursorBackOffset ?? 0);
 
       setCompletion(null);
-      onChange(nextValue);
-      setCaretAsync(nextCaret);
+      commitCodeChange(nextValue, nextCaret);
     },
-    [completion, onChange, resolvedRef, setCaretAsync, value]
+    [commitCodeChange, completion, resolvedRef, value]
   );
 
   useEffect(() => {
     setCompletion(null);
   }, [language]);
 
+  useEffect(() => {
+    setCursorInfo((prev) => {
+      if (prev.line <= lineCount) return prev;
+      return { line: 1, col: 1, selectedChars: 0 };
+    });
+    if (resolvedRef.current) {
+      setScrollTopOffset(resolvedRef.current.scrollTop);
+    }
+  }, [lineCount, resolvedRef]);
+
   const handleScroll = useCallback(() => {
     const ta = resolvedRef.current;
     if (!ta) return;
+    setScrollTopOffset(ta.scrollTop);
     if (preRef.current) {
       preRef.current.scrollTop = ta.scrollTop;
       preRef.current.scrollLeft = ta.scrollLeft;
@@ -701,7 +1016,8 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   const handleValueChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextVal = e.target.value;
     const nextPos = e.target.selectionStart;
-    onChange(nextVal);
+    syncCursorInfo(nextVal, nextPos, e.target.selectionEnd);
+    commitCodeChange(nextVal, nextPos, e.target.selectionEnd, { coalesce: true, skipCaret: true });
     refreshCompletions(nextVal, nextPos, false);
   };
 
@@ -722,8 +1038,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
     const nextPos = posFromNonWhitespaceCount(formatted, nonWsTarget);
 
     setCompletion(null);
-    onChange(formatted);
-    setCaretAsync(nextPos);
+    commitCodeChange(formatted, nextPos);
     onFormatted?.();
   };
 
@@ -763,6 +1078,75 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       return;
     }
 
+    // 2B. Undo / Redo: Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      handleRedo();
+      return;
+    }
+
+    // 2C. Find & Replace: Ctrl+F / Ctrl+H
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'h')) {
+      e.preventDefault();
+      const selectedText = start !== end && !value.slice(start, end).includes('\n') ? value.slice(start, end) : '';
+      if (selectedText) {
+        setFindQuery(selectedText);
+      }
+      setShowReplace(e.key.toLowerCase() === 'h');
+      setFindOpen(true);
+      window.requestAnimationFrame(() => {
+        findInputRef.current?.focus();
+        findInputRef.current?.select();
+      });
+      return;
+    }
+
+    // 2D. Duplicate Line Down (Shift+Alt+ArrowDown) & Move Line Up/Down (Alt+ArrowUp / Alt+ArrowDown)
+    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+      const nextNl = value.indexOf('\n', start);
+      const lineEnd = nextNl === -1 ? value.length : nextNl;
+      const currentLine = value.slice(lineStart, lineEnd);
+
+      if (e.shiftKey && e.key === 'ArrowDown') {
+        const nextVal = value.slice(0, lineEnd) + '\n' + currentLine + value.slice(lineEnd);
+        commitCodeChange(nextVal, start + currentLine.length + 1);
+        return;
+      }
+
+      if (!e.shiftKey) {
+        const lines = value.split('\n');
+        const lineIdx = value.slice(0, start).split('\n').length - 1;
+        const colOffset = start - lineStart;
+        if (e.key === 'ArrowUp' && lineIdx > 0) {
+          const targetIdx = lineIdx - 1;
+          [lines[targetIdx], lines[lineIdx]] = [lines[lineIdx], lines[targetIdx]];
+          const nextVal = lines.join('\n');
+          let newStart = 0;
+          for (let k = 0; k < targetIdx; k++) newStart += lines[k].length + 1;
+          commitCodeChange(nextVal, newStart + Math.min(colOffset, lines[targetIdx].length));
+        } else if (e.key === 'ArrowDown' && lineIdx < lines.length - 1) {
+          const targetIdx = lineIdx + 1;
+          [lines[targetIdx], lines[lineIdx]] = [lines[lineIdx], lines[targetIdx]];
+          const nextVal = lines.join('\n');
+          let newStart = 0;
+          for (let k = 0; k < targetIdx; k++) newStart += lines[k].length + 1;
+          commitCodeChange(nextVal, newStart + Math.min(colOffset, lines[targetIdx].length));
+        }
+      }
+      return;
+    }
+
     // 3. Format Document shortcut: Shift+Alt+F
     if (e.shiftKey && e.altKey && e.key.toLowerCase() === 'f') {
       e.preventDefault();
@@ -770,8 +1154,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       const formatted = formatCode(value, language);
       const nextPos = posFromNonWhitespaceCount(formatted, nonWs);
       setCompletion(null);
-      onChange(formatted);
-      setCaretAsync(nextPos);
+      commitCodeChange(formatted, nextPos);
       onFormatted?.();
       return;
     }
@@ -799,19 +1182,24 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       const joined = updatedLines.join('\n');
       const nextVal = value.slice(0, blockStart) + joined + value.slice(blockEnd);
       setCompletion(null);
-      onChange(nextVal);
-      setCaretAsync(blockStart, blockStart + joined.length);
+      commitCodeChange(nextVal, blockStart, blockStart + joined.length);
       return;
     }
 
-    // Let parent shortcuts (e.g., Ctrl+Enter Run / Ctrl+Shift+Enter Submit) execute cleanly
+    // Let parent shortcuts (e.g., Ctrl+S Save / Ctrl+Enter Run / Ctrl+Shift+Enter Submit) execute cleanly
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      onSaveShortcut?.();
+      return;
+    }
+
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       setCompletion(null);
       onKeyDown?.(e);
       return;
     }
 
-    // 5. Smart Tab & Shift+Tab (4-space indent / unindent)
+    // 5. Smart Tab & Shift+Tab (configurable space indent / unindent)
     if (e.key === 'Tab') {
       e.preventDefault();
       if (e.shiftKey || (start !== end && value.slice(start, end).includes('\n'))) {
@@ -821,30 +1209,30 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         const lines = value.slice(blockStart, blockEnd).split('\n');
         let firstLineDelta = 0;
         let totalDelta = 0;
+        const unindentRe = new RegExp(`^( {1,${indentUnit.length}}|\t)`);
 
         const transformed = lines.map((line, idx) => {
           if (e.shiftKey) {
-            const match = /^( {1,4}|\t)/.exec(line);
+            const match = unindentRe.exec(line);
             const removeLen = match ? match[0].length : 0;
             if (idx === 0) firstLineDelta = -removeLen;
             totalDelta -= removeLen;
             return line.slice(removeLen);
           }
-          if (idx === 0) firstLineDelta = 4;
-          totalDelta += 4;
-          return '    ' + line;
+          if (idx === 0) firstLineDelta = indentUnit.length;
+          totalDelta += indentUnit.length;
+          return indentUnit + line;
         });
 
         const nextVal = value.slice(0, blockStart) + transformed.join('\n') + value.slice(blockEnd);
-        onChange(nextVal);
-        setCaretAsync(
+        commitCodeChange(
+          nextVal,
           Math.max(blockStart, start + firstLineDelta),
           Math.max(blockStart, end + totalDelta)
         );
       } else {
-        const nextVal = value.slice(0, start) + '    ' + value.slice(end);
-        onChange(nextVal);
-        setCaretAsync(start + 4);
+        const nextVal = value.slice(0, start) + indentUnit + value.slice(end);
+        commitCodeChange(nextVal, start + indentUnit.length);
       }
       return;
     }
@@ -856,9 +1244,8 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         e.preventDefault();
         suppressAutocompleteRef.current = true;
         const nextVal = value.slice(0, start - 1) + value.slice(start + 1);
-        onChange(nextVal);
         setCompletion(null);
-        setCaretAsync(start - 1);
+        commitCodeChange(nextVal, start - 1);
         return;
       }
       if (value[start - 1] === ' ' && /^ {4}$/.test(value.slice(Math.max(0, start - 4), start))) {
@@ -866,8 +1253,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         if (/^ +$/.test(value.slice(lineStart, start))) {
           e.preventDefault();
           const nextVal = value.slice(0, start - 4) + value.slice(start);
-          onChange(nextVal);
-          setCaretAsync(start - 4);
+          commitCodeChange(nextVal, start - 4);
           return;
         }
       }
@@ -886,8 +1272,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       if (beforeChar === '{' && afterChar === '}') {
         const insertion = `\n${currentIndent}    \n${currentIndent}`;
         const nextVal = value.slice(0, start) + insertion + value.slice(end);
-        onChange(nextVal);
-        setCaretAsync(start + 1 + currentIndent.length + 4);
+        commitCodeChange(nextVal, start + 1 + currentIndent.length + 4);
         return;
       }
 
@@ -900,8 +1285,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
 
       const nextIndent = shouldIncreaseIndent ? `${currentIndent}    ` : currentIndent;
       const nextVal = value.slice(0, start) + '\n' + nextIndent + value.slice(end);
-      onChange(nextVal);
-      setCaretAsync(start + 1 + nextIndent.length);
+      commitCodeChange(nextVal, start + 1 + nextIndent.length);
       return;
     }
 
@@ -916,8 +1300,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         e.preventDefault();
         const selected = value.slice(start, end);
         const nextVal = value.slice(0, start) + openChar + selected + closeChar + value.slice(end);
-        onChange(nextVal);
-        setCaretAsync(start + 1, end + 1);
+        commitCodeChange(nextVal, start + 1, end + 1);
         return;
       }
 
@@ -937,8 +1320,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       if (canAutoCloseNext && canAutoCloseQuotePrev) {
         e.preventDefault();
         const nextVal = value.slice(0, start) + openChar + closeChar + value.slice(end);
-        onChange(nextVal);
-        setCaretAsync(start + 1);
+        commitCodeChange(nextVal, start + 1);
         return;
       }
     }
@@ -954,8 +1336,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
           e.preventDefault();
           const formatted = autoFormatCurrentLineOnTrigger(value, start + 1, '}', language);
           if (formatted) {
-            onChange(formatted.code);
-            setCaretAsync(formatted.cursorPos);
+            commitCodeChange(formatted.code, formatted.cursorPos);
           } else {
             setCaretAsync(start + 1);
           }
@@ -967,11 +1348,9 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
           const inserted = value.slice(0, start) + '}' + value.slice(end);
           const formatted = autoFormatCurrentLineOnTrigger(inserted, start + 1, '}', language);
           if (formatted) {
-            onChange(formatted.code);
-            setCaretAsync(formatted.cursorPos);
+            commitCodeChange(formatted.code, formatted.cursorPos);
           } else {
-            onChange(inserted);
-            setCaretAsync(start + 1);
+            commitCodeChange(inserted, start + 1);
           }
           return;
         }
@@ -991,11 +1370,9 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       const inserted = value.slice(0, start) + ';' + value.slice(end);
       const formatted = autoFormatCurrentLineOnTrigger(inserted, start + 1, ';', language);
       if (formatted) {
-        onChange(formatted.code);
-        setCaretAsync(formatted.cursorPos);
+        commitCodeChange(formatted.code, formatted.cursorPos);
       } else {
-        onChange(inserted);
-        setCaretAsync(start + 1);
+        commitCodeChange(inserted, start + 1);
       }
       return;
     }
@@ -1004,27 +1381,196 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   };
 
   const gutterPadClass = paddingClass === 'p-4' ? 'py-4' : 'py-3';
+  const basePadPx = paddingClass === 'p-4' ? 16 : 12;
+  const lineHeightPx = 24;
+  const activeLineTop = basePadPx + (cursorInfo.line - 1) * lineHeightPx - scrollTopOffset;
+  const errorLineMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const err of errorLines) {
+      if (err.line > 0) {
+        map.set(err.line, err.message);
+      }
+    }
+    return map;
+  }, [errorLines]);
+
+  const handleCursorEvent = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const ta = e.currentTarget;
+    syncCursorInfo(ta.value, ta.selectionStart, ta.selectionEnd);
+  };
 
   return (
-    <div className="flex-1 h-full relative flex overflow-hidden font-mono text-[13px] bg-canvas">
+    <div
+      className="flex-1 h-full relative flex overflow-hidden font-mono bg-canvas"
+      style={{ fontSize: `${fontSizePx}px` }}
+    >
       {showLineNumbers && (
         <div
           ref={gutterRef}
           className={`w-12 select-none ${gutterPadClass} text-right pr-3 bg-surface-subtle border-r border-border-subtle text-text-muted font-mono text-xs leading-6 shrink-0 overflow-hidden`}
         >
-          {Array.from({ length: lineCount }, (_, i) => (
-            <div key={i}>{i + 1}</div>
-          ))}
+          {Array.from({ length: lineCount }, (_, i) => {
+            const lineNum = i + 1;
+            const errMsg = errorLineMap.get(lineNum);
+            return (
+              <div
+                key={i}
+                title={errMsg || undefined}
+                className={
+                  errMsg
+                    ? 'text-danger font-bold bg-danger/15 -mr-3 pr-3'
+                    : lineNum === cursorInfo.line
+                      ? 'text-text-primary font-semibold'
+                      : ''
+                }
+              >
+                {lineNum}
+              </div>
+            );
+          })}
         </div>
       )}
 
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        {/* Diagnostic Error Line Highlights */}
+        {Array.from(errorLineMap.entries()).map(([lineNum]) => (
+          <div
+            key={`err-band-${lineNum}`}
+            aria-hidden="true"
+            className="absolute inset-x-0 bg-danger/15 border-y border-danger/35 pointer-events-none"
+            style={{
+              top: `${basePadPx + (lineNum - 1) * lineHeightPx - scrollTopOffset}px`,
+              height: `${lineHeightPx}px`,
+            }}
+          />
+        ))}
+
+        {/* Active Line Highlight */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bg-primary/[0.06] border-y border-primary/[0.08] pointer-events-none"
+          style={{
+            top: `${activeLineTop}px`,
+            height: `${lineHeightPx}px`,
+          }}
+        />
+
+        {/* Find & Replace Overlay Bar (Ctrl+F / Ctrl+H) */}
+        {findOpen && (
+          <div className="absolute top-2 right-3 z-40 w-80 rounded-xl bg-surface-elevated border border-border-default shadow-2xl p-2 space-y-1.5 text-xs font-sans">
+            <div className="flex items-center gap-1.5">
+              <input
+                ref={findInputRef}
+                type="text"
+                value={findQuery}
+                onChange={(e) => {
+                  setFindQuery(e.target.value);
+                  setActiveMatchIdx(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setFindOpen(false);
+                    resolvedRef.current?.focus();
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    jumpToFindMatch(e.shiftKey ? activeMatchIdx - 1 : activeMatchIdx + 1);
+                  }
+                }}
+                placeholder="Find in code..."
+                className="flex-1 min-w-0 px-2 py-1 rounded bg-canvas border border-border-subtle text-text-primary text-xs font-mono focus:outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={() => setMatchCase((p) => !p)}
+                className={`px-1.5 py-1 rounded text-[11px] font-mono border transition-colors ${
+                  matchCase
+                    ? 'bg-primary/20 text-primary border-primary/40'
+                    : 'bg-surface text-text-muted border-border-subtle hover:text-text-primary'
+                }`}
+                title="Match Case"
+              >
+                Aa
+              </button>
+              <span className="text-[11px] font-mono text-text-muted min-w-[38px] text-center">
+                {findQuery
+                  ? `${findMatches.length === 0 ? 0 : (activeMatchIdx % findMatches.length) + 1}/${findMatches.length}`
+                  : '0/0'}
+              </span>
+              <button
+                type="button"
+                onClick={() => jumpToFindMatch(activeMatchIdx - 1)}
+                disabled={findMatches.length === 0}
+                className="px-1.5 py-0.5 rounded bg-surface hover:bg-surface-high border border-border-subtle text-text-muted hover:text-text-primary disabled:opacity-40"
+                title="Previous match (Shift+Enter)"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => jumpToFindMatch(activeMatchIdx + 1)}
+                disabled={findMatches.length === 0}
+                className="px-1.5 py-0.5 rounded bg-surface hover:bg-surface-high border border-border-subtle text-text-muted hover:text-text-primary disabled:opacity-40"
+                title="Next match (Enter)"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFindOpen(false);
+                  resolvedRef.current?.focus();
+                }}
+                className="px-1.5 py-0.5 rounded bg-surface hover:bg-surface-high border border-border-subtle text-text-muted hover:text-text-primary"
+                title="Close (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+
+            {showReplace && (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={replaceQuery}
+                  onChange={(e) => setReplaceQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setFindOpen(false);
+                      resolvedRef.current?.focus();
+                    }
+                  }}
+                  placeholder="Replace with..."
+                  className="flex-1 min-w-0 px-2 py-1 rounded bg-canvas border border-border-subtle text-text-primary text-xs font-mono focus:outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={handleReplaceCurrent}
+                  disabled={findMatches.length === 0}
+                  className="px-2 py-1 rounded bg-surface hover:bg-surface-high border border-border-subtle text-[11px] text-text-primary disabled:opacity-40"
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReplaceAll}
+                  disabled={findMatches.length === 0}
+                  className="px-2 py-1 rounded bg-primary/15 hover:bg-primary/25 border border-primary/40 text-[11px] text-primary font-semibold disabled:opacity-40"
+                >
+                  All
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Hidden monospace character width probe */}
         <span
           ref={measureRef}
           aria-hidden="true"
-          className="fixed -top-[9999px] -left-[9999px] font-mono text-[13px] whitespace-pre pointer-events-none"
-          style={{ fontVariantLigatures: 'none' }}
+          className="fixed -top-[9999px] -left-[9999px] font-mono whitespace-pre pointer-events-none"
+          style={{ fontVariantLigatures: 'none', fontSize: `${fontSizePx}px` }}
         >
           0000000000
         </span>
@@ -1033,8 +1579,8 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         <pre
           ref={preRef}
           aria-hidden="true"
-          className={`absolute inset-0 m-0 ${paddingClass} font-mono text-[13px] leading-6 whitespace-pre overflow-hidden pointer-events-none`}
-          style={{ fontVariantLigatures: 'none', tabSize: 4 }}
+          className={`absolute inset-0 m-0 ${paddingClass} font-mono leading-6 whitespace-pre overflow-hidden pointer-events-none`}
+          style={{ fontVariantLigatures: 'none', tabSize, fontSize: `${fontSizePx}px` }}
         >
           {tokens.map((tok, idx) => (
             <span key={idx} style={{ color: TOKEN_COLORS[tok.type] }}>
@@ -1050,6 +1596,9 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
           value={value}
           onChange={handleValueChange}
           onKeyDown={handleEditorKeyDown}
+          onKeyUp={handleCursorEvent}
+          onClick={handleCursorEvent}
+          onSelect={handleCursorEvent}
           onPaste={handlePaste}
           onScroll={handleScroll}
           onBlur={() => {
@@ -1060,12 +1609,13 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
           autoCapitalize="off"
           autoComplete="off"
           wrap="off"
-          className={`relative z-10 w-full h-full m-0 ${paddingClass} bg-transparent font-mono text-[13px] leading-6 whitespace-pre overflow-auto resize-none focus:outline-none selection:bg-primary/25`}
+          className={`relative z-10 w-full h-full m-0 ${paddingClass} bg-transparent font-mono leading-6 whitespace-pre overflow-auto resize-none focus:outline-none selection:bg-primary/25`}
           style={{
             color: 'transparent',
             caretColor: 'var(--text-primary)',
             fontVariantLigatures: 'none',
-            tabSize: 4,
+            tabSize,
+            fontSize: `${fontSizePx}px`,
           }}
         />
 

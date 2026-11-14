@@ -17,10 +17,86 @@ import {
   BookOpen,
   ExternalLink,
   Code2,
+  Maximize2,
+  Minimize2,
+  Play,
+  Eye,
+  GitCompare,
+  ArrowRight,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { CodePrepLoader } from '../ui/CodePrepLoader';
 import { HighlightedCode } from '../ui/CodeHighlight';
+
+const SUPERSCRIPT_DIGITS: Record<string, string> = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+  '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻',
+};
+
+function renderFormattedInline(text: string): React.ReactNode {
+  const withSuperscripts = text.replace(/\^(\-?\d+)/g, (_m, exp: string) =>
+    exp.split('').map((ch) => SUPERSCRIPT_DIGITS[ch] || ch).join('')
+  );
+  const parts = withSuperscripts.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+      return (
+        <code
+          key={idx}
+          className="px-1.5 py-0.5 mx-0.5 rounded-md bg-surface-elevated border border-border-subtle font-mono text-[12.5px] text-primary"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={idx} className="font-semibold text-text-primary">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
+function buildSimpleLineDiff(oldCode: string, newCode: string): Array<{ type: 'same' | 'add' | 'del'; text: string }> {
+  const a = oldCode.split('\n');
+  const b = newCode.split('\n');
+  const m = a.length;
+  const n = b.length;
+  if (m * n > 25000) {
+    return [
+      ...a.slice(0, 60).map((t) => ({ type: 'del' as const, text: t })),
+      ...b.slice(0, 60).map((t) => ({ type: 'add' as const, text: t })),
+    ];
+  }
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? 1 + dp[i + 1][j + 1] : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const diff: Array<{ type: 'same' | 'add' | 'del'; text: string }> = [];
+  let i = 0;
+  let j = 0;
+  while (i < m && j < n) {
+    if (a[i] === b[j]) {
+      diff.push({ type: 'same', text: a[i] });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      diff.push({ type: 'del', text: a[i] });
+      i++;
+    } else {
+      diff.push({ type: 'add', text: b[j] });
+      j++;
+    }
+  }
+  while (i < m) diff.push({ type: 'del', text: a[i++] });
+  while (j < n) diff.push({ type: 'add', text: b[j++] });
+  return diff;
+}
 
 interface LessonData {
   problemId: number;
@@ -34,23 +110,36 @@ interface LessonData {
 
 interface ProblemSpecPaneProps {
   problem: Problem;
+  currentCode?: string;
   onOpenHints?: () => void;
   onOpenFullSolution?: () => void;
   onLoadCode?: (code: string) => void;
   onSaveNotes?: (notes: string) => Promise<void>;
   onSolutionUnlocked?: () => void;
+  onTestExample?: (example: { input: string; output: string }) => void;
+  onSelectProblem?: (problemId: number) => void;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
 }
 
 export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
   problem,
+  currentCode = '',
   onOpenHints,
   onOpenFullSolution,
   onLoadCode,
   onSaveNotes,
   onSolutionUnlocked,
+  onTestExample,
+  onSelectProblem,
+  isMaximized = false,
+  onToggleMaximize,
 }) => {
   const [activeTab, setActiveTab] = useState<'description' | 'solution' | 'notes' | 'submissions'>('description');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [previewSubmissionId, setPreviewSubmissionId] = useState<string | null>(null);
+  const [diffSubmissionId, setDiffSubmissionId] = useState<string | null>(null);
+  const [copiedSubmissionId, setCopiedSubmissionId] = useState<string | null>(null);
   const [showTopicDrawer, setShowTopicDrawer] = useState(false);
   const [showCompaniesDrawer, setShowCompaniesDrawer] = useState(false);
 
@@ -201,6 +290,21 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
             </span>
           )}
         </button>
+
+        {onToggleMaximize && (
+          <button
+            type="button"
+            onClick={onToggleMaximize}
+            className={`ml-auto p-1.5 rounded-lg border transition-colors shrink-0 ${
+              isMaximized
+                ? 'bg-primary-subtle text-primary border-primary/40'
+                : 'text-text-muted hover:text-text-primary bg-surface-elevated/60 hover:bg-surface-high border-border-subtle'
+            }`}
+            title={isMaximized ? 'Restore split view' : 'Maximize description pane'}
+          >
+            {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        )}
       </div>
 
       {/* Pane Content Body (Scrollable) */}
@@ -296,7 +400,7 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
 
             {/* Problem Statement Prose */}
             <div className="text-text-primary/90 leading-7 whitespace-pre-line text-[15px] space-y-4">
-              {problem.statement}
+              {renderFormattedInline(problem.statement)}
             </div>
 
             {isLruCache ? (
@@ -314,18 +418,31 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                 >
                   <div className="flex items-center justify-between text-text-secondary font-sans font-semibold text-xs">
                     <span>Example {idx + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(`Input: ${ex.input}\nOutput: ${ex.output}`, idx)}
-                      className="p-1 hover:text-text-primary transition-colors"
-                      title="Copy example"
-                    >
-                      {copiedIndex === idx ? (
-                        <Check className="w-3.5 h-3.5 text-success" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
+                    <div className="flex items-center gap-1.5">
+                      {onTestExample && (
+                        <button
+                          type="button"
+                          onClick={() => onTestExample({ input: ex.input, output: ex.output })}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-high text-primary border border-border-subtle text-[11px] font-medium transition-colors"
+                          title="Run your code directly on this example"
+                        >
+                          <Play className="w-3 h-3" />
+                          <span>Run</span>
+                        </button>
                       )}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(`Input: ${ex.input}\nOutput: ${ex.output}`, idx)}
+                        className="p-1 hover:text-text-primary transition-colors"
+                        title="Copy example"
+                      >
+                        {copiedIndex === idx ? (
+                          <Check className="w-3.5 h-3.5 text-success" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-1.5 text-text-primary">
                     <div>
@@ -339,7 +456,7 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                     {ex.explanation && (
                       <div className="pt-1 text-text-secondary font-sans text-sm leading-relaxed">
                         <strong className="text-text-muted font-normal font-mono text-xs">Explanation: </strong>
-                        {ex.explanation}
+                        {renderFormattedInline(ex.explanation)}
                       </div>
                     )}
                   </div>
@@ -356,10 +473,47 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                 <ul className="list-disc list-inside space-y-1.5 text-[13px] font-mono text-text-secondary pl-2">
                   {problem.constraints.split('\n').map((c, i) => (
                     <li key={i} className="text-text-secondary">
-                      <span className="text-text-primary">{c}</span>
+                      <span className="text-text-primary">{renderFormattedInline(c)}</span>
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Similar Questions inside Description */}
+            {problem.similarProblems && problem.similarProblems.length > 0 && onSelectProblem && (
+              <div className="space-y-2.5 pt-4 border-t border-border-subtle">
+                <h3 className="font-semibold text-xs tracking-wider uppercase text-text-muted">
+                  Similar Questions
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {problem.similarProblems.map((sim) => (
+                    <button
+                      key={sim.id}
+                      type="button"
+                      onClick={() => onSelectProblem(sim.id)}
+                      className="px-3 py-2.5 rounded-xl bg-surface-subtle hover:bg-surface-elevated border border-border-subtle hover:border-primary/40 text-left flex items-center justify-between gap-2 transition-colors group"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-text-primary group-hover:text-primary truncate">
+                          #{sim.id}. {sim.title}
+                        </div>
+                        <div
+                          className={`text-[10px] font-mono mt-0.5 ${
+                            sim.difficulty === 'Easy'
+                              ? 'text-success'
+                              : sim.difficulty === 'Medium'
+                              ? 'text-warning'
+                              : 'text-danger'
+                          }`}
+                        >
+                          {sim.difficulty}
+                        </div>
+                      </div>
+                      <ArrowRight className="w-3.5 h-3.5 text-text-muted group-hover:text-primary shrink-0" />
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -575,40 +729,141 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
               <div className="space-y-2.5">
                 {problem.recentSubmissions.map((sub) => {
                   const isAccepted = sub.verdict === 'Accepted';
+                  const isPreviewing = previewSubmissionId === sub.id;
+                  const isDiffing = diffSubmissionId === sub.id;
                   return (
                     <div
                       key={sub.id}
-                      className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle flex items-center justify-between gap-3"
+                      className="rounded-xl bg-surface-subtle border border-border-subtle overflow-hidden"
                     >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs font-bold font-mono ${
-                              isAccepted ? 'text-success' : 'text-danger'
-                            }`}
-                          >
-                            {sub.verdict}
-                          </span>
-                          {typeof sub.runtimeMs === 'number' && (
-                            <span className="text-xs font-mono text-text-muted">
-                              {sub.runtimeMs} ms
+                      <div className="p-3.5 flex items-center justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-xs font-bold font-mono ${
+                                isAccepted ? 'text-success' : 'text-danger'
+                              }`}
+                            >
+                              {sub.verdict}
                             </span>
-                          )}
+                            {typeof sub.runtimeMs === 'number' && (
+                              <span className="text-xs font-mono text-text-muted">
+                                {sub.runtimeMs} ms
+                              </span>
+                            )}
+                            {typeof sub.memoryKb === 'number' && sub.memoryKb > 0 && (
+                              <span className="text-xs font-mono text-text-muted">
+                                • {(sub.memoryKb / 1024).toFixed(1)} MB
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-mono text-text-muted">
+                            {new Date(sub.submittedAt).toLocaleString()}
+                          </div>
                         </div>
-                        <div className="text-xs font-mono text-text-muted">
-                          {new Date(sub.submittedAt).toLocaleString()}
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {sub.code && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDiffSubmissionId(null);
+                                setPreviewSubmissionId(isPreviewing ? null : sub.id);
+                              }}
+                              className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${
+                                isPreviewing
+                                  ? 'bg-primary-subtle text-primary border-primary/40'
+                                  : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
+                              }`}
+                              title="Preview submitted code"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>{isPreviewing ? 'Hide' : 'View'}</span>
+                            </button>
+                          )}
+
+                          {sub.code && currentCode && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPreviewSubmissionId(null);
+                                setDiffSubmissionId(isDiffing ? null : sub.id);
+                              }}
+                              className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${
+                                isDiffing
+                                  ? 'bg-primary-subtle text-primary border-primary/40'
+                                  : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
+                              }`}
+                              title="Compare this submission against your current editor code"
+                            >
+                              <GitCompare className="w-3.5 h-3.5" />
+                              <span>{isDiffing ? 'Close Diff' : 'Diff'}</span>
+                            </button>
+                          )}
+
+                          {onLoadCode && sub.code && (
+                            <button
+                              type="button"
+                              onClick={() => onLoadCode(sub.code)}
+                              className="px-2.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary flex items-center gap-1.5"
+                            >
+                              <Code2 className="w-3.5 h-3.5 text-primary" />
+                              <span>Load</span>
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      {onLoadCode && sub.code && (
-                        <button
-                          type="button"
-                          onClick={() => onLoadCode(sub.code)}
-                          className="px-2.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary flex items-center gap-1.5 shrink-0"
-                        >
-                          <Code2 className="w-3.5 h-3.5 text-primary" />
-                          <span>Load Code</span>
-                        </button>
+                      {isDiffing && sub.code && (
+                        <div className="border-t border-border-subtle bg-canvas">
+                          <div className="px-3 py-1.5 bg-surface flex items-center justify-between border-b border-border-subtle text-[11px] font-mono text-text-muted">
+                            <span>Submission (−) vs Current Editor (+)</span>
+                          </div>
+                          <div className="max-h-64 overflow-auto font-mono text-[11.5px] leading-5 p-2 space-y-0.5">
+                            {buildSimpleLineDiff(sub.code, currentCode).map((d, di) => (
+                              <div
+                                key={di}
+                                className={`px-2 rounded whitespace-pre ${
+                                  d.type === 'add'
+                                    ? 'bg-success/15 text-success'
+                                    : d.type === 'del'
+                                    ? 'bg-danger/15 text-danger'
+                                    : 'text-text-secondary'
+                                }`}
+                              >
+                                {d.type === 'add' ? '+ ' : d.type === 'del' ? '- ' : '  '}
+                                {d.text}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {isPreviewing && sub.code && (
+                        <div className="border-t border-border-subtle bg-canvas">
+                          <div className="px-3 py-1.5 bg-surface flex items-center justify-between border-b border-border-subtle text-[11px] font-mono text-text-muted">
+                            <span>Submitted C++17 Code</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(sub.code);
+                                setCopiedSubmissionId(sub.id);
+                                window.setTimeout(() => setCopiedSubmissionId(null), 1500);
+                              }}
+                              className="inline-flex items-center gap-1 text-text-muted hover:text-text-primary"
+                            >
+                              {copiedSubmissionId === sub.id ? (
+                                <Check className="w-3 h-3 text-success" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                              <span>{copiedSubmissionId === sub.id ? 'Copied' : 'Copy'}</span>
+                            </button>
+                          </div>
+                          <div className="max-h-60 overflow-auto">
+                            <HighlightedCode code={sub.code} language="cpp" className="p-3 text-xs leading-5" />
+                          </div>
+                        </div>
                       )}
                     </div>
                   );

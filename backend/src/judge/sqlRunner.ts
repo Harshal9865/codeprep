@@ -6,7 +6,7 @@ import path from 'path';
 import { Logger } from '../utils/logger';
 
 export interface SqlExecutionResult {
-  verdict: 'Accepted' | 'Wrong Answer' | 'Time Limit Exceeded' | 'Query Error';
+  verdict: 'Accepted' | 'Wrong Answer' | 'Time Limit Exceeded' | 'Query Error' | 'Query Plan';
   columns: string[];
   rows: Array<Record<string, unknown>>;
   runtimeMs: number;
@@ -280,7 +280,8 @@ export class SqlRunner {
     userQuery: string,
     schemaDdl: string,
     expectedQuery: string,
-    expectedOutputJson: string
+    expectedOutputJson: string,
+    options?: { explainOnly?: boolean }
   ): Promise<SqlExecutionResult> {
     const security = SqlRunner.validateQuerySecurity(userQuery);
     if (!security.safe) {
@@ -313,13 +314,25 @@ export class SqlRunner {
           await sandboxDb.$executeRawUnsafe(stmt);
         }
 
-        // 2. Run user query cleanly and time only SQL query execution
+        // 2. Run user query cleanly (or EXPLAIN QUERY PLAN if requested) and time execution
         const cleanedUserSql = SqlRunner.normalizePostgresQuery(SqlRunner.stripComments(userQuery));
+        const sqlToExecute = options?.explainOnly
+          ? `EXPLAIN QUERY PLAN ${cleanedUserSql}`
+          : cleanedUserSql;
         const execStartNs = process.hrtime.bigint();
-        const rawActualRows = await sandboxDb.$queryRawUnsafe<Array<Record<string, unknown>>>(cleanedUserSql);
+        const rawActualRows = await sandboxDb.$queryRawUnsafe<Array<Record<string, unknown>>>(sqlToExecute);
         const queryElapsedMs = Math.max(1, Number((process.hrtime.bigint() - execStartNs) / 1000000n));
         const actualRows = SqlRunner.sanitizeRows(rawActualRows);
         const actualColumns = actualRows.length > 0 ? Object.keys(actualRows[0]) : [];
+
+        if (options?.explainOnly) {
+          return {
+            verdict: 'Query Plan',
+            columns: actualColumns,
+            rows: actualRows,
+            runtimeMs: queryElapsedMs,
+          };
+        }
 
         // 3. Determine expected result set: run expectedQuery on the exact seeded DB first, fallback to JSON
         let expectedRows: Array<Record<string, unknown>> = [];

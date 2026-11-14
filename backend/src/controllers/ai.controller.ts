@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { prisma } from '../services/prisma.service';
 import { TimerService } from '../services/timer.service';
 import { AiTeacherService } from '../services/aiTeacher.service';
 import { LessonService } from '../services/lesson.service';
@@ -80,14 +81,17 @@ export class AiController {
       const def =
         DSA_500_PROBLEMS.find((p) => p.id === numericId) ||
         SQL_100_PROBLEMS.find((p) => p.id === numericId);
+      const dbProb = !def && Number.isFinite(numericId)
+        ? await prisma.problem.findUnique({ where: { id: numericId } })
+        : null;
 
       const sqlSchema = def && 'schemaDdl' in def ? (def as { schemaDdl?: string }).schemaDdl : undefined;
       const feedback = await AiTeacherService.getFeedback({
-        problemId: def ? def.id : numericId,
-        problemTitle: def ? def.title : `Problem #${numericId}`,
-        problemStatement: def ? def.statement : '',
-        functionSignature: def?.functionSignature,
-        constraints: def?.constraints,
+        problemId: def ? def.id : dbProb ? dbProb.id : numericId,
+        problemTitle: def ? def.title : dbProb ? dbProb.title : `Problem #${numericId}`,
+        problemStatement: def ? def.statement : dbProb ? dbProb.statement : '',
+        functionSignature: def?.functionSignature ?? dbProb?.functionSignature,
+        constraints: def?.constraints ?? dbProb?.constraints,
         schemaDdl: sqlSchema,
         userCode: userCode || '',
         verdict,
@@ -96,9 +100,9 @@ export class AiController {
         requestMode,
         userQuestion: typeof userQuestion === 'string' ? userQuestion.slice(0, 500) : undefined,
         isSolved: Boolean(isSolved),
-        topic: def?.topic,
-        pattern: def?.pattern,
-        category: def?.category,
+        topic: def?.topic ?? dbProb?.topic,
+        pattern: def?.pattern ?? dbProb?.pattern,
+        category: def?.category ?? dbProb?.category,
       });
 
       res.json({ feedback });

@@ -15,6 +15,7 @@ import { AptitudePage } from './pages/AptitudePage';
 import { InterviewPrepPage } from './pages/InterviewPrepPage';
 import { CodePrepLoader } from './components/ui/CodePrepLoader';
 import { StreakCelebrationOverlay } from './components/workspace/StreakCelebrationOverlay';
+import { CommandPalette } from './components/layout/CommandPalette';
 import {
   ensureBackupOrAutoRestore,
   flushAutoBackup,
@@ -460,6 +461,26 @@ export const App: React.FC = () => {
     <>
       {activePage}
       <StreakCelebrationOverlay />
+      <CommandPalette
+        isWorkspaceActive={currentView === 'workspace' || currentView === 'sql-workspace'}
+        onSelectProblem={(id) => {
+          setActiveProblemId(id);
+          setCurrentView(isSqlProblemId(id) ? 'sql-workspace' : 'workspace');
+        }}
+        onNavigateTab={handleTabNavigate}
+        onOpenCore600={() => {
+          setProblemListPreset((prev) => ({
+            prepSetId: 'core-600',
+            statusFilter: 'All',
+            difficultyFilter: 'All',
+            topicFilter: 'All',
+            filterVersion: (prev.filterVersion ?? 0) + 1,
+            searchQuery: '',
+            searchVersion: (prev.searchVersion ?? 0) + 1,
+          }));
+          setCurrentView('dsa');
+        }}
+      />
     </>
   );
 };

@@ -7,7 +7,11 @@ import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 import { SqlSchemaTables } from '../components/workspace/SqlSchemaTables';
 import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
 import { HighlightedCode, HighlightedCodeEditor } from '../components/ui/CodeHighlight';
+import { ResizableDivider } from '../components/workspace/ResizableDivider';
+import { WorkspaceProblemDrawer } from '../components/workspace/WorkspaceProblemDrawer';
+import { useWorkspaceLayout } from '../hooks/useWorkspaceLayout';
 import { formatCode } from '../utils/codeFormatter';
+import { ExecutionBenchmarks, SubmissionHistoryItem } from '../types/problem';
 import {
   Database,
   Table as TableIcon,
@@ -24,6 +28,15 @@ import {
   Check,
   Sparkles,
   AlignLeft,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  PanelLeftOpen,
+  History,
+  Eye,
+  Code2,
 } from 'lucide-react';
 
 interface SqlProblemData {
@@ -40,10 +53,11 @@ interface SqlProblemData {
   isSolved?: boolean;
   isBookmark?: boolean;
   unlockedAiSolution?: boolean;
+  recentSubmissions?: SubmissionHistoryItem[];
 }
 
 interface SqlQueryResult {
-  verdict: 'Accepted' | 'Wrong Answer' | 'Time Limit Exceeded' | 'Query Error';
+  verdict: 'Accepted' | 'Wrong Answer' | 'Time Limit Exceeded' | 'Query Error' | 'Query Plan';
   runtimeMs: number;
   columns?: string[];
   rows?: Array<Record<string, unknown>>;
@@ -69,15 +83,45 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [result, setResult] = useState<SqlQueryResult | null>(null);
+  const [sqlBenchmarks, setSqlBenchmarks] = useState<ExecutionBenchmarks | null>(null);
 
-  // Left pane tabs ('description' | 'solution')
-  const [activeLeftTab, setActiveLeftTab] = useState<'description' | 'solution'>('description');
+  // Left pane tabs ('description' | 'solution' | 'submissions')
+  const [activeLeftTab, setActiveLeftTab] = useState<'description' | 'solution' | 'submissions'>('description');
+  const [previewSqlSubId, setPreviewSqlSubId] = useState<string | null>(null);
   const [solutionSql, setSolutionSql] = useState<string | null>(null);
   const [solutionError, setSolutionError] = useState<string | null>(null);
   const [isUnlockingSolution, setIsUnlockingSolution] = useState(false);
   const [copiedSolution, setCopiedSolution] = useState(false);
   const [showSqlCheatSheet, setShowSqlCheatSheet] = useState(false);
   const [justFormattedSql, setJustFormattedSql] = useState(false);
+  const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, selectedChars: 0 });
+  const [fontSizePx, setFontSizePx] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem('codeprep_editor_font_size'));
+      return [12, 13, 14, 15, 16].includes(saved) ? saved : 13;
+    } catch {
+      return 13;
+    }
+  });
+  const [isProblemDrawerOpen, setIsProblemDrawerOpen] = useState(false);
+  const [isDraggingSplit, setIsDraggingSplit] = useState(false);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const rightColumnRef = useRef<HTMLDivElement>(null);
+
+  const {
+    layout,
+    setLeftWidthPct,
+    setBottomHeightPx,
+    toggleBottomCollapsed,
+    expandBottom,
+    toggleMaximize,
+    resetLayout,
+    isCustomLayout,
+  } = useWorkspaceLayout('codeprep_sql_workspace_layout', {
+    leftWidthPct: 44,
+    bottomHeightPx: 270,
+  });
+
   const [autoFormatSql, setAutoFormatSql] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('codeprep_auto_format');
@@ -126,6 +170,8 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     const fetchProblem = async () => {
       setIsLoading(true);
       setResult(null);
+      setSqlBenchmarks(null);
+      setPreviewSqlSubId(null);
       setActiveLeftTab('description');
       setSolutionSql(null);
       setSolutionError(null);
@@ -225,7 +271,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     }
   };
 
-  const handleRunQuery = async () => {
+  const handleRunQuery = async (explainOnly = false) => {
     if (!problem) return;
     const submittedSql = query;
     void persistDraftNow(problem.id, submittedSql);
@@ -236,16 +282,20 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         body: JSON.stringify({
           problemId,
           code: submittedSql,
+          explainOnly,
         }),
       });
       evaluatedQueryRef.current = submittedSql;
+      setSqlBenchmarks(null);
       setResult(res.result);
-      void requestSqlCoach({
-        requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
-        verdict: res.result.verdict,
-        queryResult: res.result,
-        queryOverride: submittedSql,
-      });
+      if (!explainOnly) {
+        void requestSqlCoach({
+          requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+          verdict: res.result.verdict,
+          queryResult: res.result,
+          queryOverride: submittedSql,
+        });
+      }
     } catch (err: unknown) {
       const fallbackErr: SqlQueryResult = {
         verdict: 'Query Error',
@@ -274,6 +324,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       const res = await apiRequest<{
         result: SqlQueryResult;
         submissionId: string;
+        benchmarks?: ExecutionBenchmarks;
         potdStatus?: {
           isPotd: boolean;
           solvedToday: boolean;
@@ -290,9 +341,28 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         }),
       });
       evaluatedQueryRef.current = submittedSql;
+      setSqlBenchmarks(res.result.verdict === 'Accepted' && res.benchmarks ? res.benchmarks : null);
       setResult(res.result);
+
+      const newSub: SubmissionHistoryItem = {
+        id: res.submissionId,
+        verdict: res.result.verdict as SubmissionHistoryItem['verdict'],
+        runtimeMs: res.result.runtimeMs,
+        memoryKb: 2048,
+        submittedAt: new Date().toISOString(),
+        code: submittedSql,
+      };
+      setProblem((prev) =>
+        prev
+          ? {
+              ...prev,
+              isSolved: prev.isSolved || res.result.verdict === 'Accepted',
+              recentSubmissions: [newSub, ...(prev.recentSubmissions || [])].slice(0, 20),
+            }
+          : null
+      );
+
       if (res.result.verdict === 'Accepted' && problem) {
-        setProblem({ ...problem, isSolved: true });
         window.dispatchEvent(new CustomEvent('codeprep:progress-updated'));
         if (res.potdStatus?.isPotd && res.potdStatus.justCompletedToday) {
           window.dispatchEvent(
@@ -345,6 +415,32 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     }
   };
 
+  useEffect(() => {
+    const handleWorkspaceCommand = (e: Event) => {
+      const detail = (e as CustomEvent<{ action?: string }>).detail;
+      if (!detail?.action) return;
+      if (detail.action === 'run') {
+        expandBottom();
+        void handleRunQuery();
+      } else if (detail.action === 'submit') {
+        expandBottom();
+        void handleSubmitQuery();
+      } else if (detail.action === 'format') {
+        const formatted = formatCode(activeQueryRef.current, 'sql');
+        setQuery(formatted);
+        setSaveStatus(formatted === savedQueryRef.current ? 'saved' : 'dirty');
+      } else if (detail.action === 'reset-layout') {
+        resetLayout();
+      } else if (detail.action === 'quick-list') {
+        setIsProblemDrawerOpen((p) => !p);
+      } else if (detail.action === 'toggle-coach') {
+        setIsCoachOpen((p) => !p);
+      }
+    };
+    window.addEventListener('codeprep:workspace:action', handleWorkspaceCommand);
+    return () => window.removeEventListener('codeprep:workspace:action', handleWorkspaceCommand);
+  });
+
   const handleUnlockAndLoadSolution = async () => {
     if (!problem) return;
     setIsUnlockingSolution(true);
@@ -393,6 +489,17 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
             <ArrowLeft className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">SQL Set</span>
           </Button>
+          {onNavigateProblem && (
+            <button
+              type="button"
+              onClick={() => setIsProblemDrawerOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-elevated hover:bg-surface-high text-text-primary text-xs font-medium transition-colors border border-border-subtle shrink-0"
+              title="Quick switch SQL problems (Drawer)"
+            >
+              <PanelLeftOpen className="w-3.5 h-3.5 text-primary" />
+              <span className="hidden lg:inline">Quick List</span>
+            </button>
+          )}
           <span className="text-border-default">|</span>
           <div className="flex items-center gap-1 shrink-0">
             <button
@@ -444,6 +551,18 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {isCustomLayout && (
+            <button
+              type="button"
+              onClick={resetLayout}
+              className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-elevated hover:bg-surface-high text-[11px] font-medium text-text-muted hover:text-text-primary border border-border-subtle transition-colors"
+              title="Reset workspace pane sizes to default"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset Layout</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -493,9 +612,27 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           <ThemeToggle compact />
 
           <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              expandBottom();
+              void handleRunQuery(true);
+            }}
+            disabled={isRunning}
+            className="gap-1.5 text-xs border border-border-subtle"
+            title="Inspect SQLite EXPLAIN QUERY PLAN (index scans vs full scans)"
+          >
+            <TableIcon className="w-3.5 h-3.5 text-primary" />
+            <span className="hidden sm:inline">Explain Plan</span>
+          </Button>
+
+          <Button
             variant="secondary"
             size="sm"
-            onClick={handleRunQuery}
+            onClick={() => {
+              expandBottom();
+              void handleRunQuery(false);
+            }}
             disabled={isRunning}
             className="gap-1.5 text-xs"
           >
@@ -506,7 +643,10 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           <Button
             variant="primary"
             size="sm"
-            onClick={handleSubmitQuery}
+            onClick={() => {
+              expandBottom();
+              void handleSubmitQuery();
+            }}
             disabled={isRunning}
             className="gap-1.5 text-xs"
           >
@@ -517,9 +657,22 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       </div>
 
       {/* Main Workspace */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+      <div
+        ref={splitContainerRef}
+        style={{ '--sql-left-w': `${layout.leftWidthPct}%` } as React.CSSProperties}
+        className="flex-1 flex flex-col md:flex-row overflow-hidden relative"
+      >
         {/* Left Pane: Spec, Schema & Solution Tabs */}
-        <div className="w-full md:w-[44%] h-full flex flex-col border-r border-border-subtle bg-surface overflow-hidden">
+        {layout.maximizedPane !== 'editor' && layout.maximizedPane !== 'console' && (
+        <div
+          className={`${
+            layout.maximizedPane === 'spec'
+              ? 'w-full h-full flex-1'
+              : 'w-full md:flex-none md:w-[var(--sql-left-w)] h-[44%] md:h-full'
+          } flex flex-col border-b md:border-b-0 border-border-subtle bg-surface overflow-hidden min-w-0 ${
+            isDraggingSplit ? '' : 'transition-[width] duration-75'
+          }`}
+        >
           <div className="h-11 border-b border-border-subtle bg-surface/90 px-3 flex items-center gap-1 overflow-x-auto shrink-0">
             <button
               type="button"
@@ -551,6 +704,37 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
               <BookOpen className="w-3.5 h-3.5 text-warning" />
               <span>Solution</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveLeftTab('submissions')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${
+                activeLeftTab === 'submissions'
+                  ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
+                  : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+              }`}
+            >
+              <History className="w-3.5 h-3.5 text-success" />
+              <span>Submissions</span>
+              {problem.recentSubmissions && problem.recentSubmissions.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-surface-high text-[10px] font-mono text-text-secondary">
+                  {problem.recentSubmissions.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleMaximize('spec')}
+              className={`ml-auto p-1.5 rounded-lg border transition-colors shrink-0 ${
+                layout.maximizedPane === 'spec'
+                  ? 'bg-primary-subtle text-primary border-primary/40'
+                  : 'text-text-muted hover:text-text-primary bg-surface-elevated/60 hover:bg-surface-high border-border-subtle'
+              }`}
+              title={layout.maximizedPane === 'spec' ? 'Restore split view' : 'Maximize description pane'}
+            >
+              {layout.maximizedPane === 'spec' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -580,7 +764,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                   </div>
                 </div>
               </>
-            ) : (
+            ) : activeLeftTab === 'solution' ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-base font-bold text-text-primary">Reference SQL Solution</span>
@@ -634,15 +818,120 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                   </div>
                 )}
               </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-base text-text-primary">SQL Submission History</h3>
+                  <span className="text-xs font-mono text-text-muted">Stored in database</span>
+                </div>
+
+                {!problem.recentSubmissions || problem.recentSubmissions.length === 0 ? (
+                  <div className="p-6 rounded-xl bg-surface-subtle border border-border-subtle text-sm text-text-muted text-center">
+                    No SQL submissions recorded yet for #{problem.id}. Submit your query to track verdict history.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {problem.recentSubmissions.map((sub) => {
+                      const isAccepted = sub.verdict === 'Accepted';
+                      const isPreview = previewSqlSubId === sub.id;
+                      return (
+                        <div
+                          key={sub.id}
+                          className="rounded-xl bg-surface-subtle border border-border-subtle overflow-hidden"
+                        >
+                          <div className="p-3.5 flex items-center justify-between gap-3">
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-xs font-bold font-mono ${
+                                    isAccepted ? 'text-success' : 'text-danger'
+                                  }`}
+                                >
+                                  {sub.verdict}
+                                </span>
+                                {typeof sub.runtimeMs === 'number' && (
+                                  <span className="text-xs font-mono text-text-muted">
+                                    {sub.runtimeMs} ms
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs font-mono text-text-muted">
+                                {new Date(sub.submittedAt).toLocaleString()}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {sub.code && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewSqlSubId(isPreview ? null : sub.id)}
+                                  className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${
+                                    isPreview
+                                      ? 'bg-primary-subtle text-primary border-primary/40'
+                                      : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
+                                  }`}
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>{isPreview ? 'Hide' : 'View'}</span>
+                                </button>
+                              )}
+                              {sub.code && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setQuery(sub.code);
+                                    setSaveStatus(sub.code === savedQueryRef.current ? 'saved' : 'dirty');
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary flex items-center gap-1.5"
+                                >
+                                  <Code2 className="w-3.5 h-3.5 text-primary" />
+                                  <span>Load</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {isPreview && sub.code && (
+                            <div className="border-t border-border-subtle bg-canvas p-3 max-h-52 overflow-auto">
+                              <HighlightedCode code={sub.code} language="sql" className="text-xs leading-5" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
+        )}
+
+        {layout.maximizedPane === 'none' && (
+          <ResizableDivider
+            orientation="vertical"
+            onDragStateChange={setIsDraggingSplit}
+            onDragDelta={(deltaPx) => {
+              const containerWidth = splitContainerRef.current?.clientWidth || window.innerWidth;
+              if (containerWidth <= 0) return;
+              const deltaPct = (deltaPx / containerWidth) * 100;
+              setLeftWidthPct(layout.leftWidthPct + deltaPct);
+            }}
+            onDoubleClick={() => setLeftWidthPct(44)}
+            title="Drag to resize description & SQL editor width (double-click to reset)"
+          />
+        )}
 
         {/* Right Pane: SQL Editor + Output Table */}
-        <div className="w-full md:w-[56%] h-full flex flex-col">
-          <div className="h-[50%] flex flex-col border-b border-border-subtle bg-canvas">
-            <div className="px-4 py-2 border-b border-border-subtle bg-surface flex items-center justify-between gap-2 text-xs font-mono text-text-secondary">
-              <div className="flex items-center gap-2">
+        {layout.maximizedPane !== 'spec' && (
+        <div
+          ref={rightColumnRef}
+          className="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden"
+        >
+          {layout.maximizedPane !== 'console' && (
+          <div className="flex-1 min-h-[120px] flex flex-col bg-canvas overflow-hidden">
+            <div className="px-4 py-2 border-b border-border-subtle bg-surface flex items-center justify-between gap-2 text-xs font-mono text-text-secondary shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <Database className="w-3.5 h-3.5 text-primary" />
                   <span>SQL Query Editor</span>
@@ -695,8 +984,49 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                   <span>Auto {autoFormatSql ? 'ON' : 'OFF'}</span>
                 </button>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="hidden lg:inline text-[10px] text-text-muted">Ctrl+Space Complete • Ctrl+Enter Run</span>
+              <div className="flex items-center gap-2.5">
+                <div className="hidden sm:flex items-center rounded border border-border-subtle bg-surface-elevated overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFontSizePx((prev) => {
+                        const next = Math.max(12, prev - 1);
+                        try {
+                          localStorage.setItem('codeprep_editor_font_size', String(next));
+                        } catch {}
+                        return next;
+                      })
+                    }
+                    disabled={fontSizePx <= 12}
+                    className="px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary disabled:opacity-40"
+                    title="Decrease SQL font size"
+                  >
+                    A-
+                  </button>
+                  <span className="px-1 text-[10px] text-text-muted border-x border-border-subtle">
+                    {fontSizePx}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFontSizePx((prev) => {
+                        const next = Math.min(16, prev + 1);
+                        try {
+                          localStorage.setItem('codeprep_editor_font_size', String(next));
+                        } catch {}
+                        return next;
+                      })
+                    }
+                    disabled={fontSizePx >= 16}
+                    className="px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary disabled:opacity-40"
+                    title="Increase SQL font size"
+                  >
+                    A+
+                  </button>
+                </div>
+                <span className="hidden xl:inline text-[10px] text-text-muted">
+                  Ln {cursorInfo.line}, Col {cursorInfo.col}
+                </span>
                 <span className={saveStatus === 'saved' ? 'text-success' : 'text-warning'}>
                   {saveStatus === 'saving'
                     ? 'Saving...'
@@ -704,6 +1034,18 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                     ? 'Unsaved edits'
                     : 'Draft saved'}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => toggleMaximize('editor')}
+                  className={`p-1 rounded border transition-colors ${
+                    layout.maximizedPane === 'editor'
+                      ? 'bg-primary-subtle text-primary border-primary/40'
+                      : 'text-text-muted hover:text-text-primary bg-surface-elevated hover:bg-surface-high border-border-subtle'
+                  }`}
+                  title={layout.maximizedPane === 'editor' ? 'Restore editor height' : 'Maximize SQL editor'}
+                >
+                  {layout.maximizedPane === 'editor' ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                </button>
               </div>
             </div>
 
@@ -722,41 +1064,115 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
               onKeyDown={(e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                   e.preventDefault();
+                  expandBottom();
                   if (e.shiftKey) {
                     handleSubmitQuery();
                   } else {
-                    handleRunQuery();
+                    handleRunQuery(false);
                   }
                 }
               }}
               language="sql"
+              schemaDdl={problem.schemaDdl}
               showLineNumbers
               paddingClass="p-4"
               autoFormat={autoFormatSql}
+              fontSizePx={fontSizePx}
+              onCursorChange={setCursorInfo}
+              onSaveShortcut={() => void persistDraftNow(problem.id, query)}
               onFormatted={() => {
                 setJustFormattedSql(true);
                 window.setTimeout(() => setJustFormattedSql(false), 1500);
               }}
             />
           </div>
+          )}
 
-          <div className="h-[50%] flex flex-col bg-surface overflow-hidden">
-            <div className="px-4 py-2 border-b border-border-subtle bg-surface-elevated flex items-center justify-between text-xs">
+          {layout.maximizedPane === 'none' && !layout.isBottomCollapsed && (
+            <ResizableDivider
+              orientation="horizontal"
+              onDragStateChange={setIsDraggingSplit}
+              onDragDelta={(deltaPx) => {
+                const maxH = Math.max(220, (rightColumnRef.current?.clientHeight || 600) - 140);
+                setBottomHeightPx(Math.min(maxH, layout.bottomHeightPx - deltaPx));
+              }}
+              onDoubleClick={() => setBottomHeightPx(270)}
+              title="Drag to resize SQL editor & result output height (double-click to reset)"
+            />
+          )}
+
+          {layout.maximizedPane !== 'editor' && (
+          <div
+            style={
+              layout.maximizedPane === 'console'
+                ? undefined
+                : layout.isBottomCollapsed
+                  ? undefined
+                  : { height: `${layout.bottomHeightPx}px` }
+            }
+            className={`${
+              layout.maximizedPane === 'console' ? 'flex-1 h-full' : layout.isBottomCollapsed ? 'h-10' : ''
+            } flex flex-col bg-surface overflow-hidden shrink-0 border-t border-border-subtle`}
+          >
+            <div className="h-10 px-4 border-b border-border-subtle bg-surface-elevated flex items-center justify-between text-xs shrink-0">
               <span className="font-semibold text-text-primary flex items-center gap-1.5">
                 <TableIcon className="w-3.5 h-3.5 text-primary" />
                 <span>Query Result Output</span>
               </span>
-              {result && (
-                <div className="flex items-center gap-3 font-mono text-xs">
-                  <span className={result.verdict === 'Accepted' ? 'text-success font-bold' : 'text-danger font-bold'}>
-                    {result.verdict}
-                  </span>
-                  <span className="text-text-muted">•</span>
-                  <span className="text-text-secondary">{result.runtimeMs} ms</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {result && (
+                  <div className="flex items-center gap-2 font-mono text-xs mr-1">
+                    <span
+                      className={
+                        result.verdict === 'Accepted'
+                          ? 'text-success font-bold'
+                          : result.verdict === 'Query Plan'
+                          ? 'text-primary font-bold'
+                          : 'text-danger font-bold'
+                      }
+                    >
+                      {result.verdict}
+                    </span>
+                    <span className="text-text-muted">•</span>
+                    <span className="text-text-secondary">{result.runtimeMs} ms</span>
+                    {result.verdict === 'Accepted' && sqlBenchmarks && (
+                      <>
+                        <span className="text-text-muted">•</span>
+                        <span className="text-success font-semibold">
+                          Beats {sqlBenchmarks.runtimePercentile.toFixed(1)}%
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {layout.maximizedPane !== 'console' && (
+                  <button
+                    type="button"
+                    onClick={toggleBottomCollapsed}
+                    className="p-1 rounded bg-surface hover:bg-surface-high text-text-muted hover:text-text-primary border border-border-subtle transition-colors"
+                    title={layout.isBottomCollapsed ? 'Expand output panel' : 'Collapse output panel'}
+                  >
+                    {layout.isBottomCollapsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => toggleMaximize('console')}
+                  className={`p-1 rounded border transition-colors ${
+                    layout.maximizedPane === 'console'
+                      ? 'bg-primary-subtle text-primary border-primary/40'
+                      : 'bg-surface hover:bg-surface-high text-text-muted hover:text-text-primary border-border-subtle'
+                  }`}
+                  title={layout.maximizedPane === 'console' ? 'Restore output height' : 'Maximize query result output'}
+                >
+                  {layout.maximizedPane === 'console' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
 
+            {!layout.isBottomCollapsed && (
             <div className="flex-1 overflow-auto p-4 space-y-4">
               {!result && (
                 <div className="h-full flex flex-col items-center justify-center text-sm text-text-muted gap-2">
@@ -837,9 +1253,22 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                 </div>
               )}
             </div>
+            )}
           </div>
+          )}
         </div>
+        )}
       </div>
+
+      {onNavigateProblem && (
+        <WorkspaceProblemDrawer
+          isOpen={isProblemDrawerOpen}
+          onClose={() => setIsProblemDrawerOpen(false)}
+          currentProblemId={problem.id}
+          mode="sql"
+          onSelectProblem={(nextId) => handleNavigate(() => onNavigateProblem(nextId))}
+        />
+      )}
 
       <HintsDrawer
         isOpen={isCoachOpen}

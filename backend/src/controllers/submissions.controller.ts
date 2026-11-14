@@ -66,7 +66,7 @@ export class SubmissionsController {
 
   static async runCode(req: Request, res: Response): Promise<void> {
     try {
-      const { problemId, code, customTestCases } = req.body;
+      const { problemId, code, customTestCases, debugMode, explainOnly } = req.body;
       const userId = req.user?.id || 'anonymous';
       const pid = parseInt(problemId, 10);
 
@@ -82,7 +82,8 @@ export class SubmissionsController {
           code,
           sqlDef.schemaDdl,
           sqlDef.expectedQuery,
-          sqlDef.expectedResultJson
+          sqlDef.expectedResultJson,
+          { explainOnly: Boolean(explainOnly) }
         );
         res.json({
           result: {
@@ -94,7 +95,11 @@ export class SubmissionsController {
             expectedColumns: sqlResult.expectedColumns,
             expectedRows: sqlResult.expectedRows,
             error: sqlResult.error,
-            stdout: sqlResult.error ? `Error: ${sqlResult.error}` : `Rows returned: ${sqlResult.rows.length}`,
+            stdout: sqlResult.error
+              ? `Error: ${sqlResult.error}`
+              : explainOnly
+              ? `Query plan steps: ${sqlResult.rows.length}`
+              : `Rows returned: ${sqlResult.rows.length}`,
             totalTestCases: 1,
             passedTestCases: sqlResult.verdict === 'Accepted' ? 1 : 0,
           },
@@ -134,6 +139,8 @@ export class SubmissionsController {
         {
           allowStandaloneMain: true,
           isCustomRun,
+          includeCaseResults: true,
+          debugMode: Boolean(debugMode),
           comparisonOptions: {
             orderMode: policy.orderMode,
             floatTolerance: policy.floatTolerance,

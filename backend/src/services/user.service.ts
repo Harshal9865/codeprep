@@ -233,7 +233,7 @@ export class UserService {
    * Full JSON data export for the user
    */
   static async exportUserData(userId: string) {
-    const [user, submissions, drafts, timers, userProblemStates, allowLegacy] = await Promise.all([
+    const [user, submissions, drafts, timers, userProblemStates, allowLegacy, badges] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -294,6 +294,17 @@ export class UserService {
         },
       }),
       UserProblemStateService.isPrimaryOwner(userId),
+      prisma.userBadge.findMany({
+        where: { userId },
+        select: {
+          badgeKey: true,
+          title: true,
+          description: true,
+          category: true,
+          unlockedAt: true,
+        },
+        orderBy: { unlockedAt: 'asc' },
+      }),
     ]);
 
     const savedMap = new Map<
@@ -352,7 +363,7 @@ export class UserService {
     return {
       metadata: {
         exportDate: new Date().toISOString(),
-        version: '1.0.0',
+        version: '1.1.0',
         platform: 'CodePrep Interview Preparation Platform',
       },
       user,
@@ -361,16 +372,18 @@ export class UserService {
         acceptedSubmissions: submissions.filter((s) => s.verdict === 'Accepted').length,
         bookmarkedProblems: bookmarksAndNotes.filter((p) => p.isBookmark).length,
         notesCount: bookmarksAndNotes.filter((p) => p.userNotes).length,
+        badgesUnlocked: badges.length,
       },
       submissions,
       drafts,
       timers,
       savedProblems: bookmarksAndNotes,
+      badges,
     };
   }
 
   /**
-   * Restores user profile settings, submissions, drafts, timers, bookmarks, and notes from an exported JSON snapshot
+   * Restores user profile settings, submissions, drafts, timers, bookmarks, notes, and badges from an exported JSON snapshot
    */
   static async importUserData(userId: string, rawDump: unknown) {
     if (!rawDump || typeof rawDump !== 'object') {
@@ -408,6 +421,13 @@ export class UserService {
         solvedWithAiHelp?: boolean;
         unlockedAiSolution?: boolean;
       }>;
+      badges?: Array<{
+        badgeKey: string;
+        title?: string;
+        description?: string;
+        category?: string;
+        unlockedAt?: string;
+      }>;
     };
 
     const existingProblems = await prisma.problem.findMany({ select: { id: true } });
@@ -427,6 +447,7 @@ export class UserService {
     let draftsRestored = 0;
     let timersRestored = 0;
     let savedProblemsRestored = 0;
+    let badgesRestored = 0;
 
     await prisma.$transaction(async (tx) => {
       if (dump.user) {
@@ -535,6 +556,26 @@ export class UserService {
           }
         }
       }
+      if (Array.isArray(dump.badges)) {
+        for (const badge of dump.badges) {
+          if (typeof badge?.badgeKey !== 'string' || !badge.badgeKey.trim()) continue;
+          const unlockedAt = badge.unlockedAt ? new Date(badge.unlockedAt) : new Date();
+          const safeUnlockedAt = Number.isNaN(unlockedAt.getTime()) ? new Date() : unlockedAt;
+          await tx.userBadge.upsert({
+            where: { userId_badgeKey: { userId, badgeKey: badge.badgeKey } },
+            update: {},
+            create: {
+              userId,
+              badgeKey: badge.badgeKey,
+              title: typeof badge.title === 'string' && badge.title.trim() ? badge.title : badge.badgeKey,
+              description: typeof badge.description === 'string' ? badge.description : '',
+              category: typeof badge.category === 'string' ? badge.category : 'solved',
+              unlockedAt: safeUnlockedAt,
+            },
+          });
+          badgesRestored++;
+        }
+      }
     });
 
     await checkpointWal();
@@ -557,6 +598,7 @@ export class UserService {
       draftsRestored,
       timersRestored,
       savedProblemsRestored,
+      badgesRestored,
     });
 
     return {
@@ -566,6 +608,7 @@ export class UserService {
         draftsRestored,
         timersRestored,
         savedProblemsRestored,
+        badgesRestored,
       },
     };
   }

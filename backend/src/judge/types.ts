@@ -14,6 +14,16 @@ export interface TestCase {
   isHidden?: boolean;
 }
 
+export interface CaseExecutionDetail {
+  index: number;
+  input: string;
+  expected: string;
+  actual: string;
+  stdout?: string;
+  passed: boolean;
+  runtimeMs?: number;
+}
+
 export interface ExecutionResult {
   verdict: Verdict;
   runtimeMs: number;
@@ -27,6 +37,7 @@ export interface ExecutionResult {
     actual: string;
     testIndex: number;
   };
+  caseResults?: CaseExecutionDetail[];
   totalTestCases: number;
   passedTestCases: number;
 }

@@ -1,7 +1,25 @@
-import React, { useState, useRef } from 'react';
-import { RotateCcw, Copy, Check, Eye, EyeOff, Code, CheckCircle2, AlignLeft, Sparkles } from 'lucide-react';
+import React, { useState, useRef, useMemo } from 'react';
+import {
+  RotateCcw,
+  Copy,
+  Check,
+  Eye,
+  EyeOff,
+  Code,
+  CheckCircle2,
+  AlignLeft,
+  Sparkles,
+  Maximize2,
+  Minimize2,
+  AlertTriangle,
+} from 'lucide-react';
 import { apiRequest } from '../../services/api';
-import { HighlightedCode, HighlightedCodeEditor } from '../ui/CodeHighlight';
+import {
+  HighlightedCode,
+  HighlightedCodeEditor,
+  EditorErrorLine,
+  findDelimiterMismatch,
+} from '../ui/CodeHighlight';
 import { formatCode } from '../../utils/codeFormatter';
 
 interface EditorPaneProps {
@@ -12,6 +30,11 @@ interface EditorPaneProps {
   saveStatus?: 'saved' | 'saving' | 'dirty' | 'error';
   onRunShortcut?: () => void;
   onSubmitShortcut?: () => void;
+  onSaveShortcut?: () => void;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
+  errorLines?: EditorErrorLine[];
+  focusLineRequest?: { line: number; nonce: number } | null;
 }
 
 export const EditorPane: React.FC<EditorPaneProps> = ({
@@ -22,12 +45,34 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
   saveStatus = 'saved',
   onRunShortcut,
   onSubmitShortcut,
+  onSaveShortcut,
+  isMaximized = false,
+  onToggleMaximize,
+  errorLines = [],
+  focusLineRequest = null,
 }) => {
   const [showFullCode, setShowFullCode] = useState(false);
   const [fullCodeText, setFullCodeText] = useState('');
   const [isGeneratingFullCode, setIsGeneratingFullCode] = useState(false);
   const [copiedFullCode, setCopiedFullCode] = useState(false);
   const [justFormatted, setJustFormatted] = useState(false);
+  const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, selectedChars: 0 });
+  const [fontSizePx, setFontSizePx] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem('codeprep_editor_font_size'));
+      return [12, 13, 14, 15, 16].includes(saved) ? saved : 13;
+    } catch {
+      return 13;
+    }
+  });
+  const [tabSize, setTabSize] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem('codeprep_editor_tab_size'));
+      return saved === 2 || saved === 4 ? saved : 4;
+    } catch {
+      return 4;
+    }
+  });
   const [autoFormat, setAutoFormat] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('codeprep_auto_format');
@@ -61,6 +106,26 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
       } catch {
         // Ignore storage quota errors
       }
+      return next;
+    });
+  };
+
+  const handleCycleFontSize = (delta: number) => {
+    setFontSizePx((prev) => {
+      const next = Math.min(16, Math.max(12, prev + delta));
+      try {
+        localStorage.setItem('codeprep_editor_font_size', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleToggleTabSize = () => {
+    setTabSize((prev) => {
+      const next = prev === 4 ? 2 : 4;
+      try {
+        localStorage.setItem('codeprep_editor_tab_size', String(next));
+      } catch {}
       return next;
     });
   };
@@ -103,6 +168,10 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
   };
 
   const lines = (showFullCode ? fullCodeText : code).split('\n');
+  const delimiterIssue = useMemo(
+    () => (showFullCode ? null : findDelimiterMismatch(code, 'cpp')),
+    [code, showFullCode]
+  );
 
   return (
     <div className="h-full flex flex-col bg-canvas overflow-hidden transition-colors">
@@ -177,13 +246,63 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
           )}
 
           {!showFullCode && (
+            <>
+              <div className="hidden sm:flex items-center rounded-lg border border-border-subtle bg-surface-elevated overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => handleCycleFontSize(-1)}
+                  disabled={fontSizePx <= 12}
+                  className="px-1.5 py-1 text-[11px] font-mono text-text-muted hover:text-text-primary hover:bg-surface-high disabled:opacity-40 transition-colors"
+                  title="Decrease editor font size"
+                >
+                  A-
+                </button>
+                <span className="px-1 text-[10px] font-mono text-text-muted border-x border-border-subtle">
+                  {fontSizePx}px
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCycleFontSize(1)}
+                  disabled={fontSizePx >= 16}
+                  className="px-1.5 py-1 text-[11px] font-mono text-text-muted hover:text-text-primary hover:bg-surface-high disabled:opacity-40 transition-colors"
+                  title="Increase editor font size"
+                >
+                  A+
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleTabSize}
+                className="hidden md:inline-flex px-2 py-1 rounded-lg text-[11px] font-mono text-text-muted hover:text-text-primary bg-surface-elevated hover:bg-surface-high transition-colors border border-border-subtle"
+                title="Switch Tab indentation width (2 or 4 spaces)"
+              >
+                Spaces: {tabSize}
+              </button>
+
+              <button
+                type="button"
+                onClick={onReset}
+                className="p-1.5 rounded-lg text-text-muted hover:text-text-primary bg-surface-elevated hover:bg-surface-high transition-colors border border-border-subtle"
+                title="Reset code to default stub"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+
+          {onToggleMaximize && (
             <button
               type="button"
-              onClick={onReset}
-              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary bg-surface-elevated hover:bg-surface-high transition-colors border border-border-subtle"
-              title="Reset code to default stub"
+              onClick={onToggleMaximize}
+              className={`p-1.5 rounded-lg transition-colors border ${
+                isMaximized
+                  ? 'bg-primary-subtle text-primary border-primary/40'
+                  : 'text-text-muted hover:text-text-primary bg-surface-elevated hover:bg-surface-high border-border-subtle'
+              }`}
+              title={isMaximized ? 'Restore editor layout' : 'Maximize code editor'}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </button>
           )}
         </div>
@@ -215,12 +334,18 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
             paddingClass="p-3"
             autoFormat={autoFormat}
             onFormatted={triggerFormattedToast}
+            fontSizePx={fontSizePx}
+            tabSize={tabSize}
+            onCursorChange={setCursorInfo}
+            onSaveShortcut={onSaveShortcut}
+            errorLines={errorLines}
+            focusLineRequest={focusLineRequest}
           />
         )}
       </div>
 
       {/* Status Bar */}
-      <div className="h-7 bg-surface px-3 flex items-center justify-between text-xs font-mono text-text-muted border-t border-border-subtle select-none">
+      <div className="h-7 bg-surface px-3 flex items-center justify-between text-xs font-mono text-text-muted border-t border-border-subtle select-none shrink-0">
         <div
           className={`flex items-center gap-1.5 ${
             saveStatus === 'error'
@@ -242,10 +367,22 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-3">
+          {delimiterIssue && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-warning-subtle border border-warning/35 text-warning text-[11px]"
+              title="Unmatched bracket, brace, or literal detected"
+            >
+              <AlertTriangle className="w-3 h-3 shrink-0" />
+              <span>{delimiterIssue}</span>
+            </span>
+          )}
           <span className="hidden lg:inline text-[11px] text-text-muted/80">
-            Ctrl+Space Complete • Shift+Alt+F Format • Ctrl+Enter Run
+            Ctrl+F Find • Ctrl+/ Comment • Ctrl+Space Complete • Ctrl+S Save • Ctrl+Enter Run
           </span>
-          <span>Ln {lines.length}</span>
+          <span>
+            Ln {cursorInfo.line}, Col {cursorInfo.col}
+            {cursorInfo.selectedChars > 0 ? ` (${cursorInfo.selectedChars} sel)` : ''} • {lines.length}L
+          </span>
         </div>
       </div>
     </div>

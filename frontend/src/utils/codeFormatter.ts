@@ -440,7 +440,31 @@ function countNetBracesOutsideStrings(line: string): { leadingClose: number; net
 export function formatCppCode(code: string): string {
   const normalized = code.replace(/\r\n/g, '\n');
   const { masked, spans } = protectCppLiteralsAndComments(normalized);
-  const rawLines = masked.split('\n');
+  const preLines = masked.split('\n');
+
+  // Fold Allman-style standalone `{` onto control/function/class headers for K&R LeetCode style
+  const rawLines: string[] = [];
+  for (const l of preLines) {
+    const trimmed = l.trim();
+    if (trimmed === '{' && rawLines.length > 0) {
+      let prevIdx = rawLines.length - 1;
+      while (prevIdx >= 0 && rawLines[prevIdx].trim() === '') prevIdx--;
+      if (prevIdx >= 0) {
+        const prevTrim = rawLines[prevIdx].trim();
+        const isHeaderOrBlock =
+          !prevTrim.startsWith('__CP_SPAN_PREP_') &&
+          !prevTrim.startsWith('__CP_SPAN_LCOM_') &&
+          !prevTrim.startsWith('__CP_SPAN_BCOM_') &&
+          !/[;{}:\[\],]$/.test(prevTrim);
+        if (isHeaderOrBlock) {
+          rawLines.splice(prevIdx + 1);
+          rawLines[prevIdx] = rawLines[prevIdx].replace(/\s+$/, '') + ' {';
+          continue;
+        }
+      }
+    }
+    rawLines.push(l);
+  }
 
   const formattedLines: string[] = [];
   let braceDepth = 0;

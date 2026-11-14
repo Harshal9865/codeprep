@@ -10,6 +10,8 @@ import {
   Pause,
   List,
   Flame,
+  PanelLeftOpen,
+  RotateCcw,
 } from 'lucide-react';
 
 interface ProblemHeaderProps {
@@ -20,6 +22,9 @@ interface ProblemHeaderProps {
   hasNext: boolean;
   onBookmarkToggle: () => void;
   onBackToList: () => void;
+  onOpenProblemDrawer?: () => void;
+  onResetLayout?: () => void;
+  isCustomLayout?: boolean;
   rightActions?: React.ReactNode;
   isPotd?: boolean;
   potdSolvedToday?: boolean;
@@ -33,6 +38,9 @@ export const ProblemHeader: React.FC<ProblemHeaderProps> = ({
   hasNext,
   onBookmarkToggle,
   onBackToList,
+  onOpenProblemDrawer,
+  onResetLayout,
+  isCustomLayout = false,
   rightActions,
   isPotd = false,
   potdSolvedToday = false,
@@ -69,11 +77,23 @@ export const ProblemHeader: React.FC<ProblemHeaderProps> = ({
           type="button"
           onClick={onBackToList}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high text-text-primary text-xs font-medium transition-colors border border-border-subtle shrink-0"
-          title="Return to Problem List"
+          title="Return to Problem List page"
         >
           <List className="w-3.5 h-3.5 text-text-muted" />
           <span className="hidden sm:inline">Problems</span>
         </button>
+
+        {onOpenProblemDrawer && (
+          <button
+            type="button"
+            onClick={onOpenProblemDrawer}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high text-text-primary text-xs font-medium transition-colors border border-border-subtle shrink-0"
+            title="Quick switch problems (Drawer)"
+          >
+            <PanelLeftOpen className="w-3.5 h-3.5 text-primary" />
+            <span className="hidden lg:inline">Quick List</span>
+          </button>
+        )}
 
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -119,9 +139,21 @@ export const ProblemHeader: React.FC<ProblemHeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Actions, Coach Button, Timer, Theme Toggle, Bookmark */}
+      {/* Right: Actions, Coach Button, Layout Reset, Timer, Theme Toggle, Bookmark */}
       <div className="flex items-center gap-2 shrink-0">
         {rightActions}
+
+        {isCustomLayout && onResetLayout && (
+          <button
+            type="button"
+            onClick={onResetLayout}
+            className="hidden md:flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-elevated hover:bg-surface-high text-[11px] font-medium text-text-muted hover:text-text-primary transition-colors border border-border-subtle"
+            title="Reset workspace pane sizes to default"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset Layout</span>
+          </button>
+        )}
 
         {/* Live Practice Timer */}
         <button

@@ -736,6 +736,21 @@ export class ProblemService {
 
     const effectiveState = await UserProblemStateService.getEffectiveState(id, userId, problem);
 
+    const similarProblems = await prisma.problem.findMany({
+      where: {
+        topic: problem.topic,
+        category: problem.category,
+        id: { not: id },
+      },
+      select: {
+        id: true,
+        title: true,
+        difficulty: true,
+      },
+      orderBy: { id: 'asc' },
+      take: 4,
+    });
+
     return {
       ...problem,
       isBookmark: effectiveState.isBookmark,
@@ -748,6 +763,7 @@ export class ProblemService {
       defaultCodeStub: problem.cppHarnessTemplate || def?.defaultCodeStub || '',
       userDraftCode: draft ? draft.code : null,
       sampleTestCases,
+      similarProblems,
       isSolved,
       recentSubmissions: submissions,
       aiLesson: lesson || null,

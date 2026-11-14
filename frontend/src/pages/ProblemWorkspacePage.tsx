@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Problem, ExecutionResult, TestCase } from '../types/problem';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Problem, ExecutionResult, ExecutionBenchmarks, TestCase } from '../types/problem';
+import { EditorErrorLine } from '../components/ui/CodeHighlight';
+import { formatCode } from '../utils/codeFormatter';
 import { ProblemHeader } from '../components/workspace/ProblemHeader';
 import { ProblemSpecPane } from '../components/workspace/ProblemSpecPane';
 import { EditorPane } from '../components/workspace/EditorPane';
 import { TestRunnerPane } from '../components/workspace/TestRunnerPane';
+import { ResizableDivider } from '../components/workspace/ResizableDivider';
+import { WorkspaceProblemDrawer } from '../components/workspace/WorkspaceProblemDrawer';
+import { useWorkspaceLayout } from '../hooks/useWorkspaceLayout';
 import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
 import { PerformanceCurveModal } from '../components/workspace/PerformanceCurveModal';
 import { Activity, Lightbulb, Flame, CheckCircle2 } from 'lucide-react';
@@ -31,7 +36,27 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
+  const [benchmarks, setBenchmarks] = useState<ExecutionBenchmarks | null>(null);
+  const [focusLineRequest, setFocusLineRequest] = useState<{ line: number; nonce: number } | null>(null);
   const [isPerformanceModalOpen, setIsPerformanceModalOpen] = useState<boolean>(false);
+  const [isProblemDrawerOpen, setIsProblemDrawerOpen] = useState<boolean>(false);
+  const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const rightColumnRef = useRef<HTMLDivElement>(null);
+
+  const {
+    layout,
+    setLeftWidthPct,
+    setBottomHeightPx,
+    toggleBottomCollapsed,
+    expandBottom,
+    toggleMaximize,
+    resetLayout,
+    isCustomLayout,
+  } = useWorkspaceLayout('codeprep_cpp_workspace_layout', {
+    leftWidthPct: 45,
+    bottomHeightPx: 256,
+  });
 
   // Separate Hints & Diagnostics pane state
   const [teacherGuidance, setTeacherGuidance] = useState<string>('');
@@ -134,6 +159,8 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       savedCodeRef.current = initialCode;
       setSaveStatus('saved');
       setExecutionResult(null);
+      setBenchmarks(null);
+      setFocusLineRequest(null);
       evaluatedCodeRef.current = '';
       analyzedCodeRef.current = '';
       setTeacherGuidance('');
@@ -253,7 +280,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     }
   };
 
-  const handleRun = async (customTestCases?: TestCase[]) => {
+  const handleRun = async (customTestCases?: TestCase[], debugMode?: boolean) => {
     if (!problem) return;
     const submittedCode = code;
     void persistDraftNow(problem.id, submittedCode);
@@ -265,9 +292,11 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
           problemId: problem.id,
           code: submittedCode,
           customTestCases,
+          debugMode: Boolean(debugMode),
         }),
       });
       evaluatedCodeRef.current = submittedCode;
+      setBenchmarks(null);
       setExecutionResult(res.result);
       requestTeacherFeedback({
         requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
@@ -291,6 +320,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       const res = await apiRequest<{
         result: ExecutionResult;
         submissionId: string;
+        benchmarks?: ExecutionBenchmarks;
         potdStatus?: {
           isPotd: boolean;
           solvedToday: boolean;
@@ -307,6 +337,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         }),
       });
       evaluatedCodeRef.current = submittedCode;
+      setBenchmarks(res.result.verdict === 'Accepted' && res.benchmarks ? res.benchmarks : null);
       setExecutionResult(res.result);
 
       const newHistoryItem = {
@@ -396,6 +427,39 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     targetAction();
   };
 
+  const errorLines = useMemo<EditorErrorLine[]>(() => {
+    if (!executionResult?.compileError) return [];
+    const seen = new Set<number>();
+    const parsed: EditorErrorLine[] = [];
+    for (const raw of executionResult.compileError.split('\n')) {
+      const m = /(?:^|line\s+|:)(\d+):(?:\d+:)?\s*(?:error|warning|fatal error)?:?\s*(.*)/i.exec(raw.trim());
+      if (m) {
+        const line = parseInt(m[1], 10);
+        if (line > 0 && !seen.has(line)) {
+          seen.add(line);
+          parsed.push({ line, message: (m[2] || raw).trim() });
+        }
+      }
+      if (parsed.length >= 10) break;
+    }
+    return parsed;
+  }, [executionResult?.compileError]);
+
+  useEffect(() => {
+    const handleWorkspaceCommand = (e: Event) => {
+      const detail = (e as CustomEvent<{ action?: string }>).detail;
+      if (!detail?.action) return;
+      if (detail.action === 'run') void handleRun();
+      else if (detail.action === 'submit') void handleSubmit();
+      else if (detail.action === 'format') handleCodeChange(formatCode(activeCodeRef.current, 'cpp'));
+      else if (detail.action === 'reset-layout') resetLayout();
+      else if (detail.action === 'quick-list') setIsProblemDrawerOpen((p) => !p);
+      else if (detail.action === 'toggle-coach') handleToggleHints();
+    };
+    window.addEventListener('codeprep:workspace:action', handleWorkspaceCommand);
+    return () => window.removeEventListener('codeprep:workspace:action', handleWorkspaceCommand);
+  });
+
   if (isLoading || !problem) {
     return (
       <CodePrepLoader
@@ -429,6 +493,9 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         hasNext={problemId < 3000}
         onBookmarkToggle={handleBookmarkToggle}
         onBackToList={() => handleNavigateSafely(onBackToList)}
+        onOpenProblemDrawer={() => setIsProblemDrawerOpen(true)}
+        onResetLayout={resetLayout}
+        isCustomLayout={isCustomLayout}
         isPotd={potdInfo.isPotd}
         potdSolvedToday={potdInfo.solvedToday}
         rightActions={
@@ -465,47 +532,115 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       />
 
       {/* Split IDE Workspace + Separate Hints Pane */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        <div
-          className={`w-full h-full transition-all duration-300 ${
-            isHintsOpen ? 'md:w-[37%]' : 'md:w-[45%]'
-          }`}
-        >
-          <ProblemSpecPane
-            problem={problem}
-            onOpenHints={openAiCoachWithFreshAnalysis}
-            onOpenFullSolution={() => handleNavigateSafely(onOpenAiSolution)}
-            onLoadCode={(pastCode) => handleCodeChange(pastCode)}
-            onSaveNotes={handleSaveNotes}
-            onSolutionUnlocked={() =>
-              setProblem((prev) => (prev ? { ...prev, unlockedAiSolution: true } : null))
-            }
-          />
-        </div>
-
-        <div className="flex-1 min-w-0 h-full flex flex-col border-t md:border-t-0 md:border-l border-border-subtle">
-          <div className="flex-1 overflow-hidden">
-            <EditorPane
-              code={code}
-              onChange={handleCodeChange}
-              onReset={() => handleCodeChange(problem.defaultCodeStub || '')}
-              problemId={problem.id}
-              saveStatus={saveStatus}
-              onRunShortcut={() => handleRun()}
-              onSubmitShortcut={() => handleSubmit()}
+      <div
+        ref={splitContainerRef}
+        style={{ '--left-pane-w': `${layout.leftWidthPct}%` } as React.CSSProperties}
+        className="flex-1 flex flex-col md:flex-row overflow-hidden relative"
+      >
+        {layout.maximizedPane !== 'editor' && layout.maximizedPane !== 'console' && (
+          <div
+            className={`${
+              layout.maximizedPane === 'spec'
+                ? 'w-full h-full flex-1'
+                : 'w-full md:flex-none md:w-[var(--left-pane-w)] h-[44%] md:h-full'
+            } min-w-0 overflow-hidden ${isDraggingSplit ? '' : 'transition-[width] duration-75'}`}
+          >
+            <ProblemSpecPane
+              problem={problem}
+              currentCode={code}
+              onOpenHints={openAiCoachWithFreshAnalysis}
+              onOpenFullSolution={() => handleNavigateSafely(onOpenAiSolution)}
+              onLoadCode={(pastCode) => handleCodeChange(pastCode)}
+              onSaveNotes={handleSaveNotes}
+              onSolutionUnlocked={() =>
+                setProblem((prev) => (prev ? { ...prev, unlockedAiSolution: true } : null))
+              }
+              onTestExample={(ex) => {
+                expandBottom();
+                void handleRun([{ input: ex.input, expectedOutput: ex.output }]);
+              }}
+              onSelectProblem={(nextId) => handleNavigateSafely(() => onNavigateProblem(nextId))}
+              isMaximized={layout.maximizedPane === 'spec'}
+              onToggleMaximize={() => toggleMaximize('spec')}
             />
           </div>
+        )}
 
-          <TestRunnerPane
-            sampleTestCases={problem.sampleTestCases}
-            functionSignature={problem.functionSignature}
-            executionResult={executionResult}
-            isRunning={isRunning}
-            isSubmitting={isSubmitting}
-            onRun={handleRun}
-            onSubmit={handleSubmit}
+        {layout.maximizedPane === 'none' && (
+          <ResizableDivider
+            orientation="vertical"
+            onDragStateChange={setIsDraggingSplit}
+            onDragDelta={(deltaPx) => {
+              const containerWidth = splitContainerRef.current?.clientWidth || window.innerWidth;
+              if (containerWidth <= 0) return;
+              const deltaPct = (deltaPx / containerWidth) * 100;
+              setLeftWidthPct(layout.leftWidthPct + deltaPct);
+            }}
+            onDoubleClick={() => setLeftWidthPct(45)}
+            title="Drag to resize description & editor width (double-click to reset)"
           />
-        </div>
+        )}
+
+        {layout.maximizedPane !== 'spec' && (
+          <div
+            ref={rightColumnRef}
+            className="flex-1 min-w-0 min-h-0 h-full flex flex-col border-t md:border-t-0 border-border-subtle overflow-hidden"
+          >
+            {layout.maximizedPane !== 'console' && (
+              <div className="flex-1 min-h-[120px] overflow-hidden">
+                <EditorPane
+                  code={code}
+                  onChange={handleCodeChange}
+                  onReset={() => handleCodeChange(problem.defaultCodeStub || '')}
+                  problemId={problem.id}
+                  saveStatus={saveStatus}
+                  onRunShortcut={() => handleRun()}
+                  onSubmitShortcut={() => handleSubmit()}
+                  onSaveShortcut={() => void persistDraftNow(problem.id, code)}
+                  isMaximized={layout.maximizedPane === 'editor'}
+                  onToggleMaximize={() => toggleMaximize('editor')}
+                  errorLines={errorLines}
+                  focusLineRequest={focusLineRequest}
+                />
+              </div>
+            )}
+
+            {layout.maximizedPane === 'none' && !layout.isBottomCollapsed && (
+              <ResizableDivider
+                orientation="horizontal"
+                onDragStateChange={setIsDraggingSplit}
+                onDragDelta={(deltaPx) => {
+                  const maxH = Math.max(220, (rightColumnRef.current?.clientHeight || 600) - 140);
+                  setBottomHeightPx(Math.min(maxH, layout.bottomHeightPx - deltaPx));
+                }}
+                onDoubleClick={() => setBottomHeightPx(256)}
+                title="Drag to resize editor & console height (double-click to reset)"
+              />
+            )}
+
+            {layout.maximizedPane !== 'editor' && (
+              <TestRunnerPane
+                sampleTestCases={problem.sampleTestCases}
+                functionSignature={problem.functionSignature}
+                executionResult={executionResult}
+                benchmarks={benchmarks}
+                isRunning={isRunning}
+                isSubmitting={isSubmitting}
+                onRun={handleRun}
+                onSubmit={handleSubmit}
+                heightPx={layout.bottomHeightPx}
+                isCollapsed={layout.isBottomCollapsed}
+                isMaximized={layout.maximizedPane === 'console'}
+                onToggleCollapse={toggleBottomCollapsed}
+                onToggleMaximize={() => toggleMaximize('console')}
+                onExpandConsole={expandBottom}
+                onJumpToErrorLine={(line) =>
+                  setFocusLineRequest((prev) => ({ line, nonce: (prev?.nonce ?? 0) + 1 }))
+                }
+              />
+            )}
+          </div>
+        )}
 
         <HintsDrawer
           isOpen={isHintsOpen}
@@ -538,6 +673,14 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         currentCode={code}
         isOpen={isPerformanceModalOpen}
         onClose={() => setIsPerformanceModalOpen(false)}
+      />
+
+      <WorkspaceProblemDrawer
+        isOpen={isProblemDrawerOpen}
+        onClose={() => setIsProblemDrawerOpen(false)}
+        currentProblemId={problem.id}
+        mode="cpp"
+        onSelectProblem={(nextId) => handleNavigateSafely(() => onNavigateProblem(nextId))}
       />
 
       {potdBannerMsg && (

@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { ExecutionResult, TestCase, Verdict } from './types';
+import { CaseExecutionDetail, ExecutionResult, TestCase, Verdict } from './types';
 import { GeneratedHarness, HarnessGenerator } from './harnessGenerator';
 import { LineMapper } from './lineMapper';
 import { Comparator, ComparisonOptions } from './comparator';
@@ -16,6 +16,8 @@ export interface RunnerOptions {
   memoryLimitMb?: number;
   allowStandaloneMain?: boolean;
   isCustomRun?: boolean;
+  includeCaseResults?: boolean;
+  debugMode?: boolean;
   comparisonOptions?: ComparisonOptions;
 }
 
@@ -121,12 +123,14 @@ export class SandboxRunner {
   static async getOrCompileBinary(
     fullCode: string,
     usePch: boolean,
-    compileTimeoutMs = this.DEFAULT_COMPILE_TIMEOUT_MS
+    compileTimeoutMs = this.DEFAULT_COMPILE_TIMEOUT_MS,
+    debugMode = false
   ): Promise<{ success: boolean; stderr: string; binaryPath: string }> {
     const ext = process.platform === 'win32' ? '.exe' : '';
     const cacheKey = crypto
       .createHash('sha256')
       .update(usePch ? 'pch1|' : 'pch0|')
+      .update(debugMode ? 'dbg1|' : 'dbg0|')
       .update(fullCode)
       .digest('hex')
       .slice(0, 24);
@@ -156,7 +160,8 @@ export class SandboxRunner {
           sourceFilePath,
           outputBinaryPath,
           compileTimeoutMs,
-          usePch ? this.PCH_DIR : undefined
+          usePch ? this.PCH_DIR : undefined,
+          debugMode
         );
 
         if (!compileResult.success) {
@@ -205,12 +210,14 @@ export class SandboxRunner {
   ): Promise<ExecutionResult> {
     const perTestTimeoutMs = options.timeoutMs || this.DEFAULT_TIMEOUT_MS;
     const compileTimeoutMs = options.compileTimeoutMs || this.DEFAULT_COMPILE_TIMEOUT_MS;
+    const debugMode = Boolean(options.debugMode);
 
-    // 1. Generate compilable C++17 harness (use prebuilt Docker/warmed PCH when available)
+    // 1. Generate compilable C++17 harness (skip prebuilt PCH when Debug Checks are enabled)
     const usePch =
-      this.pchReady ||
-      (fs.existsSync(path.join(this.PCH_DIR, 'codeprep_std.hpp.gch')) &&
-        (await this.warmupCompilerCache()));
+      !debugMode &&
+      (this.pchReady ||
+        (fs.existsSync(path.join(this.PCH_DIR, 'codeprep_std.hpp.gch')) &&
+          (await this.warmupCompilerCache())));
     let harness: GeneratedHarness;
     try {
       harness = HarnessGenerator.generateHarness(
@@ -234,7 +241,12 @@ export class SandboxRunner {
     }
 
     // 2. Compile once (or reuse cached binary if unchanged across Run / Submit / Custom Input)
-    let compileResult = await this.getOrCompileBinary(harness.fullCode, usePch, compileTimeoutMs);
+    let compileResult = await this.getOrCompileBinary(
+      harness.fullCode,
+      usePch,
+      compileTimeoutMs,
+      debugMode
+    );
     if (!compileResult.success && usePch && compileResult.stderr.includes('codeprep_std.hpp')) {
       this.pchReady = false;
       harness = HarnessGenerator.generateHarness(
@@ -243,7 +255,12 @@ export class SandboxRunner {
         testCases,
         { allowStandaloneMain: options.allowStandaloneMain, usePrecompiledHeader: false }
       );
-      compileResult = await this.getOrCompileBinary(harness.fullCode, false, compileTimeoutMs);
+      compileResult = await this.getOrCompileBinary(
+        harness.fullCode,
+        false,
+        compileTimeoutMs,
+        debugMode
+      );
     }
 
     if (!compileResult.success) {
@@ -344,6 +361,9 @@ export class SandboxRunner {
       let passedCount = 0;
       const debugLines: string[] = [];
       const customOutputs: string[] = [];
+      const caseResults: CaseExecutionDetail[] = [];
+      let firstFailedCase: { input: string; expected: string; actual: string; testIndex: number } | undefined;
+      let firstFailureVerdict: Verdict | null = null;
 
       for (let i = 0; i < testCases.length; i++) {
         const tc = testCases[i];
@@ -361,18 +381,30 @@ export class SandboxRunner {
               testCases.length > 1 ? `[Case ${i + 1} stdout]: ${danglingDebug}` : danglingDebug
             );
           }
+          const failDetail = {
+            input: tc.input,
+            expected: tc.expectedOutput,
+            actual: cleanStderr || 'Runtime Error (early termination)',
+            testIndex: i + 1,
+          };
+          if (options.includeCaseResults) {
+            caseResults.push({
+              index: i + 1,
+              input: tc.input,
+              expected: tc.expectedOutput,
+              actual: failDetail.actual,
+              stdout: danglingDebug || undefined,
+              passed: false,
+            });
+          }
           return {
             verdict: 'Runtime Error',
             runtimeMs: Math.round(totalRuntimeMs),
             memoryKb: peakMemoryKb || 14200,
             stdout: debugLines.join('\n') || undefined,
             stderr: cleanStderr || 'Process terminated early before returning output (e.g. exit() or abort()).',
-            failedTestCase: {
-              input: tc.input,
-              expected: tc.expectedOutput,
-              actual: cleanStderr || 'Runtime Error (early termination)',
-              testIndex: i + 1,
-            },
+            failedTestCase: firstFailedCase || failDetail,
+            caseResults: options.includeCaseResults ? caseResults : undefined,
             totalTestCases: testCases.length,
             passedTestCases: passedCount,
           };
@@ -398,20 +430,44 @@ export class SandboxRunner {
         cursor = newlineAfterTime !== -1 ? newlineAfterTime + 1 : afterEndStart;
 
         if (caseMs > perTestTimeoutMs) {
-          return {
-            verdict: 'Time Limit Exceeded',
-            runtimeMs: Math.round(totalRuntimeMs),
-            memoryKb: peakMemoryKb || 14200,
-            stdout: debugLines.join('\n') || undefined,
-            failedTestCase: {
+          const tleMsg = `Time Limit Exceeded (${caseMs.toFixed(1)} ms > ${perTestTimeoutMs} ms)`;
+          if (options.includeCaseResults) {
+            caseResults.push({
+              index: i + 1,
               input: tc.input,
               expected: tc.expectedOutput,
-              actual: `Time Limit Exceeded (${caseMs.toFixed(1)} ms > ${perTestTimeoutMs} ms)`,
+              actual: tleMsg,
+              stdout: debugChunk || undefined,
+              passed: false,
+              runtimeMs: Math.round(caseMs * 10) / 10,
+            });
+          }
+          if (!options.includeCaseResults) {
+            return {
+              verdict: 'Time Limit Exceeded',
+              runtimeMs: Math.round(totalRuntimeMs),
+              memoryKb: peakMemoryKb || 14200,
+              stdout: debugLines.join('\n') || undefined,
+              failedTestCase: {
+                input: tc.input,
+                expected: tc.expectedOutput,
+                actual: tleMsg,
+                testIndex: i + 1,
+              },
+              totalTestCases: testCases.length,
+              passedTestCases: passedCount,
+            };
+          }
+          if (!firstFailedCase) {
+            firstFailedCase = {
+              input: tc.input,
+              expected: tc.expectedOutput,
+              actual: tleMsg,
               testIndex: i + 1,
-            },
-            totalTestCases: testCases.length,
-            passedTestCases: passedCount,
-          };
+            };
+            firstFailureVerdict = 'Time Limit Exceeded';
+          }
+          continue;
         }
 
         // Custom Input without Expected Output: report actual computed output cleanly instead of failing
@@ -421,6 +477,17 @@ export class SandboxRunner {
               ? `Case ${i + 1} Output: ${actualSerialized}`
               : `Output: ${actualSerialized}`
           );
+          if (options.includeCaseResults) {
+            caseResults.push({
+              index: i + 1,
+              input: tc.input,
+              expected: '(custom run)',
+              actual: actualSerialized,
+              stdout: debugChunk || undefined,
+              passed: true,
+              runtimeMs: Math.round(caseMs * 10) / 10,
+            });
+          }
           passedCount++;
           continue;
         }
@@ -432,6 +499,28 @@ export class SandboxRunner {
         );
 
         if (!comparison.isMatch) {
+          if (options.includeCaseResults) {
+            caseResults.push({
+              index: i + 1,
+              input: tc.input,
+              expected: comparison.expectedClean,
+              actual: comparison.actualClean,
+              stdout: debugChunk || undefined,
+              passed: false,
+              runtimeMs: Math.round(caseMs * 10) / 10,
+            });
+            if (!firstFailedCase) {
+              firstFailedCase = {
+                input: tc.input,
+                expected: comparison.expectedClean,
+                actual: comparison.actualClean,
+                testIndex: i + 1,
+              };
+              firstFailureVerdict = 'Wrong Answer';
+            }
+            continue;
+          }
+
           return {
             verdict: 'Wrong Answer',
             runtimeMs: Math.round(totalRuntimeMs),
@@ -448,6 +537,17 @@ export class SandboxRunner {
           };
         }
 
+        if (options.includeCaseResults) {
+          caseResults.push({
+            index: i + 1,
+            input: tc.input,
+            expected: comparison.expectedClean,
+            actual: comparison.actualClean,
+            stdout: debugChunk || undefined,
+            passed: true,
+            runtimeMs: Math.round(caseMs * 10) / 10,
+          });
+        }
         passedCount++;
       }
 
@@ -460,11 +560,13 @@ export class SandboxRunner {
       }
 
       return {
-        verdict: 'Accepted',
+        verdict: firstFailureVerdict || 'Accepted',
         runtimeMs: Math.round(totalRuntimeMs),
         memoryKb: peakMemoryKb || 14200,
         stdout: combinedStdoutParts.join('\n\n') || undefined,
         stderr: cleanStderr || undefined,
+        failedTestCase: firstFailedCase,
+        caseResults: options.includeCaseResults ? caseResults : undefined,
         totalTestCases: testCases.length,
         passedTestCases: passedCount,
       };
@@ -692,11 +794,25 @@ export class SandboxRunner {
     sourcePath: string,
     outputPath: string,
     timeoutMs = this.DEFAULT_COMPILE_TIMEOUT_MS,
-    pchIncludeDir?: string
+    pchIncludeDir?: string,
+    debugMode = false
   ): Promise<{ success: boolean; stderr: string }> {
+    const baseFlags = debugMode
+      ? [
+          '-O0',
+          '-g',
+          '-D_GLIBCXX_DEBUG',
+          '-std=c++17',
+          '-Wall',
+          '-Wextra',
+          '-Wno-unused-variable',
+          '-Wno-sign-compare',
+          '-Werror=return-type',
+        ]
+      : this.CPP_COMPILE_FLAGS;
     const args = [
-      ...this.CPP_COMPILE_FLAGS,
-      ...(pchIncludeDir ? ['-I', pchIncludeDir] : []),
+      ...baseFlags,
+      ...(pchIncludeDir && !debugMode ? ['-I', pchIncludeDir] : []),
       sourcePath,
       '-o',
       outputPath,

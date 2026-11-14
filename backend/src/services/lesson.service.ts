@@ -337,9 +337,16 @@ ${guide.mistakes}`;
 
   static async getLessonByProblemId(problemId: number, userId: string) {
     // Ensure catalog is seeded if a cold boot receives a direct lesson request
-    const probExists = await prisma.problem.findUnique({ where: { id: problemId }, select: { id: true } });
-    if (!probExists) {
+    let probMeta = await prisma.problem.findUnique({
+      where: { id: problemId },
+      select: { id: true, category: true },
+    });
+    if (!probMeta) {
       await ProblemService.seedInitialProblems();
+      probMeta = await prisma.problem.findUnique({
+        where: { id: problemId },
+        select: { id: true, category: true },
+      });
     }
 
     let timerStatus = await TimerService.getStatus(problemId, userId);
@@ -365,6 +372,7 @@ ${guide.mistakes}`;
 
     return {
       problemId: lesson.problemId,
+      category: probMeta?.category || (lesson.verifiedSolution.trimStart().startsWith('--') ? 'SQL' : 'DSA'),
       techniqueLesson: lesson.techniqueLesson,
       visualTrace: this.safeJsonParse(lesson.visualTraceJson, { steps: [] }),
       workedExamples: lesson.workedExamples,

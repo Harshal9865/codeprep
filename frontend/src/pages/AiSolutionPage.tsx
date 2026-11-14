@@ -20,6 +20,7 @@ import {
 
 interface AiLessonResponse {
   problemId: number;
+  category?: string;
   techniqueLesson: string;
   visualTrace: VisualTraceData;
   workedExamples: string;
@@ -315,7 +316,9 @@ export const AiSolutionPage: React.FC<AiSolutionPageProps> = ({
           </div>
           {(() => {
             const isSqlProblem =
-              (problemId >= 501 && problemId <= 600) || (problemId >= 731 && problemId <= 1030);
+              lesson?.category
+                ? lesson.category.toUpperCase() === 'SQL'
+                : (problemId >= 501 && problemId <= 600) || (problemId >= 731 && problemId <= 1030);
             return (
               <div className="rounded-2xl border border-border-subtle overflow-hidden code-window-card">
                 <div className="px-4 py-2.5 bg-surface-elevated/60 border-b border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
