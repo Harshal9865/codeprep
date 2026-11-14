@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { hashPassword, verifyPassword } from '../utils/password';
 import { prisma, checkpointWal } from './prisma.service';
 import { Logger } from '../utils/logger';
+import { UserProblemStateService } from './userProblemState.service';
 
 export interface AvatarValidationResult {
   valid: boolean;
@@ -231,7 +232,7 @@ export class UserService {
    * Full JSON data export for the user
    */
   static async exportUserData(userId: string) {
-    const [user, submissions, drafts, timers, bookmarksAndNotes] = await Promise.all([
+    const [user, submissions, drafts, timers, userProblemStates, allowLegacy] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -275,9 +276,52 @@ export class UserService {
           lastHeartbeat: true,
         },
       }),
-      prisma.problem.findMany({
+      prisma.userProblemState.findMany({
         where: {
-          OR: [{ isBookmark: true }, { userNotes: { not: null } }],
+          userId,
+          OR: [
+            { isBookmark: true },
+            { userNotes: { not: null } },
+            { solvedWithAiHelp: true },
+            { unlockedAiSolution: true },
+          ],
+        },
+        include: {
+          problem: {
+            select: { title: true },
+          },
+        },
+      }),
+      UserProblemStateService.isPrimaryOwner(userId),
+    ]);
+
+    const savedMap = new Map<
+      number,
+      {
+        id: number;
+        title: string;
+        isBookmark: boolean;
+        userNotes: string | null;
+        solvedWithAiHelp: boolean;
+      }
+    >();
+
+    for (const row of userProblemStates) {
+      if (row.isBookmark || row.userNotes || row.solvedWithAiHelp) {
+        savedMap.set(row.problemId, {
+          id: row.problemId,
+          title: row.problem?.title || `Problem #${row.problemId}`,
+          isBookmark: row.isBookmark,
+          userNotes: row.userNotes,
+          solvedWithAiHelp: row.solvedWithAiHelp,
+        });
+      }
+    }
+
+    if (allowLegacy) {
+      const legacyProblems = await prisma.problem.findMany({
+        where: {
+          OR: [{ isBookmark: true }, { userNotes: { not: null } }, { solvedWithAiHelp: true }],
         },
         select: {
           id: true,
@@ -286,8 +330,15 @@ export class UserService {
           userNotes: true,
           solvedWithAiHelp: true,
         },
-      }),
-    ]);
+      });
+      for (const lp of legacyProblems) {
+        if (!savedMap.has(lp.id)) {
+          savedMap.set(lp.id, lp);
+        }
+      }
+    }
+
+    const bookmarksAndNotes = Array.from(savedMap.values());
 
     return {
       metadata: {
@@ -452,12 +503,22 @@ export class UserService {
         for (const sp of dump.savedProblems) {
           const pid = Number(sp?.id);
           if (!validProblemIds.has(pid)) continue;
-          const updateProb: Record<string, boolean | string | null> = {};
-          if (typeof sp.isBookmark === 'boolean') updateProb.isBookmark = sp.isBookmark;
-          if (sp.userNotes !== undefined) updateProb.userNotes = sp.userNotes;
-          if (typeof sp.solvedWithAiHelp === 'boolean') updateProb.solvedWithAiHelp = sp.solvedWithAiHelp;
-          if (Object.keys(updateProb).length > 0) {
-            await tx.problem.update({ where: { id: pid }, data: updateProb });
+          const updateState: Record<string, boolean | string | null> = {};
+          if (typeof sp.isBookmark === 'boolean') updateState.isBookmark = sp.isBookmark;
+          if (sp.userNotes !== undefined) updateState.userNotes = sp.userNotes;
+          if (typeof sp.solvedWithAiHelp === 'boolean') updateState.solvedWithAiHelp = sp.solvedWithAiHelp;
+          if (Object.keys(updateState).length > 0) {
+            await tx.userProblemState.upsert({
+              where: { problemId_userId: { problemId: pid, userId } },
+              update: updateState,
+              create: {
+                problemId: pid,
+                userId,
+                isBookmark: Boolean(sp.isBookmark),
+                userNotes: sp.userNotes ?? null,
+                solvedWithAiHelp: Boolean(sp.solvedWithAiHelp),
+              },
+            });
             savedProblemsRestored++;
           }
         }

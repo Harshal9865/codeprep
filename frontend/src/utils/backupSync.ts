@@ -2,6 +2,11 @@ import { apiRequest } from '../services/api';
 
 const BACKUP_STORAGE_KEY = 'codeprep_auto_backup_v1';
 
+function getBackupStorageKey(userEmail?: string | null): string {
+  const normalized = userEmail?.toLowerCase().trim();
+  return normalized ? `${BACKUP_STORAGE_KEY}:${normalized}` : BACKUP_STORAGE_KEY;
+}
+
 export interface PortableBackupSnapshot {
   metadata?: {
     exportDate?: string;
@@ -65,19 +70,39 @@ function hasMeaningfulData(snap: PortableBackupSnapshot | null | undefined): boo
   );
 }
 
-export function readLocalBackupSnapshot(): PortableBackupSnapshot | null {
+export function readLocalBackupSnapshot(userEmail?: string | null): PortableBackupSnapshot | null {
   try {
-    const raw = localStorage.getItem(BACKUP_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PortableBackupSnapshot;
-    return hasMeaningfulData(parsed) ? parsed : null;
+    const scopedKey = getBackupStorageKey(userEmail);
+    const raw = localStorage.getItem(scopedKey);
+    if (raw) {
+      const parsed = JSON.parse(raw) as PortableBackupSnapshot;
+      if (hasMeaningfulData(parsed)) {
+        return parsed;
+      }
+    }
+
+    // Legacy fallback: only match if legacy key belongs to this exact email
+    if (scopedKey !== BACKUP_STORAGE_KEY && userEmail) {
+      const legacyRaw = localStorage.getItem(BACKUP_STORAGE_KEY);
+      if (legacyRaw) {
+        const legacyParsed = JSON.parse(legacyRaw) as PortableBackupSnapshot;
+        if (
+          hasMeaningfulData(legacyParsed) &&
+          legacyParsed.user?.email?.toLowerCase() === userEmail.toLowerCase()
+        ) {
+          return legacyParsed;
+        }
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }
 }
 
-export function getLocalBackupMeta(): LocalBackupMeta | null {
-  const snap = readLocalBackupSnapshot();
+export function getLocalBackupMeta(userEmail?: string | null): LocalBackupMeta | null {
+  const snap = readLocalBackupSnapshot(userEmail);
   if (!snap) return null;
   const subs = snap.submissions || [];
   return {
@@ -93,7 +118,8 @@ export function getLocalBackupMeta(): LocalBackupMeta | null {
 export function saveLocalBackupSnapshot(snap: PortableBackupSnapshot): void {
   if (!hasMeaningfulData(snap)) return;
   try {
-    localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(snap));
+    const targetKey = getBackupStorageKey(snap.user?.email);
+    localStorage.setItem(targetKey, JSON.stringify(snap));
   } catch {
     // Ignore storage quota errors cleanly
   }
@@ -150,7 +176,7 @@ export async function ensureBackupOrAutoRestore(userEmail?: string): Promise<boo
       return false;
     }
 
-    const localSnap = readLocalBackupSnapshot();
+    const localSnap = readLocalBackupSnapshot(userEmail);
     if (!localSnap) return false;
 
     const sameAccount =

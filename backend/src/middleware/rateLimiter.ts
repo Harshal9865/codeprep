@@ -13,7 +13,7 @@ export const loginLimiter = rateLimit({
 
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 120, // 120 requests per minute
+  max: 400, // Allow comfortable multi-user & workspace polling headroom
   standardHeaders: true,
   legacyHeaders: false,
   message: {

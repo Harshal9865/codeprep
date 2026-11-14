@@ -106,8 +106,13 @@ export class ProblemsController {
 
   static async toggleBookmark(req: Request, res: Response): Promise<void> {
     try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
       const id = parseInt(req.params.id, 10);
-      const updated = await ProblemService.toggleBookmark(id);
+      const updated = await ProblemService.toggleBookmark(id, userId);
       res.json({ isBookmark: updated.isBookmark });
     } catch (error) {
       res.status(500).json({ error: 'Failed to update bookmark.' });
@@ -116,9 +121,14 @@ export class ProblemsController {
 
   static async saveNotes(req: Request, res: Response): Promise<void> {
     try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
       const id = parseInt(req.params.id, 10);
       const { notes } = req.body;
-      const updated = await ProblemService.saveNotes(id, notes);
+      const updated = await ProblemService.saveNotes(id, userId, notes);
       res.json({ notes: updated.userNotes });
     } catch (error) {
       res.status(500).json({ error: 'Failed to save notes.' });

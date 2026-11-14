@@ -26,7 +26,8 @@ const envSchema = z.object({
   SANDBOX_TYPE: z.enum(['docker', 'local-process']).default('docker'),
   SANDBOX_TIMEOUT_MS: z.string().default('2000').transform((val) => parseInt(val, 10)),
   RATE_LIMIT_WINDOW_MS: z.string().default('900000').transform((val) => parseInt(val, 10)),
-  RATE_LIMIT_MAX_LOGIN_ATTEMPTS: z.string().default('5').transform((val) => parseInt(val, 10)),
+  RATE_LIMIT_MAX_LOGIN_ATTEMPTS: z.string().default('20').transform((val) => parseInt(val, 10)),
+  MAX_USERS: z.string().default('3').transform((val) => Math.max(2, parseInt(val, 10) || 3)),
 });
 
 export const env = envSchema.parse(process.env);

@@ -1,6 +1,7 @@
 import { prisma } from './prisma.service';
 import { TIMER_CONFIG } from '../config/timer.config';
 import { Logger } from '../utils/logger';
+import { UserProblemStateService } from './userProblemState.service';
 
 export interface TimerStatus {
   problemId: number;
@@ -78,7 +79,9 @@ export class TimerService {
       });
     }
 
-    const isUnlocked = isSolved || timer.activeSeconds >= thresholdSeconds || problem.unlockedAiSolution;
+    const effectiveState = await UserProblemStateService.getEffectiveState(problemId, userId, problem);
+    const isUnlocked =
+      isSolved || timer.activeSeconds >= thresholdSeconds || effectiveState.unlockedAiSolution;
     const remainingSeconds = Math.max(0, thresholdSeconds - timer.activeSeconds);
 
     return {
@@ -89,7 +92,7 @@ export class TimerService {
       thresholdSeconds,
       remainingSeconds,
       isSolved,
-      solvedWithAiHelp: problem.solvedWithAiHelp,
+      solvedWithAiHelp: effectiveState.solvedWithAiHelp,
     };
   }
 
@@ -119,7 +122,8 @@ export class TimerService {
     const activeSeconds = timer ? timer.activeSeconds : 0;
     const isPaused = timer ? timer.isPaused : true;
 
-    const isUnlocked = isSolved || activeSeconds >= thresholdSeconds || problem.unlockedAiSolution;
+    const effectiveState = await UserProblemStateService.getEffectiveState(problemId, userId, problem);
+    const isUnlocked = isSolved || activeSeconds >= thresholdSeconds || effectiveState.unlockedAiSolution;
     const remainingSeconds = Math.max(0, thresholdSeconds - activeSeconds);
 
     return {
@@ -130,20 +134,14 @@ export class TimerService {
       thresholdSeconds,
       remainingSeconds,
       isSolved,
-      solvedWithAiHelp: problem.solvedWithAiHelp,
+      solvedWithAiHelp: effectiveState.solvedWithAiHelp,
     };
   }
 
   static async unlockAiSolution(problemId: number, userId: string): Promise<void> {
     const status = await this.getStatus(problemId, userId);
 
-    await prisma.problem.update({
-      where: { id: problemId },
-      data: {
-        unlockedAiSolution: true,
-        solvedWithAiHelp: !status.isSolved,
-      },
-    });
+    await UserProblemStateService.markAiUnlocked(problemId, userId, !status.isSolved);
 
     Logger.info('TimerService', 'Reference solution unlocked for problem', {
       problemId,

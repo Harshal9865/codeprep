@@ -2,6 +2,7 @@ import { prisma } from './prisma.service';
 import { DSA_500_PROBLEMS } from '../data/dsa500';
 import { SQL_100_PROBLEMS } from '../data/sql100';
 import { Logger } from '../utils/logger';
+import { UserProblemStateService } from './userProblemState.service';
 
 export interface ProblemFilterOptions {
   category?: string;
@@ -244,7 +245,8 @@ export class ProblemService {
         where.id = { notIn: solvedIds };
       }
     } else if (statusLower === 'bookmarked' || statusLower === 'saved') {
-      where.isBookmark = true;
+      const bookmarkedIds = await UserProblemStateService.getBookmarkedProblemIds(userId);
+      where.id = { in: bookmarkedIds };
     }
 
     const [total, problems] = await Promise.all([
@@ -269,19 +271,31 @@ export class ProblemService {
       }),
     ]);
 
-    const enriched = problems.map((prob) => ({
-      id: prob.id,
-      slug: prob.slug,
-      title: prob.title,
-      difficulty: prob.difficulty,
-      category: prob.category,
-      topic: prob.topic,
-      pattern: prob.pattern,
-      isSolved: solvedSet.has(prob.id),
-      isBookmark: prob.isBookmark,
-      unlockedAiSolution: prob.unlockedAiSolution,
-      solvedWithAiHelp: prob.solvedWithAiHelp,
-    }));
+    const { stateMap, allowLegacy } = await UserProblemStateService.getStateMapForProblems(
+      userId,
+      problems.map((p) => p.id)
+    );
+
+    const enriched = problems.map((prob) => {
+      const effective = UserProblemStateService.resolveEffectiveState(
+        stateMap.get(prob.id),
+        prob,
+        allowLegacy
+      );
+      return {
+        id: prob.id,
+        slug: prob.slug,
+        title: prob.title,
+        difficulty: prob.difficulty,
+        category: prob.category,
+        topic: prob.topic,
+        pattern: prob.pattern,
+        isSolved: solvedSet.has(prob.id),
+        isBookmark: effective.isBookmark,
+        unlockedAiSolution: effective.unlockedAiSolution,
+        solvedWithAiHelp: effective.solvedWithAiHelp,
+      };
+    });
 
     return {
       problems: enriched,
@@ -355,8 +369,14 @@ export class ProblemService {
       }
     }
 
+    const effectiveState = await UserProblemStateService.getEffectiveState(id, userId, problem);
+
     return {
       ...problem,
+      isBookmark: effectiveState.isBookmark,
+      userNotes: effectiveState.userNotes,
+      unlockedAiSolution: effectiveState.unlockedAiSolution,
+      solvedWithAiHelp: effectiveState.solvedWithAiHelp,
       examples,
       schemaDdl: def && 'schemaDdl' in def ? def.schemaDdl : undefined,
       expectedResult,
@@ -386,24 +406,11 @@ export class ProblemService {
     });
   }
 
-  static async toggleBookmark(problemId: number) {
-    const current = await prisma.problem.findUnique({
-      where: { id: problemId },
-      select: { isBookmark: true },
-    });
-
-    if (!current) throw new Error('Problem not found');
-
-    return prisma.problem.update({
-      where: { id: problemId },
-      data: { isBookmark: !current.isBookmark },
-    });
+  static async toggleBookmark(problemId: number, userId: string) {
+    return UserProblemStateService.toggleBookmark(problemId, userId);
   }
 
-  static async saveNotes(problemId: number, userNotes: string) {
-    return prisma.problem.update({
-      where: { id: problemId },
-      data: { userNotes },
-    });
+  static async saveNotes(problemId: number, userId: string, userNotes: string) {
+    return UserProblemStateService.saveNotes(problemId, userId, userNotes);
   }
 }

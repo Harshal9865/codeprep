@@ -119,6 +119,20 @@ const PRISMA_SCHEMA_DDL: string[] = [
   );`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserBadge_userId_badgeKey_key" ON "UserBadge"("userId", "badgeKey");`,
   `CREATE INDEX IF NOT EXISTS "UserBadge_userId_idx" ON "UserBadge"("userId");`,
+  `CREATE TABLE IF NOT EXISTS "UserProblemState" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "problemId" INTEGER NOT NULL,
+    "userId" TEXT NOT NULL,
+    "isBookmark" BOOLEAN NOT NULL DEFAULT false,
+    "userNotes" TEXT,
+    "unlockedAiSolution" BOOLEAN NOT NULL DEFAULT false,
+    "solvedWithAiHelp" BOOLEAN NOT NULL DEFAULT false,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "UserProblemState_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "UserProblemState_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserProblemState_problemId_userId_key" ON "UserProblemState"("problemId", "userId");`,
+  `CREATE INDEX IF NOT EXISTS "UserProblemState_userId_isBookmark_idx" ON "UserProblemState"("userId", "isBookmark");`,
 ];
 
 function sleep(ms: number): Promise<void> {

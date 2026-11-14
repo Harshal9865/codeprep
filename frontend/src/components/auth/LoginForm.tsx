@@ -45,18 +45,26 @@ const PixelDevEmblem: React.FC = () => (
 );
 
 export const LoginForm: React.FC = () => {
-  const { login, register, quickLogin, isRegistrationAllowed } = useAuth();
+  const {
+    login,
+    register,
+    quickLogin,
+    isRegistrationAllowed,
+    userCount,
+    maxUsers,
+  } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('admin@codeprep.dev');
   const [password, setPassword] = useState('Password123!');
-  const [displayName, setDisplayName] = useState('Harshal');
+  const [displayName, setDisplayName] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isQuickLoggingIn, setIsQuickLoggingIn] = useState(false);
+  const [quickLoginTarget, setQuickLoginTarget] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isQuickLoggingIn = quickLoginTarget !== null;
 
   useEffect(() => {
     if (!isRegistrationAllowed && mode === 'register') {
@@ -76,7 +84,7 @@ export const LoginForm: React.FC = () => {
 
     if (mode === 'register') {
       if (!isRegistrationAllowed) {
-        setErrorMessage('Single-user account already exists. Use Sign In or Quick Enter.');
+        setErrorMessage(`Account capacity reached (${userCount}/${maxUsers} users). Use Sign In or Quick Enter.`);
         setMode('login');
         return;
       }
@@ -112,19 +120,19 @@ export const LoginForm: React.FC = () => {
     }
   };
 
-  const handleQuickLogin = async () => {
+  const handleQuickLogin = async (targetEmail: string) => {
     setErrorMessage(null);
-    setIsQuickLoggingIn(true);
+    setQuickLoginTarget(targetEmail);
     try {
-      await quickLogin();
+      await quickLogin(targetEmail);
     } catch (err: unknown) {
       if (err instanceof Error) {
         setErrorMessage(err.message);
       } else {
-        setErrorMessage('Quick login failed. Please ensure the backend server is running on port 5000.');
+        setErrorMessage('Quick login failed. Please verify server connectivity.');
       }
     } finally {
-      setIsQuickLoggingIn(false);
+      setQuickLoginTarget(null);
     }
   };
 
@@ -192,23 +200,40 @@ export const LoginForm: React.FC = () => {
 
         {/* 1-Click Instant Local Login */}
         <div className="space-y-2 pt-1">
-          <button
-            type="button"
-            onClick={handleQuickLogin}
-            disabled={isQuickLoggingIn || isLoading}
-            className="w-full py-2.5 px-3 rounded-xl bg-primary hover:bg-primary-hover text-black font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            {isQuickLoggingIn ? (
-              <CodePrepLoader variant="inline" tone="contrast" label="Entering Workspace..." />
-            ) : (
-              <>
-                <Zap className="w-4 h-4 fill-black" />
-                <span>Quick Enter Workspace</span>
-              </>
-            )}
-          </button>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              type="button"
+              onClick={() => handleQuickLogin('admin@codeprep.dev')}
+              disabled={isQuickLoggingIn || isLoading}
+              className="w-full py-2.5 px-3 rounded-xl bg-primary hover:bg-primary-hover text-black font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {quickLoginTarget === 'admin@codeprep.dev' ? (
+                <CodePrepLoader variant="inline" tone="contrast" label="Entering Harshal..." />
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 fill-black" />
+                  <span>Quick Enter • Harshal</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickLogin('priti@codeprep.dev')}
+              disabled={isQuickLoggingIn || isLoading}
+              className="w-full py-2 px-3 rounded-xl bg-surface-high hover:bg-surface-elevated text-text-primary border border-border-default hover:border-primary/60 font-semibold text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {quickLoginTarget === 'priti@codeprep.dev' ? (
+                <CodePrepLoader variant="inline" label="Entering Priti..." />
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-primary" />
+                  <span>Quick Enter • Priti</span>
+                </>
+              )}
+            </button>
+          </div>
           <p className="text-xs text-center text-text-muted">
-            1-click local access with saved progress
+            Separate drafts, submissions &amp; saved bookmarks per user
           </p>
         </div>
       </div>
@@ -221,6 +246,8 @@ export const LoginForm: React.FC = () => {
             type="button"
             onClick={() => {
               setMode('login');
+              if (!email) setEmail('admin@codeprep.dev');
+              if (!password) setPassword('Password123!');
               setErrorMessage(null);
             }}
             className={`py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
@@ -237,12 +264,14 @@ export const LoginForm: React.FC = () => {
             disabled={!isRegistrationAllowed}
             title={
               isRegistrationAllowed
-                ? 'Create your local personal account'
-                : 'Single-user local account already exists'
+                ? 'Create a new personal workspace account'
+                : `Account capacity reached (${maxUsers} users max)`
             }
             onClick={() => {
               if (!isRegistrationAllowed) return;
               setMode('register');
+              if (email === 'admin@codeprep.dev') setEmail('');
+              if (password === 'Password123!') setPassword('');
               setErrorMessage(null);
             }}
             className={`py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
@@ -258,7 +287,7 @@ export const LoginForm: React.FC = () => {
             ) : (
               <LockKeyhole className="w-3.5 h-3.5" />
             )}
-            <span>{isRegistrationAllowed ? 'Create Account' : 'Account Active'}</span>
+            <span>{isRegistrationAllowed ? 'Create Account' : 'Capacity Full'}</span>
           </button>
         </div>
 
@@ -281,7 +310,7 @@ export const LoginForm: React.FC = () => {
               label="DISPLAY NAME"
               type="text"
               required
-              placeholder="e.g. Harshal"
+              placeholder="e.g. Priti"
               value={displayName}
               onChange={(e) => {
                 setDisplayName(e.target.value);
@@ -346,7 +375,9 @@ export const LoginForm: React.FC = () => {
                   Remember 30 days
                 </span>
               </label>
-              <span className="font-mono text-text-muted">Single-user mode</span>
+              <span className="font-mono text-text-muted">
+                {userCount > 0 ? `${userCount}/${maxUsers} users` : `${maxUsers} users max`}
+              </span>
             </div>
           )}
 

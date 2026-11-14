@@ -1,6 +1,7 @@
 import { prisma } from './prisma.service';
 import { ProblemService } from './problem.service';
 import { Logger } from '../utils/logger';
+import { UserProblemStateService } from './userProblemState.service';
 
 export interface HeatmapDay {
   date: string; // YYYY-MM-DD
@@ -263,6 +264,21 @@ export class AnalyticsService {
         orderBy: { id: 'asc' },
       });
     }
+
+    // Apply strict per-user bookmark & AI-help overlay (legacy fallback only for primary owner)
+    const { stateMap, allowLegacy } = await UserProblemStateService.getStateMapForProblems(userId);
+    allProblems = allProblems.map((prob) => {
+      const effective = UserProblemStateService.resolveEffectiveState(
+        stateMap.get(prob.id),
+        prob,
+        allowLegacy
+      );
+      return {
+        ...prob,
+        isBookmark: effective.isBookmark,
+        solvedWithAiHelp: effective.solvedWithAiHelp,
+      };
+    });
 
     // Track which problems are solved
     const solvedProblemIds = new Set<number>();

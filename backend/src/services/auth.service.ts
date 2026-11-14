@@ -21,19 +21,39 @@ export interface TokenPair {
   user: UserPublicProfile;
 }
 
+export interface RegistrationStatus {
+  allowed: boolean;
+  userCount: number;
+  maxUsers: number;
+  remainingSlots: number;
+}
+
 export class AuthService {
+  private static readonly MAX_USERS = env.MAX_USERS;
+
   private static hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  static async isRegistrationAllowed(): Promise<boolean> {
+  static async getRegistrationStatus(): Promise<RegistrationStatus> {
     const userCount = await prisma.user.count();
-    return userCount === 0;
+    const maxUsers = this.MAX_USERS;
+    return {
+      allowed: userCount < maxUsers,
+      userCount,
+      maxUsers,
+      remainingSlots: Math.max(0, maxUsers - userCount),
+    };
+  }
+
+  static async isRegistrationAllowed(): Promise<boolean> {
+    const status = await this.getRegistrationStatus();
+    return status.allowed;
   }
 
   static async seedDefaultUser(): Promise<void> {
     try {
-      const userCount = await prisma.user.count();
+      let userCount = await prisma.user.count();
       if (userCount === 0) {
         const passwordHash = await hashPassword('Password123!');
         await prisma.user.create({
@@ -45,6 +65,7 @@ export class AuthService {
             timezone: env.DEFAULT_TIMEZONE,
           },
         });
+        userCount = 1;
         Logger.info('AuthService', 'Default owner account initialized: admin@codeprep.dev');
       } else {
         const legacyDefault = await prisma.user.findUnique({
@@ -58,13 +79,62 @@ export class AuthService {
           });
         }
       }
+
+      // Ensure secondary collaborator account (Priti) is provisioned within capacity
+      const pritiExisting = await prisma.user.findUnique({
+        where: { email: 'priti@codeprep.dev' },
+        select: { id: true },
+      });
+      if (!pritiExisting && userCount < this.MAX_USERS) {
+        const passwordHash = await hashPassword('Password123!');
+        await prisma.user.create({
+          data: {
+            email: 'priti@codeprep.dev',
+            passwordHash,
+            displayName: 'Priti',
+            themePreference: 'dark',
+            timezone: env.DEFAULT_TIMEZONE,
+          },
+        });
+        Logger.info('AuthService', 'Second user account initialized: priti@codeprep.dev');
+      }
     } catch (err) {
       Logger.warn('AuthService', 'Notice during default user check', err);
     }
   }
 
-  static async quickLogin(): Promise<TokenPair> {
-    let user = await prisma.user.findFirst();
+  static async quickLogin(requestedEmail?: string): Promise<TokenPair> {
+    const normalizedRequested = requestedEmail?.toLowerCase().trim();
+    let user = null;
+
+    if (normalizedRequested === 'priti@codeprep.dev') {
+      user = await prisma.user.findUnique({ where: { email: 'priti@codeprep.dev' } });
+      if (!user) {
+        await this.seedDefaultUser();
+        user = await prisma.user.findUnique({ where: { email: 'priti@codeprep.dev' } });
+      }
+    } else if (normalizedRequested && normalizedRequested !== 'admin@codeprep.dev') {
+      user = await prisma.user.findUnique({ where: { email: normalizedRequested } });
+    }
+
+    if (!user && !normalizedRequested) {
+      user =
+        (await prisma.user.findUnique({ where: { email: 'admin@codeprep.dev' } })) ||
+        (await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } }));
+    } else if (!user && normalizedRequested === 'admin@codeprep.dev') {
+      user =
+        (await prisma.user.findUnique({ where: { email: 'admin@codeprep.dev' } })) ||
+        (await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } }));
+    }
+
+    if (!user) {
+      await this.seedDefaultUser();
+      const targetLookup = normalizedRequested || 'admin@codeprep.dev';
+      user =
+        (await prisma.user.findUnique({ where: { email: targetLookup } })) ||
+        (await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } }));
+    }
+
     if (!user) {
       const passwordHash = await hashPassword('Password123!');
       user = await prisma.user.create({
@@ -96,24 +166,30 @@ export class AuthService {
     if (existing) {
       const matches = await verifyPassword(plainPassword, existing.passwordHash);
       if (matches) {
-        Logger.info('AuthService', 'Existing owner authenticated via register form.', { userId: existing.id });
+        Logger.info('AuthService', 'Existing account authenticated via register form.', { userId: existing.id });
         return this.generateTokenPair(existing.id, true);
       }
       throw new Error('An account with this email already exists. Please switch to the Sign In tab.');
     }
 
+    const userCount = await prisma.user.count();
+    if (userCount >= this.MAX_USERS) {
+      throw new Error(`Account capacity reached (maximum ${this.MAX_USERS} users allowed on this instance).`);
+    }
+
     const passwordHash = await hashPassword(plainPassword);
+    const fallbackName = normalizedEmail === 'admin@codeprep.dev' ? 'Harshal Patel' : 'Developer';
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
         passwordHash,
-        displayName: displayName?.trim() || 'Harshal Patel',
+        displayName: displayName?.trim() || fallbackName,
         themePreference: 'dark',
         timezone: env.DEFAULT_TIMEZONE,
       },
     });
 
-    Logger.info('AuthService', 'Owner account registered successfully.', { userId: user.id });
+    Logger.info('AuthService', 'User account registered successfully.', { userId: user.id, userCount: userCount + 1 });
     return this.generateTokenPair(user.id, true);
   }
 
@@ -123,14 +199,21 @@ export class AuthService {
       where: { email: normalizedEmail },
     });
 
+    if (!user && (normalizedEmail === 'admin@codeprep.dev' || normalizedEmail === 'priti@codeprep.dev')) {
+      await this.seedDefaultUser();
+      user = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+    }
+
     if (!user) {
       const userCount = await prisma.user.count();
       if (userCount === 0) {
         Logger.info('AuthService', 'First login attempt with empty database: automatically creating account.');
         return this.registerFirstUser(normalizedEmail, plainPassword, 'Harshal Patel');
       }
-      Logger.warn('AuthService', 'Authentication failed: Invalid credentials provided.');
-      throw new Error('Account not found. Switch to the Register tab or use Quick Login.');
+      Logger.warn('AuthService', 'Authentication failed: Account not found.', { email: normalizedEmail });
+      throw new Error('Account not found. Switch to Create Account or sign in with an existing account.');
     }
 
     const isValid = await verifyPassword(plainPassword, user.passwordHash);

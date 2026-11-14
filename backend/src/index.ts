@@ -41,9 +41,9 @@ const configuredSqliteFile = (process.env.DATABASE_URL || '').trim().startsWith(
 const uploadsRootDir = process.env.UPLOADS_DIR?.trim()
   ? path.resolve(process.env.UPLOADS_DIR.trim())
   : configuredSqliteFile &&
-      configuredSqliteFile !== ':memory:' &&
-      path.isAbsolute(configuredSqliteFile) &&
-      !path.normalize(configuredSqliteFile).startsWith(path.resolve(process.cwd()))
+    configuredSqliteFile !== ':memory:' &&
+    path.isAbsolute(configuredSqliteFile) &&
+    !path.normalize(configuredSqliteFile).startsWith(path.resolve(process.cwd()))
     ? path.join(path.dirname(path.normalize(configuredSqliteFile)), 'uploads')
     : path.resolve(process.cwd(), 'uploads');
 
@@ -81,7 +81,17 @@ if (env.NODE_ENV === 'production') {
   const staticRoot = staticCandidates.find((dir) => fs.existsSync(path.join(dir, 'index.html')));
 
   if (staticRoot) {
-    app.use(express.static(staticRoot, { maxAge: '7d', index: 'index.html' }));
+    app.use(
+      express.static(staticRoot, {
+        maxAge: '7d',
+        index: 'index.html',
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          }
+        },
+      })
+    );
     app.get('*', (req: Request, res: Response, next: NextFunction) => {
       if (
         req.path.startsWith('/api') ||
@@ -90,6 +100,7 @@ if (env.NODE_ENV === 'production') {
       ) {
         return next();
       }
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(staticRoot, 'index.html'));
     });
   }

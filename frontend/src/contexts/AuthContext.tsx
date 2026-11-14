@@ -4,10 +4,24 @@ import { apiRequest } from '../services/api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function postAuthSyncMessage(type: 'LOGIN' | 'LOGOUT'): void {
+  try {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel('codeprep_auth_sync');
+    channel.postMessage({ type });
+    channel.close();
+  } catch {
+    // Restricted WebViews or browsers without BroadcastChannel support
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRegistrationAllowed, setIsRegistrationAllowed] = useState<boolean>(false);
+  const [userCount, setUserCount] = useState<number>(0);
+  const [maxUsers, setMaxUsers] = useState<number>(3);
+  const [remainingSlots, setRemainingSlots] = useState<number>(1);
 
   const applyUserSession = useCallback((nextUser: User | null) => {
     setUser(nextUser);
@@ -24,14 +38,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const fetchAuthStatus = useCallback(async () => {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 15000) : null;
+
     try {
       const statusRes = await apiRequest<{
         isRegistrationAllowed: boolean;
+        userCount?: number;
+        maxUsers?: number;
+        remainingSlots?: number;
         authenticated?: boolean;
         user?: User | null;
         accessToken?: string;
-      }>('/auth/status');
+      }>('/auth/status', controller ? { signal: controller.signal } : {});
       setIsRegistrationAllowed(statusRes.isRegistrationAllowed);
+      if (typeof statusRes.userCount === 'number') setUserCount(statusRes.userCount);
+      if (typeof statusRes.maxUsers === 'number') setMaxUsers(statusRes.maxUsers);
+      if (typeof statusRes.remainingSlots === 'number') {
+        setRemainingSlots(statusRes.remainingSlots);
+      } else {
+        setRemainingSlots(statusRes.isRegistrationAllowed ? 1 : 0);
+      }
 
       if (statusRes.accessToken) {
         try {
@@ -51,6 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       applyUserSession(null);
     } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
       setIsLoading(false);
     }
   }, [applyUserSession]);
@@ -58,15 +86,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     fetchAuthStatus();
 
-    // Multi-tab logout synchronization via BroadcastChannel
-    const authChannel = new BroadcastChannel('codeprep_auth_sync');
-    authChannel.onmessage = (event) => {
-      if (event.data?.type === 'LOGOUT') {
-        setUser(null);
-      } else if (event.data?.type === 'LOGIN') {
-        fetchAuthStatus();
+    // Multi-tab logout synchronization via BroadcastChannel (guarded for mobile WebViews)
+    let authChannel: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        authChannel = new BroadcastChannel('codeprep_auth_sync');
+        authChannel.onmessage = (event) => {
+          if (event.data?.type === 'LOGOUT') {
+            setUser(null);
+          } else if (event.data?.type === 'LOGIN') {
+            fetchAuthStatus();
+          }
+        };
       }
-    };
+    } catch {
+      authChannel = null;
+    }
 
     const handleCustomLogout = () => {
       try {
@@ -86,7 +121,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.addEventListener('codeprep:user-updated', handleUserUpdated);
 
     return () => {
-      authChannel.close();
+      try {
+        authChannel?.close();
+      } catch {}
       window.removeEventListener('codeprep:auth:logout', handleCustomLogout);
       window.removeEventListener('codeprep:user-updated', handleUserUpdated);
     };
@@ -101,10 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
     applyUserSession(res.user);
-
-    const authChannel = new BroadcastChannel('codeprep_auth_sync');
-    authChannel.postMessage({ type: 'LOGIN' });
-    authChannel.close();
+    postAuthSyncMessage('LOGIN');
   };
 
   const register = async (email: string, password: string, displayName?: string) => {
@@ -116,25 +150,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
     applyUserSession(res.user);
-    setIsRegistrationAllowed(false);
-
-    const authChannel = new BroadcastChannel('codeprep_auth_sync');
-    authChannel.postMessage({ type: 'LOGIN' });
-    authChannel.close();
+    await fetchAuthStatus();
+    postAuthSyncMessage('LOGIN');
   };
 
-  const quickLogin = async () => {
+  const quickLogin = async (email?: string) => {
     const res = await apiRequest<{ user: User; accessToken?: string }>('/auth/quick-login', {
       method: 'POST',
+      body: JSON.stringify(email ? { email } : {}),
     });
     if (res.accessToken) {
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
     applyUserSession(res.user);
-
-    const authChannel = new BroadcastChannel('codeprep_auth_sync');
-    authChannel.postMessage({ type: 'LOGIN' });
-    authChannel.close();
+    postAuthSyncMessage('LOGIN');
   };
 
   const logout = async () => {
@@ -148,9 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionStorage.setItem('codeprep_authenticated', '0');
       } catch { }
       setUser(null);
-      const authChannel = new BroadcastChannel('codeprep_auth_sync');
-      authChannel.postMessage({ type: 'LOGOUT' });
-      authChannel.close();
+      postAuthSyncMessage('LOGOUT');
     }
   };
 
@@ -160,6 +187,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isLoading,
         isRegistrationAllowed,
+        userCount,
+        maxUsers,
+        remainingSlots,
         login,
         register,
         quickLogin,

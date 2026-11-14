@@ -24,6 +24,7 @@ model User {
   drafts           ProblemDraft[]
   timers           ProblemActiveTimer[]
   badges           UserBadge[]
+  problemStates    UserProblemState[]
 }
 
 model RefreshToken {
@@ -57,12 +58,29 @@ model Problem {
   submissions         Submission[]
   drafts              ProblemDraft[]
   timers              ProblemActiveTimer[]
+  userStates          UserProblemState[]
   aiLesson            AiLesson?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
   @@index([category, topic])
   @@index([difficulty])
+}
+
+model UserProblemState {
+  id                  String   @id @default(cuid())
+  problemId           Int
+  userId              String
+  isBookmark          Boolean  @default(false)
+  userNotes           String?
+  unlockedAiSolution  Boolean  @default(false)
+  solvedWithAiHelp    Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem             Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, userId])
+  @@index([userId, isBookmark])
 }
 
 model ProblemDraft {

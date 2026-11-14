@@ -22,7 +22,7 @@ const loginSchema = z.object({
 export class AuthController {
   static async checkStatus(req: Request, res: Response): Promise<void> {
     try {
-      const isRegistrationAllowed = await AuthService.isRegistrationAllowed();
+      const registration = await AuthService.getRegistrationStatus();
 
       // Check optional session silently without returning 401
       let currentUser = null;
@@ -61,20 +61,26 @@ export class AuthController {
       }
 
       res.json({
-        isRegistrationAllowed,
+        isRegistrationAllowed: registration.allowed,
+        userCount: registration.userCount,
+        maxUsers: registration.maxUsers,
+        remainingSlots: registration.remainingSlots,
         authenticated: Boolean(currentUser),
         user: currentUser,
         ...(refreshedAccessToken ? { accessToken: refreshedAccessToken } : {}),
-        instanceType: 'single-user-private',
+        instanceType: 'multi-user-private',
       });
     } catch (error) {
       Logger.error('AuthController', 'Failed to check registration status', error);
-      // Graceful fallback for single-user instance: allow first-time owner registration
+      // Graceful fallback for setup mode
       res.json({
         isRegistrationAllowed: true,
+        userCount: 0,
+        maxUsers: env.MAX_USERS,
+        remainingSlots: env.MAX_USERS,
         authenticated: false,
         user: null,
-        instanceType: 'single-user-private',
+        instanceType: 'multi-user-private',
         statusNotice: 'Instance in setup mode',
       });
     }
@@ -93,13 +99,20 @@ export class AuthController {
       setTokenCookies(res, tokenPair.accessToken, tokenPair.refreshToken, true);
 
       res.status(201).json({
-        message: 'Owner account successfully created and verified.',
+        message: 'Account successfully created and verified.',
         user: tokenPair.user,
         accessToken: tokenPair.accessToken,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Registration failed.';
-      const statusCode = message.includes('permanently disabled') ? 403 : 400;
+      const statusCode =
+        message.includes('permanently disabled') ||
+        message.includes('capacity reached') ||
+        message.includes('limit reached')
+          ? 403
+          : message.includes('already exists')
+            ? 409
+            : 400;
       res.status(statusCode).json({ error: message });
     }
   }
@@ -127,15 +140,16 @@ export class AuthController {
     }
   }
 
-  static async quickLogin(_req: Request, res: Response): Promise<void> {
+  static async quickLogin(req: Request, res: Response): Promise<void> {
     try {
+      const requestedEmail = typeof req.body?.email === 'string' ? req.body.email : undefined;
       let tokenPair;
       try {
-        tokenPair = await AuthService.quickLogin();
+        tokenPair = await AuthService.quickLogin(requestedEmail);
       } catch (dbErr) {
         Logger.warn('AuthController', 'Quick login encountered initial error, verifying database health and retrying...', dbErr);
         await connectPrisma();
-        tokenPair = await AuthService.quickLogin();
+        tokenPair = await AuthService.quickLogin(requestedEmail);
       }
       setTokenCookies(res, tokenPair.accessToken, tokenPair.refreshToken, true);
       res.json({
