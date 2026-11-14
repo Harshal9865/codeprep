@@ -58,32 +58,83 @@ function isSkeletonStub(code: string): boolean {
   return /class Solution\s*\{\s*public:\s*[^\{]+\{\s*\}\s*;?\s*\}$/.test(cleaned);
 }
 
+function isTrivialLiteralReturn(code: string): boolean {
+  const cleaned = code
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Matches a Solution method whose body is just returning a literal constant or empty braced init
+  return /class Solution\s*\{\s*public:\s*[^\{]+\{\s*return\s+(-?\d+|true|false|nullptr|""|''|\{\s*\})\s*;\s*\}\s*;?\s*\}$/.test(
+    cleaned
+  );
+}
+
+function checkBraceAndParenBalance(code: string): string | null {
+  const cleaned = code
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '')
+    .replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""');
+  let braces = 0;
+  let parens = 0;
+  for (const ch of cleaned) {
+    if (ch === '{') braces++;
+    else if (ch === '}') braces--;
+    else if (ch === '(') parens++;
+    else if (ch === ')') parens--;
+    if (braces < 0) return 'Extra closing brace `}` found before a matching `{`.';
+    if (parens < 0) return 'Extra closing parenthesis `)` found before a matching `(`.';
+  }
+  if (braces !== 0) return `Unbalanced braces: ${braces > 0 ? `${braces} unclosed '{'` : `${-braces} extra '}'`}.`;
+  if (parens !== 0) return `Unbalanced parentheses: ${parens > 0 ? `${parens} unclosed '('` : `${-parens} extra ')'`}.`;
+  return null;
+}
+
 function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
   const lines = input.userCode.split(/\r?\n/);
   const code = input.userCode;
   const targetComplexity = inferTargetComplexity(input.constraints, input.topic);
   const mistakes: CodeMistakeItem[] = [];
   const guidanceSteps: string[] = [];
+  const isVerifiedAccepted = input.verdict === 'Accepted';
+  const hasFailureVerdict = Boolean(input.verdict && input.verdict !== 'Accepted');
 
   if (isSkeletonStub(code)) {
     return {
       detectedMethod: 'Starter Skeleton (No logic implemented yet)',
-      estimatedComplexity: 'N/A',
+      estimatedComplexity: 'Incomplete (Empty Stub)',
       targetComplexity,
       mistakes: [
         {
           title: 'Function body is still empty',
           detail: 'The current editor code only contains the starter class/signature stub.',
-          fixHint: `Start by implementing the ${input.pattern || input.topic || 'core'} approach inside the function body and handling boundary cases.`,
+          fixHint: `Implement the ${input.pattern || input.topic || 'core'} algorithm inside the function body and return the expected result.`,
         },
       ],
       guidanceSteps: [
-        `Identify the input structure from the signature (${input.functionSignature || 'method'}) and constraints (${targetComplexity}).`,
+        `Identify the input parameters from ${input.functionSignature || 'the method signature'} and target ${targetComplexity}.`,
         `Draft the main loop or recursion using the ${input.pattern || input.topic || 'target'} invariant.`,
-        'Click Run to test against the sample cases, then click Analyze My Code again so I can check your logic for bugs.',
+        'Click Run to verify against sample test cases, then inspect any failing edge cases.',
       ],
-      summary: `Your editor only has the starter skeleton right now. Write your initial attempt (${targetComplexity} target) and click Analyze My Code to get line-by-line feedback.`,
+      summary: `No logic implemented yet — the editor only contains the starter skeleton. Implement your ${targetComplexity} approach and click Run/Submit.`,
     };
+  }
+
+  const balanceErr = checkBraceAndParenBalance(code);
+  if (balanceErr) {
+    mistakes.push({
+      title: 'Syntax Error: Unbalanced Braces / Parentheses',
+      detail: balanceErr,
+      fixHint: 'Match every `{` with `}` and every `(` with `)` before compiling.',
+    });
+  }
+
+  if (isTrivialLiteralReturn(code) && !isVerifiedAccepted) {
+    mistakes.push({
+      title: 'Incomplete / Hardcoded Return Statement',
+      detail: 'Your function only returns a constant literal without processing the input parameters.',
+      fixHint: `Replace the hardcoded return with actual logic to handle the problem inputs (${input.pattern || targetComplexity}).`,
+    });
   }
 
   // 1. Detect Candidate Method & Loop Nesting
@@ -97,7 +148,7 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
     const lineNo = i + 1;
     const stripped = rawLine.replace(/\/\/.*$/, '');
 
-    const isLoop = /\b(for|while)\s*\(/.test(stripped);
+    const isLoop = /\b(for|while)\s*\(/.test(stripped) || /\bdo\s*\{/.test(stripped);
     if (isLoop) {
       loopCount++;
       loopDepthStack.push(maxBraceDepth);
@@ -109,6 +160,16 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
     maxBraceDepth += opens - closes;
     while (loopDepthStack.length > 0 && maxBraceDepth <= loopDepthStack[loopDepthStack.length - 1]) {
       loopDepthStack.pop();
+    }
+
+    // Mistake: Off-by-one `<= container.size()` or `<= container.length()`
+    if (/\b(?:for|while)\s*\([^)]*<=\s*[a-zA-Z_]\w*\s*\.\s*(size|length)\(\s*\)/.test(stripped)) {
+      mistakes.push({
+        line: lineNo,
+        title: 'Off-by-one loop bound (<= .size())',
+        detail: 'Indices run from 0 to size() - 1; using <= container.size() accesses one element past the end.',
+        fixHint: 'Change `<= container.size()` to `< container.size()`.',
+      });
     }
 
     // Mistake: Binary search midpoint integer overflow
@@ -126,18 +187,32 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
       mistakes.push({
         line: lineNo,
         title: 'Unsigned .size() subtraction trap',
-        detail: '.size() returns size_t (unsigned). If the container is empty or too small, size() - 1 underflows to ~1.8e19 and can crash or loop forever.',
-        fixHint: 'Cast with static_cast<int>(container.size()) - 1 or guard !container.empty() first.',
+        detail: '.size() returns size_t (unsigned). If the container is empty or smaller than the subtracted value, subtraction underflows to ~1.8e19.',
+        fixHint: 'Cast to int first: `static_cast<int>(container.size()) - 1` or guard `!container.empty()`.',
       });
     }
 
-    // Mistake: Single '=' inside if (...)
-    if (/\bif\s*\([^=<>!]*[^=<>!]=[^=][^)]*\)/.test(stripped)) {
+    // Mistake: Single '=' inside if (...) or while (...)
+    if (/\b(?:if|while)\s*\([^;()]*[^=!<>]=[^=][^;()]*\)/.test(stripped)) {
       mistakes.push({
         line: lineNo,
-        title: 'Assignment (=) instead of equality (==) inside if condition',
-        detail: 'A single = inside an if(...) assigns a value instead of comparing.',
-        fixHint: 'Replace = with == if you meant a comparison check.',
+        title: 'Assignment (=) instead of equality (==) in condition',
+        detail: 'A single `=` assigns a value instead of comparing equality inside `if` / `while`.',
+        fixHint: 'Replace `=` with `==` if you intended a comparison.',
+      });
+    }
+
+    // Mistake: Uninitialized local scalar variable inside function body (excluding class fields? C++ Solution rarely needs uninit scalars)
+    if (
+      /^\s*(?:int|long|long\s+long|double|float|bool|char)\s+([a-zA-Z_]\w*)\s*;\s*$/.test(stripped) &&
+      maxBraceDepth >= 2
+    ) {
+      const varMatch = stripped.match(/^\s*(?:int|long|long\s+long|double|float|bool|char)\s+([a-zA-Z_]\w*)\s*;/);
+      mistakes.push({
+        line: lineNo,
+        title: `Uninitialized variable \`${varMatch?.[1] || 'var'}\``,
+        detail: `Local primitive \`${varMatch?.[1] || 'var'}\` has an indeterminate garbage value in C++ if read before assignment.`,
+        fixHint: `Initialize explicitly (e.g., \`= 0\`, \`= INT_MIN\`, or \`= false\`).`,
       });
     }
 
@@ -147,7 +222,7 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
         line: lineNo,
         title: '32-bit sum accumulator risk',
         detail: 'std::accumulate(..., 0) sums into an int, which can overflow on large arrays.',
-        fixHint: 'Use 0LL when sums may exceed 2^31 - 1.',
+        fixHint: 'Use `0LL` as the initial value when sums can exceed 2^31 - 1.',
       });
     }
 
@@ -157,17 +232,36 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
         line: lineNo,
         title: 'Binary search infinite loop risk',
         detail: 'Using while (l <= r) together with r = mid can loop forever when l == r == mid.',
-        fixHint: 'Either use r = mid - 1 with while (l <= r), or use while (l < r) with r = mid.',
+        fixHint: 'Use `r = mid - 1` with `while (l <= r)`, or use `while (l < r)` with `r = mid`.',
       });
     }
 
-    // Mistake: Out-of-bounds [i + 1] or [i - 1] without visible guard on same/adjacent loop
+    // Mistake: Out-of-bounds [i + 1] or [i - 1]
     if (/\[i\s*\+\s*1\]/.test(stripped) && /\.size\(\)/.test(code) && !/i\s*\+\s*1\s*</.test(code)) {
       mistakes.push({
         line: lineNo,
-        title: 'Check index bounds for [i + 1]',
-        detail: 'Indexing [i + 1] can read past the last element if the loop stops at size() instead of size() - 1.',
-        fixHint: 'Ensure your loop condition stops at i + 1 < n or verify i + 1 < size() before accessing.',
+        title: 'Check index bounds for `[i + 1]`',
+        detail: 'Indexing `[i + 1]` can read past the last element if the loop stops at `size()` instead of `size() - 1`.',
+        fixHint: 'Ensure your loop condition stops at `i + 1 < n` or check bounds before accessing `[i + 1]`.',
+      });
+    }
+
+    if (/\[i\s*-\s*1\]/.test(stripped) && /for\s*\(\s*(?:int|size_t)\s+i\s*=\s*0\b/.test(code) && !/\bi\s*>\s*0\b|\bi\s*>=\s*1\b/.test(code)) {
+      mistakes.push({
+        line: lineNo,
+        title: 'Potential negative index `[i - 1]` when `i == 0`',
+        detail: 'Loop starts at `i = 0` and accesses `[i - 1]` without a visible `i > 0` guard.',
+        fixHint: 'Start the loop at `i = 1` or guard with `if (i > 0)` before reading `[i - 1]`.',
+      });
+    }
+
+    // Mistake: vector::erase(vec.begin()) inside a loop -> O(N^2) shift
+    if (loopDepthStack.length > 0 && /\.erase\s*\([^)]*\.begin\s*\(/.test(stripped)) {
+      mistakes.push({
+        line: lineNo,
+        title: 'Linear `.erase(begin())` inside loop',
+        detail: 'Erasing from the front of a std::vector shifts all remaining elements (O(N) per erase -> O(N^2) total).',
+        fixHint: 'Use `std::deque`, two indices/pointers, or pop from `.back()` instead.',
       });
     }
   }
@@ -177,13 +271,25 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
   const hasOrderedMap = /\bmap\s*</.test(code) && !hasUnorderedMap;
   const hasSet = /\bunordered_set\b|\bset\s*</.test(code);
   const hasSort = /\bsort\s*\(/.test(code);
+  const hasStlLinear = /\b(accumulate|max_element|min_element|reverse|find|count|fill|partial_sum)\s*\(/.test(code);
+  const hasStlLog = /\b(lower_bound|upper_bound|binary_search)\s*\(/.test(code);
   const hasStackOrQueue = /\bstack\b|\bqueue\b|\bdeque\b|\bpriority_queue\b/.test(code);
   const hasDpArray = /\bdp\b/.test(code);
-  const hasBinarySearch = /\bmid\b/.test(code) && (/\blow\b|\blo\b|\bl\b/.test(code)) && (/\bhigh\b|\bhi\b|\br\b/.test(code));
-  const methodNameMatch = input.functionSignature?.match(/\b([A-Za-z_]\w*)\s*\(/);
-  const methodName = methodNameMatch?.[1];
-  const isRecursive = Boolean(
-    methodName && (code.match(new RegExp(`\\b${methodName}\\s*\\(`, 'g')) || []).length >= 2
+  const hasBinarySearch =
+    hasStlLog || (/\bmid\b/.test(code) && /\blow\b|\blo\b|\bl\b|\bleft\b/.test(code) && /\bhigh\b|\bhi\b|\br\b|\bright\b/.test(code));
+
+  // Detect recursion in main method OR any helper method inside Solution
+  const declaredFnNames = Array.from(
+    code.matchAll(/\b(?:void|int|long(?:\s+long)?|bool|double|float|string|char|auto|vector<[^>]+>)\s+([A-Za-z_]\w*)\s*\(/g)
+  )
+    .map((m) => m[1])
+    .filter((name) => name !== 'if' && name !== 'for' && name !== 'while' && name !== 'switch');
+  const sigMatch = input.functionSignature?.match(/\b([A-Za-z_]\w*)\s*\(/);
+  if (sigMatch?.[1] && !declaredFnNames.includes(sigMatch[1])) {
+    declaredFnNames.push(sigMatch[1]);
+  }
+  const isRecursive = declaredFnNames.some(
+    (fnName) => (code.match(new RegExp(`\\b${fnName}\\s*\\(`, 'g')) || []).length >= 2
   );
 
   // Return statement check for non-void signature
@@ -192,16 +298,19 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
     mistakes.push({
       title: 'Missing return statement',
       detail: `Signature '${input.functionSignature}' expects a return value, but no return statement was found.`,
-      fixHint: 'Make sure every execution path returns a value matching the return type.',
+      fixHint: 'Ensure every execution path returns a value matching the return type.',
     });
   }
 
   // LinkedList / Tree null dereference guard
-  if ((code.includes('ListNode') || code.includes('TreeNode') || code.includes('->next') || code.includes('->left')) && !/\bnullptr\b|\bNULL\b|!\s*\w+/.test(code)) {
+  if (
+    (code.includes('ListNode') || code.includes('TreeNode') || code.includes('->next') || code.includes('->left')) &&
+    !/\bnullptr\b|\bNULL\b|!\s*\w+/.test(code)
+  ) {
     mistakes.push({
       title: 'Missing null pointer guard',
-      detail: 'Your code accesses ->next or ->left/->right without a visible nullptr base check.',
-      fixHint: 'Check if node == nullptr (or while (fast && fast->next)) before dereferencing.',
+      detail: 'Your code accesses `->next` or `->left`/`->right` without a visible nullptr base check.',
+      fixHint: 'Check `if (!node)` / `node == nullptr` (or `while (fast && fast->next)`) before dereferencing.',
     });
   }
 
@@ -211,54 +320,87 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
         compileError?: string;
         stderr?: string;
         error?: string;
-        failedTestCase?: { input: string; expected: string; actual: string };
+        passedTestCases?: number;
+        totalTestCases?: number;
+        failedTestCase?: { input: string; expected: string; actual: string; testIndex?: number };
       }
     | undefined;
   const runtimeOrCompileErr = execAny?.compileError || execAny?.error || execAny?.stderr;
+  const tcProgress =
+    typeof execAny?.passedTestCases === 'number' && typeof execAny?.totalTestCases === 'number' && execAny.totalTestCases > 0
+      ? `Passed ${execAny.passedTestCases}/${execAny.totalTestCases} test cases`
+      : '';
 
   if (runtimeOrCompileErr && (input.verdict === 'Compile Error' || input.verdict === 'Runtime Error' || execAny?.compileError)) {
     const comp = runtimeOrCompileErr;
-    const lineMatch = comp.match(/[Ll]ine\s*(\d+)/);
-    const parsedLine = lineMatch ? parseInt(lineMatch[1], 10) : undefined;
+    const lineMatch = comp.match(/[Ll]ine\s*(\d+)|:(\d+):\d+:\s*error:/);
+    const parsedLine = lineMatch ? parseInt(lineMatch[1] || lineMatch[2], 10) : undefined;
     let fixHint = 'Verify C++17 types, semicolons, brackets, and exact parameter types matching the stub.';
     if (comp.includes('control reaches end of non-void')) {
-      fixHint = 'Add a default return statement at the end of your function outside if/for blocks.';
+      fixHint = 'Add a fallback `return` statement at the end of your function outside `if`/`for` blocks.';
     } else if (comp.includes('was not declared in this scope')) {
-      fixHint = 'Check variable spelling and ensure variables are declared before use (or inside the right block).';
+      fixHint = 'Check variable spelling and ensure variables are declared in the outer scope where used.';
     } else if (comp.includes('no matching function')) {
       fixHint = 'Check argument types/order passed to STL helpers (e.g. sort, max, unordered_map, push_back).';
     } else if (input.verdict === 'Runtime Error') {
-      fixHint = 'Check out-of-bounds vector indexing, empty-container .back()/pop(), or null pointer dereferences.';
+      fixHint = 'Check out-of-bounds vector indexing, empty-container `.back()`/`.top()`, or null pointer dereferences.';
     }
     mistakes.unshift({
       line: parsedLine,
-      title: input.verdict === 'Runtime Error' ? 'Runtime Error' : 'Compilation Error',
-      detail: comp.split('\n').slice(0, 3).join(' ').slice(0, 240),
+      title: input.verdict === 'Runtime Error' ? `Runtime Error${tcProgress ? ` (${tcProgress})` : ''}` : 'Compilation Error',
+      detail: comp.split('\n').slice(0, 3).join(' ').slice(0, 260),
       fixHint,
+    });
+  } else if (input.verdict === 'Compile Error' || input.verdict === 'Runtime Error') {
+    mistakes.unshift({
+      title: `${input.verdict}${tcProgress ? ` (${tcProgress})` : ''}`,
+      detail: `Your submitted code terminated with ${input.verdict}.`,
+      fixHint:
+        input.verdict === 'Compile Error'
+          ? 'Review syntax, semicolons, variable declarations, and return types against the starter signature.'
+          : 'Guard array bounds, empty containers, division by zero, and pointer dereferences.',
     });
   } else if (input.verdict === 'Time Limit Exceeded' || (maxLoopNesting >= 2 && targetComplexity.includes('O(N)'))) {
     mistakes.push({
-      title: maxLoopNesting >= 2 ? 'Quadratic O(N^2) nested loops vs large constraint' : 'Time Limit Exceeded risk',
-      detail: `Detected ${maxLoopNesting >= 2 ? `${maxLoopNesting}-level nested loops` : 'a time limit failure'} while the problem targets ${targetComplexity}.`,
-      fixHint: `Flatten the inner scan using ${hasUnorderedMap ? 'direct index arithmetic' : 'an unordered_map / unordered_set, sorting + two pointers, or monotonic stack'}.`,
+      title: maxLoopNesting >= 2 ? 'Quadratic O(N^2) nested loops vs large constraint' : 'Time Limit Exceeded',
+      detail: `Detected ${maxLoopNesting >= 2 ? `${maxLoopNesting}-level nested loops` : 'excessive runtime'}${tcProgress ? ` (${tcProgress})` : ''} while target is ${targetComplexity}.`,
+      fixHint: `Replace nested scanning with ${hasUnorderedMap ? 'O(1) hash transitions' : 'an unordered_map/unordered_set, sorting + two pointers, or monotonic stack'}.`,
+    });
+  } else if (input.verdict === 'Memory Limit Exceeded' || input.verdict === 'Output Limit Exceeded') {
+    mistakes.unshift({
+      title: input.verdict,
+      detail: `Execution exceeded sandbox ${input.verdict === 'Memory Limit Exceeded' ? 'memory' : 'stdout'} limits${tcProgress ? ` (${tcProgress})` : ''}.`,
+      fixHint: 'Avoid huge DP tables or printing inside tight loops (`cout` debug statements).',
     });
   } else if (input.executionResult?.failedTestCase) {
     const tc = input.executionResult.failedTestCase;
-    let hint = 'Trace your variables step-by-step on this exact failing input to find where state diverges.';
-    if ((tc.actual === '[]' || tc.actual === '0' || tc.actual === '-1') && tc.expected !== tc.actual) {
-      hint = 'Your loop/base case exited early or missed a valid match—check boundary comparisons (< vs <=) and fallback return values.';
-    } else if (/^-?\d+$/.test(tc.actual) && /^-?\d+$/.test(tc.expected)) {
-      const diff = Math.abs(Number(tc.actual) - Number(tc.expected));
+    let hint = 'Trace your variables step-by-step on this exact failing input to find where state diverges from expected output.';
+    if ((tc.actual === '[]' || tc.actual === '0' || tc.actual === '-1' || tc.actual === 'false') && tc.expected !== tc.actual) {
+      hint = 'Your loop/base case exited early or missed a valid branch — check loop boundaries (< vs <=), initial conditions, and return values.';
+    } else if (/^-?\d+$/.test(tc.actual.trim()) && /^-?\d+$/.test(tc.expected.trim())) {
+      const diff = Math.abs(Number(tc.actual.trim()) - Number(tc.expected.trim()));
       if (diff === 1) {
-        hint = 'Off-by-1 discrepancy! Check index boundaries, initial counter (0 vs 1), or strict < vs <=.';
-      } else if (Number(tc.actual) < 0 && Number(tc.expected) > 0) {
-        hint = 'Negative output vs positive expected strongly suggests integer overflow or subtraction order.';
+        hint = 'Off-by-1 discrepancy! Check loop start/end bounds, initial counter (0 vs 1), or `<` vs `<=`.';
+      } else if (Number(tc.actual.trim()) < 0 && Number(tc.expected.trim()) > 0) {
+        hint = 'Negative actual vs positive expected strongly suggests integer overflow (`long long`) or reversed subtraction order.';
+      }
+    } else if (tc.expected.startsWith('[') && tc.actual.startsWith('[')) {
+      const expItems = tc.expected.slice(1, -1).split(',').filter(Boolean).length;
+      const actItems = tc.actual.slice(1, -1).split(',').filter(Boolean).length;
+      if (expItems !== actItems) {
+        hint = `Output length mismatch (got ${actItems} elements, expected ${expItems}). Check push_back conditions, loop termination, or duplicate filtering.`;
       }
     }
     mistakes.unshift({
-      title: `Failed Test Case (${input.verdict || 'Wrong Answer'})`,
-      detail: `Input: ${tc.input} → Expected: ${tc.expected}, Got: ${tc.actual}`,
+      title: `Failed Test Case (${input.verdict || 'Wrong Answer'}${tcProgress ? ` • ${tcProgress}` : ''})`,
+      detail: `Input: ${tc.input.slice(0, 120)} → Expected: ${tc.expected.slice(0, 100)}, Got: ${tc.actual.slice(0, 100)}`,
       fixHint: hint,
+    });
+  } else if (hasFailureVerdict) {
+    mistakes.unshift({
+      title: `Failed Submission (${input.verdict}${tcProgress ? ` • ${tcProgress}` : ''})`,
+      detail: 'Your current implementation failed test validation.',
+      fixHint: 'Inspect loop invariants, boundary conditions (empty/1-element/duplicates/negatives), and variable updates.',
     });
   }
 
@@ -266,26 +408,35 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
     mistakes.push({
       title: 'std::map used where unordered_map is faster',
       detail: 'std::map performs O(log N) tree operations per lookup vs O(1) average for unordered_map.',
-      fixHint: 'Unless sorted key traversal is required, switch to unordered_map for faster runtime.',
+      fixHint: 'Unless sorted key order is needed, switch to unordered_map for faster runtime.',
     });
   }
 
-  // Approach classification & complexity estimate
+  // Approach classification & honest complexity estimate
   const methodTags: string[] = [];
-  let estimatedComplexity = 'O(1)';
+  let estimatedComplexity = 'Incomplete / Unverified';
 
-  if (isRecursive && !hasDpArray) {
+  const hasCompileOrSyntaxError = input.verdict === 'Compile Error' || Boolean(balanceErr);
+  const effectiveLinearPasses = loopCount + (hasStlLinear && loopCount === 0 ? 1 : 0);
+
+  if (hasCompileOrSyntaxError) {
+    methodTags.push('Uncompilable / Syntax-Broken C++');
+    estimatedComplexity = 'Invalid (Compile Error)';
+  } else if (isTrivialLiteralReturn(code)) {
+    methodTags.push('Hardcoded / Incomplete Stub');
+    estimatedComplexity = 'Incomplete (Constant Stub)';
+  } else if (isRecursive && !hasDpArray) {
     methodTags.push('Recursive Search (no visible memoization)');
-    estimatedComplexity = 'O(branch^depth) unless pruned or linear tree depth';
+    estimatedComplexity = 'O(branch^depth) or O(N) recursion stack';
   } else if (hasDpArray) {
     methodTags.push('Dynamic Programming');
-    estimatedComplexity = maxLoopNesting >= 2 ? 'O(N * M)' : 'O(N)';
+    estimatedComplexity = maxLoopNesting >= 2 ? 'O(N * M) or O(N^2)' : 'O(N)';
   } else if (hasBinarySearch) {
     methodTags.push('Binary Search');
-    estimatedComplexity = maxLoopNesting >= 2 ? 'O(N log M)' : 'O(log N)';
+    estimatedComplexity = maxLoopNesting >= 2 ? 'O(N^2 log M)' : loopCount >= 1 && !hasStlLog ? 'O(log N)' : hasSort ? 'O(N log N)' : 'O(log N) / O(N log M)';
   } else if (hasSort && maxLoopNesting >= 2) {
-    methodTags.push('Sorting + Nested/Two-Pointer Scan');
-    estimatedComplexity = 'O(N^2) / O(N log N)';
+    methodTags.push('Sorting + Nested Scan');
+    estimatedComplexity = 'O(N^2)';
   } else if (hasSort) {
     methodTags.push('Sorting-Based Approach');
     estimatedComplexity = 'O(N log N)';
@@ -294,28 +445,35 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
     estimatedComplexity = maxLoopNesting >= 2 ? 'O(N^2)' : 'O(N) avg';
   } else if (hasStackOrQueue) {
     methodTags.push('Stack / Queue / Heap');
-    estimatedComplexity = 'O(N) or O(N log K)';
+    estimatedComplexity = code.includes('priority_queue') ? 'O(N log K)' : 'O(N)';
   } else if (maxLoopNesting >= 3) {
     methodTags.push('Triple Nested Loops');
     estimatedComplexity = 'O(N^3)';
-  } else if (maxLoopNesting === 2) {
-    methodTags.push('Nested Loops (Brute-Force / Matrix Scan)');
+  } else if (maxLoopNesting === 2 || (loopCount >= 1 && hasStlLinear && /\.(find|count|accumulate|erase)\s*\(/.test(code))) {
+    methodTags.push('Nested Loops / Quadratic Scan');
     estimatedComplexity = 'O(N^2)';
-  } else if (loopCount >= 1) {
-    methodTags.push('Single-Pass / Linear Iteration');
+  } else if (effectiveLinearPasses >= 1) {
+    methodTags.push(effectiveLinearPasses > 1 ? 'Multi-Pass Linear Iteration' : 'Single-Pass / Linear Iteration');
     estimatedComplexity = 'O(N)';
   } else {
-    methodTags.push('Direct Expression / Constant-Time Logic');
+    methodTags.push('Direct Expression (No Loops/Recursion Detected)');
+    estimatedComplexity = isVerifiedAccepted
+      ? 'O(1)'
+      : 'O(1) structure (no loop/recursion — verify if logic is incomplete)';
   }
 
   const detectedMethod = methodTags.join(' + ');
 
-  if (input.isSolved) {
-    guidanceSteps.push('Your method passed all tests! Double-check whether any extra array/map can be reduced to O(1) space or fewer passes.');
-  } else if (mistakes.length === 0) {
-    guidanceSteps.push(`Your ${detectedMethod} looks structurally clean (Est. ${estimatedComplexity}). Run it against sample and hidden tests to verify edge cases.`);
+  if (isVerifiedAccepted) {
+    guidanceSteps.push('Your current code passed all tests! Check whether auxiliary maps/arrays can be reduced toward O(1) extra space or fewer passes.');
+  } else if (hasFailureVerdict) {
+    guidanceSteps.push(
+      `Your code failed (${input.verdict}). Fix the flagged issues and trace failing inputs before trusting runtime or complexity.`
+    );
+  } else if (mistakes.length > 0) {
+    guidanceSteps.push(`Address the ${mistakes.length} ${mistakes.length === 1 ? 'issue' : 'issues'} above before running tests.`);
   } else {
-    guidanceSteps.push(`Address the highlighted ${mistakes.length === 1 ? 'issue' : `${mistakes.length} issues`} above before re-running.`);
+    guidanceSteps.push(`Your logic (${detectedMethod}) has not been verified against tests yet — run sample & full tests to validate edge cases.`);
   }
 
   if (input.pattern && !hasUnorderedMap && !hasBinarySearch && !hasDpArray && input.pattern.toLowerCase().includes('hash')) {
@@ -325,17 +483,19 @@ function analyzeCppCode(input: AnalysisInput): MethodAnalysisReport {
   }
 
   if (input.userQuestion?.trim()) {
-    guidanceSteps.unshift(`Regarding your question ("${input.userQuestion.trim()}"): Look at your ${detectedMethod} (${estimatedComplexity}) and the checks flagged above—verify base cases, loop bounds, and container state transitions on edge inputs.`);
+    guidanceSteps.unshift(`Regarding your question ("${input.userQuestion.trim()}"): Inspect ${detectedMethod} (${estimatedComplexity}) alongside loop bounds, initialization values, and failing edge inputs.`);
   }
 
   const summaryLines = [
-    `Method Detected: ${detectedMethod} (${estimatedComplexity} | Target: ${targetComplexity})`,
+    `Method Detected: ${detectedMethod} (Est: ${estimatedComplexity} | Target: ${targetComplexity})`,
     '',
     mistakes.length > 0
-      ? `Mistakes / Risks Found (${mistakes.length}):\n${mistakes
+      ? `Mistakes / Failures Found (${mistakes.length}):\n${mistakes
           .map((m, idx) => `${idx + 1}. ${m.line ? `[Line ${m.line}] ` : ''}${m.title}: ${m.detail}\n   Fix: ${m.fixHint}`)
           .join('\n')}`
-      : 'No obvious static C++ syntax or complexity traps detected in your current code.',
+      : isVerifiedAccepted
+        ? 'Verified Accepted — all test cases passed cleanly.'
+        : 'No static syntax crash spotted, but logic correctness is NOT yet verified. Click Run / Submit or check edge cases carefully.',
     '',
     `Guidance:\n${guidanceSteps.map((s) => `• ${s}`).join('\n')}`,
   ];
@@ -355,11 +515,13 @@ function analyzeSqlCode(input: AnalysisInput): MethodAnalysisReport {
   const upper = sql.toUpperCase();
   const mistakes: CodeMistakeItem[] = [];
   const guidanceSteps: string[] = [];
+  const isVerifiedAccepted = input.verdict === 'Accepted';
+  const hasFailureVerdict = Boolean(input.verdict && input.verdict !== 'Accepted');
 
-  if (!sql || /^--[^\n]*$/.test(sql)) {
+  if (!sql || /^(?:--[^\n]*\n?)+$/.test(sql)) {
     return {
       detectedMethod: 'Empty SQL Editor',
-      estimatedComplexity: 'Relational Query',
+      estimatedComplexity: 'Incomplete (Empty Query)',
       targetComplexity: 'Clean SELECT + JOIN/GROUP/WINDOW',
       mistakes: [
         {
@@ -373,7 +535,7 @@ function analyzeSqlCode(input: AnalysisInput): MethodAnalysisReport {
         'Check whether unmatched rows require LEFT JOIN instead of INNER JOIN.',
         'Run your query to test relational output equality.',
       ],
-      summary: 'Write a SELECT query first, then run Analyze My Query to get targeted feedback on joins, grouping, NULLs, and ordering.',
+      summary: 'No SQL query written yet. Draft a SELECT query first, then click Run or Analyze My Query for detailed diagnostics.',
     };
   }
 
@@ -386,12 +548,44 @@ function analyzeSqlCode(input: AnalysisInput): MethodAnalysisReport {
   if (/\bSELECT\s+DISTINCT\b/.test(upper)) methods.push('DISTINCT Projection');
   const detectedMethod = methods.length > 0 ? methods.join(' + ') : 'Standard SELECT Filter Query';
 
-  // Common SQL mistakes
+  // Common SQL & SQLite mistakes
   if (/=\s*NULL\b|!=\s*NULL\b|<>\s*NULL\b/.test(upper)) {
     mistakes.push({
       title: 'Invalid NULL comparison (= NULL)',
       detail: 'In SQL, = NULL or != NULL always evaluates to UNKNOWN/false.',
       fixHint: 'Use IS NULL or IS NOT NULL instead.',
+    });
+  }
+
+  if (/\bSELECT\s+\*/.test(upper)) {
+    mistakes.push({
+      title: 'SELECT * projection mismatch risk',
+      detail: 'Most SQL problems expect specific column names and order rather than all table columns.',
+      fixHint: 'Explicitly select the required columns with matching aliases (`AS ...`).',
+    });
+  }
+
+  if (/\bLEFT\s+(?:OUTER\s+)?JOIN\b/.test(upper) && /\bCOUNT\s*\(\s*\*\s*\)/.test(upper)) {
+    mistakes.push({
+      title: 'COUNT(*) with LEFT JOIN counts unmatched rows as 1',
+      detail: 'When a right-table row is unmatched (NULL), COUNT(*) counts the row anyway instead of 0.',
+      fixHint: 'Count a non-null column from the right table, e.g. `COUNT(r.id)` instead of `COUNT(*)`.',
+    });
+  }
+
+  if (/\bLEFT\s+(?:OUTER\s+)?JOIN\b/.test(upper) && /\b(SUM|AVG)\s*\(/.test(upper) && !/\bCOALESCE\b|\bIFNULL\b/.test(upper)) {
+    mistakes.push({
+      title: 'SUM / AVG after LEFT JOIN may return NULL instead of 0',
+      detail: 'Groups with only unmatched NULL rows evaluate `SUM(col)` to NULL.',
+      fixHint: 'Wrap with `COALESCE(SUM(col), 0)` if zero is expected for empty groups.',
+    });
+  }
+
+  if (/\b[a-zA-Z_][\w.]*\s*\/\s*[a-zA-Z_][\w.]*/.test(sql) && !/1\.0\s*\*|\*\s*1\.0|\bCAST\s*\([^)]+AS\s+(?:REAL|FLOAT)/i.test(sql)) {
+    mistakes.push({
+      title: 'SQLite integer division truncation (`a / b`)',
+      detail: 'In SQLite, dividing two integers truncates decimals (e.g. `1 / 2 = 0`).',
+      fixHint: 'Multiply by `1.0 * numerator / denominator` or use `CAST(... AS REAL)`.',
     });
   }
 
@@ -428,6 +622,8 @@ function analyzeSqlCode(input: AnalysisInput): MethodAnalysisReport {
         compileError?: string;
         error?: string;
         failedTestCase?: { actual?: string };
+        columns?: string[];
+        expectedColumns?: string[];
         rows?: Array<Record<string, unknown>>;
         expectedRows?: Array<Record<string, unknown>>;
       }
@@ -441,38 +637,58 @@ function analyzeSqlCode(input: AnalysisInput): MethodAnalysisReport {
       fixHint: 'Double-check exact table names, aliases, commas, and column names in the Schema panel.',
     });
   } else if (input.verdict === 'Wrong Answer') {
+    const colMismatch =
+      sqlExec?.expectedColumns &&
+      sqlExec?.columns &&
+      sqlExec.expectedColumns.join(',') !== sqlExec.columns.join(',');
     const actualSample =
       sqlExec?.failedTestCase?.actual?.slice(0, 140) ||
-      (sqlExec?.rows ? `${sqlExec.rows.length} rows returned (expected ${sqlExec.expectedRows?.length ?? '?'})` : 'Output mismatch');
+      (colMismatch
+        ? `Column mismatch — got [${sqlExec!.columns!.join(', ')}], expected [${sqlExec!.expectedColumns!.join(', ')}]`
+        : sqlExec?.rows
+          ? `${sqlExec.rows.length} rows returned (expected ${sqlExec.expectedRows?.length ?? '?'})`
+          : 'Output rows differed from expected result');
     mistakes.unshift({
-      title: 'Result Set Mismatch',
-      detail: `Expected rows/columns differed from your output: ${actualSample}`,
-      fixHint: 'Check column alias names (AS ...), LEFT JOIN vs INNER JOIN for missing/zero rows, NULL filtering (COALESCE), and duplicate rows.',
+      title: 'SQL Output Mismatch (Wrong Answer)',
+      detail: actualSample,
+      fixHint: colMismatch
+        ? 'Rename your output columns with exact `AS column_name` aliases matching the expected headers.'
+        : 'Check LEFT JOIN vs INNER JOIN for missing zero rows, WHERE vs ON filters (especially on NULL rows), duplicate rows (DISTINCT), and ORDER BY.',
+    });
+  } else if (hasFailureVerdict) {
+    mistakes.unshift({
+      title: `SQL Check Failed (${input.verdict})`,
+      detail: 'The submitted query failed validation against expected output.',
+      fixHint: 'Verify schema column aliases, join types, NULL handling, and ordering.',
     });
   }
 
-  if (input.isSolved) {
+  if (isVerifiedAccepted) {
     guidanceSteps.push('Query passed all assertions! Check whether a single LEFT JOIN + GROUP BY or window function simplifies any subqueries.');
+  } else if (hasFailureVerdict) {
+    guidanceSteps.push(`Your query failed (${input.verdict}). Address the flagged issues and compare your output columns & rows against Expected Output.`);
   } else {
-    guidanceSteps.push('Verify your output column names match the example headers exactly.');
-    guidanceSteps.push('Check whether NULLs should become 0 via COALESCE(..., 0) or remain excluded.');
+    guidanceSteps.push('Verify your output column names (`AS ...`) match the example headers exactly.');
+    guidanceSteps.push('Click Run Query / Submit to verify rows, NULL handling, and ordering against expected output.');
   }
 
   const summary = [
     `SQL Method Detected: ${detectedMethod}`,
     '',
     mistakes.length > 0
-      ? `Potential SQL Issues (${mistakes.length}):\n${mistakes
+      ? `SQL Mistakes / Risks (${mistakes.length}):\n${mistakes
           .map((m, idx) => `${idx + 1}. ${m.title}: ${m.detail}\n   Fix: ${m.fixHint}`)
           .join('\n')}`
-      : 'No static SQL anti-patterns spotted. Verify exact column aliases and edge rows (NULLs/ties).',
+      : isVerifiedAccepted
+        ? 'Verified Accepted — your query returned the exact expected columns and rows.'
+        : 'No static SQL anti-patterns caught, but relational correctness is NOT verified until you Run/Submit.',
     '',
     `Guidance:\n${guidanceSteps.map((s) => `• ${s}`).join('\n')}`,
   ].join('\n');
 
   return {
     detectedMethod,
-    estimatedComplexity: 'Relational Query Plan',
+    estimatedComplexity: input.verdict === 'Query Error' ? 'Invalid (SQL Error)' : 'Relational Query Plan',
     targetComplexity: 'Single-pass JOIN / Window / Aggregate',
     mistakes,
     guidanceSteps,

@@ -81,12 +81,14 @@ export class AiController {
         DSA_500_PROBLEMS.find((p) => p.id === numericId) ||
         SQL_100_PROBLEMS.find((p) => p.id === numericId);
 
+      const sqlSchema = def && 'schemaDdl' in def ? (def as { schemaDdl?: string }).schemaDdl : undefined;
       const feedback = await AiTeacherService.getFeedback({
         problemId: def ? def.id : numericId,
         problemTitle: def ? def.title : `Problem #${numericId}`,
         problemStatement: def ? def.statement : '',
         functionSignature: def?.functionSignature,
         constraints: def?.constraints,
+        schemaDdl: sqlSchema,
         userCode: userCode || '',
         verdict,
         executionResult,

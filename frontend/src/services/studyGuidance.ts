@@ -17,6 +17,7 @@ export interface StudyGuidanceResponse {
   hintLevel: number;
   mode: 'analyze' | 'coach' | 'optimizer' | 'nudge';
   provider?: 'gemini' | 'local';
+  providerNote?: string;
   analysis?: MethodAnalysisData;
 }
 

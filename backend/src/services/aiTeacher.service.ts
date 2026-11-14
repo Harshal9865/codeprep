@@ -9,6 +9,7 @@ export interface TeacherFeedbackRequest {
   problemStatement: string;
   functionSignature?: string;
   constraints?: string;
+  schemaDdl?: string;
   userCode: string;
   verdict?: string;
   executionResult?: ExecutionResult;
@@ -26,6 +27,7 @@ export interface TeacherFeedbackResponse {
   hintLevel: number;
   mode: 'analyze' | 'coach' | 'optimizer' | 'nudge';
   provider?: 'gemini' | 'local';
+  providerNote?: string;
   analysis?: MethodAnalysisReport;
 }
 
@@ -34,6 +36,7 @@ interface GeminiGenerateResponse {
     content?: {
       parts?: Array<{ text?: string }>;
     };
+    finishReason?: string;
   }>;
   error?: { message?: string; code?: number };
 }
@@ -54,14 +57,23 @@ export class StudyGuideService {
    */
   static async getFeedback(req: TeacherFeedbackRequest): Promise<TeacherFeedbackResponse> {
     const hintLevel = req.hintLevel || 1;
-    const mode: TeacherFeedbackResponse['mode'] =
-      req.requestMode === 'analyze'
+    const hasFailureVerdict = Boolean(req.verdict && req.verdict !== 'Accepted');
+    const isCurrentAccepted = req.verdict === 'Accepted';
+
+    // Never treat failing code as an accepted optimization task, even if the problem was solved previously.
+    const mode: TeacherFeedbackResponse['mode'] = hasFailureVerdict
+      ? req.requestMode === 'analyze'
         ? 'analyze'
-        : req.isSolved
+        : 'coach'
+      : req.requestMode === 'analyze'
+        ? 'analyze'
+        : isCurrentAccepted
           ? 'optimizer'
-          : req.verdict
-            ? 'coach'
-            : 'nudge';
+          : req.requestMode === 'hint'
+            ? 'nudge'
+            : req.verdict
+              ? 'coach'
+              : 'nudge';
 
     const analysis = CodeAnalyzerService.analyze({
       problemId: req.problemId,
@@ -76,25 +88,30 @@ export class StudyGuideService {
       verdict: req.verdict,
       executionResult: req.executionResult,
       userQuestion: req.userQuestion,
-      isSolved: req.isSolved,
+      isSolved: isCurrentAccepted,
     });
 
     const apiKey = this.resolveApiKey();
+    let providerNote: string | undefined;
+
     if (env.AI_PROVIDER === 'gemini' && apiKey) {
-      const aiText = await this.callGeminiCoach(req, mode, hintLevel, analysis, apiKey);
-      if (aiText) {
+      const aiRes = await this.callGeminiCoach(req, mode, hintLevel, analysis, apiKey);
+      if (aiRes.text) {
         return {
-          message: aiText,
+          message: aiRes.text,
           hintLevel,
           mode,
           provider: 'gemini',
           analysis,
         };
       }
+      providerNote = aiRes.errorReason || 'Gemini unavailable; using local analyzer.';
+    } else if (!apiKey) {
+      providerNote = 'AI_API_KEY / GEMINI_API_KEY is not set on server; using local analyzer.';
     }
 
     const fallback = this.generateDeterministicGuidance(req, mode, hintLevel, analysis);
-    return { ...fallback, provider: 'local', analysis };
+    return { ...fallback, provider: 'local', providerNote, analysis };
   }
 
   static async generateReferenceLessonContent(params: {
@@ -248,11 +265,10 @@ Keep total output concise (under 220 words).`;
     hintLevel: number,
     analysis: MethodAnalysisReport,
     apiKey: string
-  ): Promise<string | null> {
+  ): Promise<{ text: string | null; errorReason?: string }> {
     const isSql = req.category === 'SQL';
     const prompt = this.buildCoachingPrompt(req, mode, hintLevel, isSql, analysis);
-    const res = await this.invokeGeminiPrompt(prompt, apiKey, 900);
-    return res.text;
+    return this.invokeGeminiPrompt(prompt, apiKey, 1000);
   }
 
   private static async invokeGeminiPrompt(
@@ -262,7 +278,12 @@ Keep total output concise (under 220 words).`;
     options?: { jsonMode?: boolean }
   ): Promise<{ text: string | null; errorReason?: string }> {
     const modelCandidates = Array.from(
-      new Set([env.AI_MODEL_NAME || 'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'])
+      new Set([
+        env.AI_MODEL_NAME || 'gemini-2.5-flash',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+      ])
     );
 
     const isExpressAuthKey = apiKey.startsWith('AQ.');
@@ -276,56 +297,64 @@ Keep total output concise (under 220 words).`;
     let lastErrorReason = 'Gemini API request failed.';
 
     for (const model of modelCandidates) {
-      const generationConfig: Record<string, unknown> = {
-        temperature: options?.jsonMode ? 0.2 : 0.4,
-        maxOutputTokens,
-      };
-      if (options?.jsonMode) {
-        generationConfig.responseMimeType = 'application/json';
-      }
-      if (model.includes('2.5')) {
-        generationConfig.thinkingConfig = { thinkingBudget: 0 };
-      }
-
       for (const baseUrl of endpointsForModel(model)) {
-        try {
-          const res = await fetch(`${baseUrl}?key=${encodeURIComponent(apiKey)}`, {
+        const sendRequest = async (includeThinkingConfig: boolean) => {
+          const generationConfig: Record<string, unknown> = {
+            temperature: options?.jsonMode ? 0.2 : 0.35,
+            maxOutputTokens,
+          };
+          if (options?.jsonMode) {
+            generationConfig.responseMimeType = 'application/json';
+          }
+          if (includeThinkingConfig && model.includes('2.5')) {
+            generationConfig.thinkingConfig = { thinkingBudget: 0 };
+          }
+
+          return fetch(`${baseUrl}?key=${encodeURIComponent(apiKey)}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'x-goog-api-key': apiKey,
             },
-            signal: AbortSignal.timeout(14000),
+            signal: AbortSignal.timeout(15000),
             body: JSON.stringify({
               contents: [{ role: 'user', parts: [{ text: prompt }] }],
               generationConfig,
             }),
           });
+        };
 
-          if (res.status === 404 || res.status === 401 || res.status === 403 || res.status === 400) {
-            const errBody = await res.text().catch(() => '');
-            lastErrorReason = `Gemini HTTP ${res.status} on ${model}: ${errBody.slice(0, 160)}`;
-            Logger.warn('AiTeacherService', `Gemini endpoint failed (${res.status}) on '${model}' at ${baseUrl}; trying fallback.`);
-            continue;
+        try {
+          let res = await sendRequest(true);
+          if (res.status === 400 && model.includes('2.5')) {
+            const firstErr = await res.text().catch(() => '');
+            if (firstErr.toLowerCase().includes('thinking')) {
+              res = await sendRequest(false);
+            } else {
+              lastErrorReason = `Gemini HTTP 400 on ${model}: ${firstErr.slice(0, 140)}`;
+              Logger.warn('AiTeacherService', lastErrorReason);
+              continue;
+            }
           }
 
           if (!res.ok) {
             const errBody = await res.text().catch(() => '');
-            Logger.warn('AiTeacherService', `Gemini request failed (${res.status}) on '${model}'. Falling back locally.`, errBody.slice(0, 240));
-            return {
-              text: null,
-              errorReason: `Gemini API returned HTTP ${res.status} — verify AI_API_KEY on Render.`,
-            };
+            lastErrorReason = `Gemini HTTP ${res.status} on ${model}: ${errBody.slice(0, 140)}`;
+            Logger.warn('AiTeacherService', `Gemini request failed (${res.status}) on '${model}'; trying next model/endpoint.`);
+            continue;
           }
 
           const data = (await res.json()) as GeminiGenerateResponse;
-          const text = data.candidates?.[0]?.content?.parts
+          const candidate = data.candidates?.[0];
+          const text = candidate?.content?.parts
             ?.map((p) => p.text || '')
             .join('')
             .trim();
 
           if (text) return { text };
-          lastErrorReason = 'Empty response returned by Gemini model.';
+          lastErrorReason = candidate?.finishReason
+            ? `Gemini returned no text (${candidate.finishReason}).`
+            : 'Empty response returned by Gemini model.';
         } catch (error) {
           Logger.warn('AiTeacherService', `Gemini request error on '${model}'. Trying fallback.`, error);
           lastErrorReason = 'Network or timeout calling Gemini API.';
@@ -345,68 +374,79 @@ Keep total output concise (under 220 words).`;
   ): string {
     const langLabel = isSql ? 'SQLite SQL' : 'C++17';
     const statementSnippet = (req.problemStatement || '').slice(0, 1400);
+    const schemaSnippet = isSql && req.schemaDdl ? `\nDatabase Schema DDL:\n${req.schemaDdl.slice(0, 900)}\n` : '';
     const numberedCode = (req.userCode || '')
       .split(/\r?\n/)
       .slice(0, 120)
       .map((line, idx) => `${idx + 1}: ${line}`)
       .join('\n')
-      .slice(0, 3200);
+      .slice(0, 3400);
 
     const execResult = req.executionResult as
       | (ExecutionResult & {
           error?: string;
+          columns?: string[];
+          expectedColumns?: string[];
           rows?: Array<Record<string, unknown>>;
           expectedRows?: Array<Record<string, unknown>>;
         })
       | undefined;
 
+    const progressLine =
+      typeof execResult?.passedTestCases === 'number' && typeof execResult?.totalTestCases === 'number' && execResult.totalTestCases > 0
+        ? `Test Cases Passed: ${execResult.passedTestCases} / ${execResult.totalTestCases}\n`
+        : '';
+
     const failureDetails = execResult?.compileError
-      ? `Compiler/Syntax Error:\n${execResult.compileError.slice(0, 600)}`
+      ? `${progressLine}Compiler/Syntax Error:\n${execResult.compileError.slice(0, 650)}`
       : execResult?.error
-        ? `Execution / SQL Error:\n${execResult.error.slice(0, 600)}`
+        ? `${progressLine}Execution / SQL Error:\n${execResult.error.slice(0, 650)}`
         : execResult?.failedTestCase
-          ? `Failed Test Case (${req.verdict}):\nInput: ${execResult.failedTestCase.input}\nExpected: ${execResult.failedTestCase.expected}\nActual: ${execResult.failedTestCase.actual}`
+          ? `${progressLine}Failed Test Case (${req.verdict}):\nInput: ${execResult.failedTestCase.input}\nExpected: ${execResult.failedTestCase.expected}\nActual: ${execResult.failedTestCase.actual}`
           : execResult?.rows && execResult?.expectedRows && req.verdict === 'Wrong Answer'
-            ? `SQL Wrong Answer:\nActual rows (${execResult.rows.length}): ${JSON.stringify(execResult.rows.slice(0, 4))}\nExpected rows (${execResult.expectedRows.length}): ${JSON.stringify(execResult.expectedRows.slice(0, 4))}`
+            ? `${progressLine}SQL Wrong Answer:\nActual columns: ${JSON.stringify(execResult.columns || [])}\nExpected columns: ${JSON.stringify(execResult.expectedColumns || [])}\nActual rows (${execResult.rows.length}): ${JSON.stringify(execResult.rows.slice(0, 4))}\nExpected rows (${execResult.expectedRows.length}): ${JSON.stringify(execResult.expectedRows.slice(0, 4))}`
             : req.verdict
-              ? `Latest Verdict: ${req.verdict}`
-              : 'No submission attempted yet.';
+              ? `${progressLine}Latest Verdict: ${req.verdict}`
+              : 'Not executed yet against test cases — inspect logic directly.';
 
     const staticFindings = analysis.mistakes.length > 0
       ? analysis.mistakes.map((m) => `- ${m.line ? `Line ${m.line}: ` : ''}${m.title} (${m.detail})`).join('\n')
-      : 'None flagged statically.';
+      : 'No regex syntax issues caught, so DO YOUR OWN DEEP SEMANTIC & LINE-BY-LINE LOGIC CHECK.';
 
     const roleDirective =
-      mode === 'analyze'
-        ? `Carefully analyze the candidate's current method (${analysis.detectedMethod}). Answer any question they asked, pinpoint exact bugs/edge-case mistakes by line number, evaluate their time/space complexity vs target (${analysis.targetComplexity}), and guide them step-by-step on how to fix or optimize their approach without blindly dumping a full solution unless necessary.`
+      mode === 'analyze' || mode === 'coach'
+        ? `Perform a strict real-time code audit of the candidate's current code. Pinpoint EVERY concrete logical mistake, syntax/runtime bug, off-by-one error, missing edge case, or SQL join/NULL/alias error by exact line number. If execution failed on a test case, trace the candidate's actual code step-by-step on that input to explain WHY it produced the wrong output (Actual vs Expected). Evaluate true Time & Space complexity vs target (${analysis.targetComplexity}) without sugarcoating.`
         : mode === 'optimizer'
-          ? 'The candidate passed all tests. Give a crisp senior-engineer critique: estimate exact Time & Space complexity of their code, then list 1–2 concrete optimizations or cleaner edge-case improvements.'
-          : mode === 'coach'
-            ? 'Diagnose WHY the candidate’s code failed (or errored) without rewriting their entire solution for them. Point to the exact logical flaw, SQL clause, or off-by-one bug by line.'
-            : hintLevel === 1
-              ? 'Give Hint Level 1 (subtle intuition/pattern nudge only). Do NOT give away code or the exact algorithm steps yet.'
-              : hintLevel === 2
-                ? 'Give Hint Level 2 (key data structure, invariant, or SQL join/window strategy). Still do NOT paste the complete final code.'
-                : 'Give Hint Level 3 (clear numbered step-by-step plan + edge cases to handle), keeping code snippets minimal so they still write it themselves.';
+          ? 'The current code passed all test cases (Verdict: Accepted). Give a crisp senior-engineer critique: exact Time & Space complexity of their code, subtle edge-case risks if any, and 1-2 concrete optimizations.'
+          : hintLevel === 1
+            ? 'Give Hint Level 1 (subtle intuition/pattern nudge + point out any clear bug in their current draft without spoiling the full solution).'
+            : hintLevel === 2
+              ? 'Give Hint Level 2 (key data structure, invariant, or SQL join/window strategy + flag any logical mistake in their draft without pasting the full code).'
+              : 'Give Hint Level 3 (clear numbered step-by-step plan + edge cases to handle, keeping code snippets minimal).';
 
-    return `You are a crisp technical interviewer coaching a candidate solving a ${langLabel} problem on CodePrep.
-Keep your answer concise (under 240 words), practical, and structured with clear short sections:
-- Method & Complexity
-- Mistakes / Edge Cases Found
-- Next Step to Fix
+    return `You are a strict, accurate principal engineer coaching a candidate on a ${langLabel} problem in CodePrep.
+
+CRITICAL TRUTHFULNESS RULES:
+1. NEVER praise code or say "looks good", "clean", "correct", or "solid" if Latest Verdict is NOT Accepted, if the body is incomplete/stubbed, or if you find any logical bug!
+2. NEVER label incomplete, uncompilable, or trivially stubbed code as "O(1)" — state the true complexity (or "Incomplete / Does not compile").
+3. Base your critique ONLY on the exact lines in Candidate's current code below, citing line numbers (e.g. Line 6) and exact variable/column names.
+4. Keep output crisp (under 250 words) using these headings:
+- Verdict & Real Complexity
+- Exact Mistakes Found (with Line Numbers)
+- Trace / Why It Fails & How to Fix
 
 Problem: #${req.problemId} ${req.problemTitle}
 Category: ${req.category || 'DSA'} | Topic: ${req.topic || 'General'} | Pattern: ${req.pattern || 'General'}
-Constraints: ${req.constraints || 'Standard limits'}
+${req.functionSignature ? `Required Signature: ${req.functionSignature}\n` : ''}Constraints: ${req.constraints || 'Standard limits'}
 ${req.userQuestion?.trim() ? `\nCandidate's Question: ${req.userQuestion.trim()}\n` : ''}
 Statement summary:
 ${statementSnippet}
-
+${schemaSnippet}
 Candidate's current ${langLabel} code (with line numbers):
 ${numberedCode || '(empty editor)'}
 
-Static pre-check findings:
-Detected: ${analysis.detectedMethod} (${analysis.estimatedComplexity})
+Static pre-check notes:
+Detected heuristic: ${analysis.detectedMethod} (${analysis.estimatedComplexity})
 ${staticFindings}
 
 Execution status:
@@ -422,31 +462,27 @@ ${roleDirective}`;
     hintLevel: number,
     analysis: MethodAnalysisReport
   ): TeacherFeedbackResponse {
-    if (mode === 'analyze') {
+    const isCurrentAccepted = req.verdict === 'Accepted';
+    const hasFailureVerdict = Boolean(req.verdict && req.verdict !== 'Accepted');
+
+    // Always prioritize concrete mistake/failure diagnostics when analyzing, failing, or when static mistakes exist
+    if (mode === 'analyze' || hasFailureVerdict || analysis.mistakes.length > 0) {
       return {
         message: analysis.summary,
         hintLevel,
-        mode,
+        mode: hasFailureVerdict ? 'coach' : 'analyze',
       };
     }
 
     const isSql = req.category === 'SQL';
 
-    if (mode === 'optimizer') {
+    if (mode === 'optimizer' && isCurrentAccepted) {
       return {
         message: isSql
           ? `${analysis.detectedMethod} passed all SQL assertions.\n\nOptimization checklist:\n1. Filter selective WHERE predicates before joins or window functions.\n2. Verify tie-breaking columns in ORDER BY so output stays deterministic.\n3. Compare your query structure with the Reference Solution.`
           : `All test cases passed (${analysis.detectedMethod} • ${analysis.estimatedComplexity}).\n\nNext steps to tighten complexity:\n1. Examine memory usage: can auxiliary arrays or maps be reduced toward O(1) extra space?\n2. Check inner loops and copies: pass containers by const reference and reserve hash capacities.\n3. Compare with Reference Solution for optimal interview trade-offs.`,
         hintLevel,
-        mode,
-      };
-    }
-
-    if (req.executionResult?.compileError || req.verdict === 'Time Limit Exceeded' || req.verdict === 'Wrong Answer') {
-      return {
-        message: analysis.summary,
-        hintLevel,
-        mode,
+        mode: 'optimizer',
       };
     }
 

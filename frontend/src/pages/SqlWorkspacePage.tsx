@@ -81,10 +81,13 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   const [coachGuidance, setCoachGuidance] = useState('');
   const [coachAnalysis, setCoachAnalysis] = useState<MethodAnalysisData | null>(null);
   const [coachProvider, setCoachProvider] = useState<'gemini' | 'local' | undefined>(undefined);
+  const [coachProviderNote, setCoachProviderNote] = useState<string | undefined>(undefined);
   const [isCoachLoading, setIsCoachLoading] = useState(false);
   const [hasUnreadCoach, setHasUnreadCoach] = useState(false);
 
   const savedQueryRef = useRef<string>('');
+  const evaluatedQueryRef = useRef<string>('');
+  const analyzedQueryRef = useRef<string>('');
   const activeQueryRef = useRef<string>('');
   const activeIdRef = useRef<number>(problemId);
 
@@ -118,6 +121,9 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       setCoachGuidance('');
       setCoachAnalysis(null);
       setCoachProvider(undefined);
+      setCoachProviderNote(undefined);
+      evaluatedQueryRef.current = '';
+      analyzedQueryRef.current = '';
       setHasUnreadCoach(false);
       try {
         const res = await apiRequest<{ problem: SqlProblemData }>(`/problems/${problemId}`);
@@ -173,28 +179,36 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     hintLevel?: number;
     requestMode?: 'analyze' | 'hint' | 'coach' | 'optimizer';
     userQuestion?: string;
+    queryOverride?: string;
   }) => {
     if (!problem) return;
+    const targetSql = options?.queryOverride ?? query;
+    const matchesEvaluated = Boolean(result && evaluatedQueryRef.current === targetSql);
+    const verdictToSend = options?.verdict ?? (matchesEvaluated ? result?.verdict : undefined);
+    const resultToSend = options?.queryResult ?? (matchesEvaluated ? result ?? undefined : undefined);
+
     setIsCoachLoading(true);
     try {
       const feedback = await requestStudyGuidance({
         problemId: problem.id,
-        userCode: query,
-        verdict: options?.verdict,
-        executionResult: options?.queryResult,
+        userCode: targetSql,
+        verdict: verdictToSend,
+        executionResult: resultToSend,
         hintLevel: options?.hintLevel ?? 1,
-        isSolved: problem.isSolved || options?.queryResult?.verdict === 'Accepted',
+        isSolved: verdictToSend === 'Accepted',
         requestMode: options?.requestMode,
         userQuestion: options?.userQuestion,
       });
       setCoachGuidance(feedback.message);
       setCoachAnalysis(feedback.analysis ?? null);
       setCoachProvider(feedback.provider);
+      setCoachProviderNote(feedback.providerNote);
+      analyzedQueryRef.current = targetSql;
       if (!isCoachOpen) {
         setHasUnreadCoach(true);
       }
     } catch {
-      setCoachGuidance('Use "Analyze My Query" or progressive hints to inspect JOINs, filters, and GROUP BY clauses.');
+      setCoachGuidance('Unable to reach AI Coach right now. Re-run or click "Analyze My Query & Find Mistakes".');
     } finally {
       setIsCoachLoading(false);
     }
@@ -202,26 +216,39 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 
   const handleRunQuery = async () => {
     if (!problem) return;
-    void persistDraftNow(problem.id, query);
+    const submittedSql = query;
+    void persistDraftNow(problem.id, submittedSql);
     setIsRunning(true);
     try {
       const res = await apiRequest<{ result: SqlQueryResult }>('/submissions/run', {
         method: 'POST',
         body: JSON.stringify({
           problemId,
-          code: query,
+          code: submittedSql,
         }),
       });
+      evaluatedQueryRef.current = submittedSql;
       setResult(res.result);
-      void requestSqlCoach({ verdict: res.result.verdict, queryResult: res.result });
+      void requestSqlCoach({
+        requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+        verdict: res.result.verdict,
+        queryResult: res.result,
+        queryOverride: submittedSql,
+      });
     } catch (err: unknown) {
       const fallbackErr: SqlQueryResult = {
         verdict: 'Query Error',
         runtimeMs: 0,
         error: err instanceof Error ? err.message : 'Database query failed.',
       };
+      evaluatedQueryRef.current = submittedSql;
       setResult(fallbackErr);
-      void requestSqlCoach({ verdict: fallbackErr.verdict, queryResult: fallbackErr });
+      void requestSqlCoach({
+        requestMode: 'analyze',
+        verdict: fallbackErr.verdict,
+        queryResult: fallbackErr,
+        queryOverride: submittedSql,
+      });
     } finally {
       setIsRunning(false);
     }
@@ -229,7 +256,8 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 
   const handleSubmitQuery = async () => {
     if (!problem) return;
-    void persistDraftNow(problem.id, query);
+    const submittedSql = query;
+    void persistDraftNow(problem.id, submittedSql);
     setIsRunning(true);
     try {
       const res = await apiRequest<{
@@ -247,9 +275,10 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         method: 'POST',
         body: JSON.stringify({
           problemId,
-          code: query,
+          code: submittedSql,
         }),
       });
+      evaluatedQueryRef.current = submittedSql;
       setResult(res.result);
       if (res.result.verdict === 'Accepted' && problem) {
         setProblem({ ...problem, isSolved: true });
@@ -268,15 +297,26 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           );
         }
       }
-      void requestSqlCoach({ verdict: res.result.verdict, queryResult: res.result });
+      void requestSqlCoach({
+        requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+        verdict: res.result.verdict,
+        queryResult: res.result,
+        queryOverride: submittedSql,
+      });
     } catch (err: unknown) {
       const fallbackErr: SqlQueryResult = {
         verdict: 'Query Error',
         runtimeMs: 0,
         error: err instanceof Error ? err.message : 'Submission failed.',
       };
+      evaluatedQueryRef.current = submittedSql;
       setResult(fallbackErr);
-      void requestSqlCoach({ verdict: fallbackErr.verdict, queryResult: fallbackErr });
+      void requestSqlCoach({
+        requestMode: 'analyze',
+        verdict: fallbackErr.verdict,
+        queryResult: fallbackErr,
+        queryOverride: submittedSql,
+      });
     } finally {
       setIsRunning(false);
     }
@@ -388,11 +428,20 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           <button
             type="button"
             onClick={() => {
-              setIsCoachOpen((prev) => {
-                const next = !prev;
-                if (next) setHasUnreadCoach(false);
-                return next;
-              });
+              if (!isCoachOpen) {
+                setIsCoachOpen(true);
+                setHasUnreadCoach(false);
+                if (analyzedQueryRef.current !== query || !coachAnalysis) {
+                  const matchesEvaluated = Boolean(result && evaluatedQueryRef.current === query);
+                  void requestSqlCoach({
+                    requestMode: matchesEvaluated && result?.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+                    verdict: matchesEvaluated ? result?.verdict : undefined,
+                    queryResult: matchesEvaluated ? result ?? undefined : undefined,
+                  });
+                }
+              } else {
+                setIsCoachOpen(false);
+              }
             }}
             aria-expanded={isCoachOpen}
             className={`relative px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold border flex items-center gap-1.5 transition-colors ${
@@ -734,22 +783,20 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         guidanceMessage={coachGuidance}
         analysis={coachAnalysis}
         provider={coachProvider}
+        providerNote={coachProviderNote}
+        currentVerdict={evaluatedQueryRef.current === query ? result?.verdict : undefined}
         isSolved={Boolean(problem.isSolved)}
         category="SQL"
         onAnalyzeMethod={(question) =>
           requestSqlCoach({
             requestMode: 'analyze',
             userQuestion: question,
-            verdict: result?.verdict,
-            queryResult: result ?? undefined,
           })
         }
         onRequestHint={(lvl) =>
           requestSqlCoach({
             hintLevel: lvl,
             requestMode: 'hint',
-            verdict: result?.verdict,
-            queryResult: result ?? undefined,
           })
         }
         isLoading={isCoachLoading}

@@ -37,6 +37,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
   const [teacherGuidance, setTeacherGuidance] = useState<string>('');
   const [teacherAnalysis, setTeacherAnalysis] = useState<MethodAnalysisData | null>(null);
   const [teacherProvider, setTeacherProvider] = useState<'gemini' | 'local' | undefined>(undefined);
+  const [teacherProviderNote, setTeacherProviderNote] = useState<string | undefined>(undefined);
   const [isTeacherLoading, setIsTeacherLoading] = useState<boolean>(false);
   const [isHintsOpen, setIsHintsOpen] = useState<boolean>(false);
   const [hasUnreadGuidance, setHasUnreadGuidance] = useState<boolean>(false);
@@ -49,6 +50,8 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
 
   const lastActiveTimestampRef = useRef<number>(Date.now());
   const savedCodeRef = useRef<string>('');
+  const evaluatedCodeRef = useRef<string>('');
+  const analyzedCodeRef = useRef<string>('');
   const activeCodeRef = useRef<string>('');
   const activeProblemIdRef = useRef<number>(problemId);
 
@@ -131,9 +134,12 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       savedCodeRef.current = initialCode;
       setSaveStatus('saved');
       setExecutionResult(null);
+      evaluatedCodeRef.current = '';
+      analyzedCodeRef.current = '';
       setTeacherGuidance('');
       setTeacherAnalysis(null);
       setTeacherProvider(undefined);
+      setTeacherProviderNote(undefined);
       setHasUnreadGuidance(false);
 
       const potd = dashRes?.analytics?.potd;
@@ -191,58 +197,84 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     hintLevel?: number;
     requestMode?: 'analyze' | 'hint' | 'coach' | 'optimizer';
     userQuestion?: string;
+    codeOverride?: string;
   }) => {
     if (!problem) return;
+    const targetCode = options?.codeOverride ?? code;
+    const matchesEvaluated = Boolean(executionResult && evaluatedCodeRef.current === targetCode);
+    const verdictToSend = options?.verdict ?? (matchesEvaluated ? executionResult?.verdict : undefined);
+    const resultToSend = options?.result ?? (matchesEvaluated ? executionResult ?? undefined : undefined);
+
     setIsTeacherLoading(true);
     try {
       const feedback = await requestStudyGuidance({
         problemId: problem.id,
-        userCode: code,
-        verdict: options?.verdict,
-        executionResult: options?.result,
+        userCode: targetCode,
+        verdict: verdictToSend,
+        executionResult: resultToSend,
         hintLevel: options?.hintLevel ?? 1,
-        isSolved: problem.isSolved || options?.result?.verdict === 'Accepted',
+        isSolved: verdictToSend === 'Accepted',
         requestMode: options?.requestMode,
         userQuestion: options?.userQuestion,
       });
       setTeacherGuidance(feedback.message);
       setTeacherAnalysis(feedback.analysis ?? null);
       setTeacherProvider(feedback.provider);
+      setTeacherProviderNote(feedback.providerNote);
+      analyzedCodeRef.current = targetCode;
       if (!isHintsOpen) {
         setHasUnreadGuidance(true);
       }
     } catch {
-      setTeacherGuidance('Use "Analyze My Method" or the progressive hint buttons below to inspect edge cases.');
+      setTeacherGuidance('Unable to reach AI Coach right now. Re-run or click "Analyze My Method & Find Mistakes".');
     } finally {
       setIsTeacherLoading(false);
     }
   };
 
+  const openAiCoachWithFreshAnalysis = () => {
+    setIsHintsOpen(true);
+    setHasUnreadGuidance(false);
+    if (analyzedCodeRef.current !== code || !teacherAnalysis) {
+      const matchesEvaluated = Boolean(executionResult && evaluatedCodeRef.current === code);
+      void requestTeacherFeedback({
+        requestMode: matchesEvaluated && executionResult?.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+        verdict: matchesEvaluated ? executionResult?.verdict : undefined,
+        result: matchesEvaluated ? executionResult ?? undefined : undefined,
+      });
+    }
+  };
+
   const handleToggleHints = () => {
-    setIsHintsOpen((prev) => {
-      const next = !prev;
-      if (next) {
-        setHasUnreadGuidance(false);
-      }
-      return next;
-    });
+    if (!isHintsOpen) {
+      openAiCoachWithFreshAnalysis();
+    } else {
+      setIsHintsOpen(false);
+    }
   };
 
   const handleRun = async (customTestCases?: TestCase[]) => {
     if (!problem) return;
-    void persistDraftNow(problem.id, code);
+    const submittedCode = code;
+    void persistDraftNow(problem.id, submittedCode);
     setIsRunning(true);
     try {
       const res = await apiRequest<{ result: ExecutionResult }>('/submissions/run', {
         method: 'POST',
         body: JSON.stringify({
           problemId: problem.id,
-          code,
+          code: submittedCode,
           customTestCases,
         }),
       });
+      evaluatedCodeRef.current = submittedCode;
       setExecutionResult(res.result);
-      requestTeacherFeedback({ verdict: res.result.verdict, result: res.result });
+      requestTeacherFeedback({
+        requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+        verdict: res.result.verdict,
+        result: res.result,
+        codeOverride: submittedCode,
+      });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Run failed');
     } finally {
@@ -252,7 +284,8 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
 
   const handleSubmit = async () => {
     if (!problem) return;
-    void persistDraftNow(problem.id, code);
+    const submittedCode = code;
+    void persistDraftNow(problem.id, submittedCode);
     setIsSubmitting(true);
     try {
       const res = await apiRequest<{
@@ -270,9 +303,10 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         method: 'POST',
         body: JSON.stringify({
           problemId: problem.id,
-          code,
+          code: submittedCode,
         }),
       });
+      evaluatedCodeRef.current = submittedCode;
       setExecutionResult(res.result);
 
       const newHistoryItem = {
@@ -321,7 +355,12 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         }
       }
 
-      requestTeacherFeedback({ verdict: res.result.verdict, result: res.result });
+      requestTeacherFeedback({
+        requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+        verdict: res.result.verdict,
+        result: res.result,
+        codeOverride: activeCodeRef.current,
+      });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Submission failed');
     } finally {
@@ -422,10 +461,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         >
           <ProblemSpecPane
             problem={problem}
-            onOpenHints={() => {
-              setIsHintsOpen(true);
-              setHasUnreadGuidance(false);
-            }}
+            onOpenHints={openAiCoachWithFreshAnalysis}
             onOpenFullSolution={() => handleNavigateSafely(onOpenAiSolution)}
             onLoadCode={(pastCode) => handleCodeChange(pastCode)}
             onSaveNotes={handleSaveNotes}
@@ -463,22 +499,20 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
           guidanceMessage={teacherGuidance}
           analysis={teacherAnalysis}
           provider={teacherProvider}
+          providerNote={teacherProviderNote}
+          currentVerdict={evaluatedCodeRef.current === code ? executionResult?.verdict : undefined}
           isSolved={Boolean(problem.isSolved)}
           category="DSA"
           onAnalyzeMethod={(question) =>
             requestTeacherFeedback({
               requestMode: 'analyze',
               userQuestion: question,
-              verdict: executionResult?.verdict,
-              result: executionResult ?? undefined,
             })
           }
           onRequestHint={(lvl) =>
             requestTeacherFeedback({
               hintLevel: lvl,
               requestMode: 'hint',
-              verdict: executionResult?.verdict,
-              result: executionResult ?? undefined,
             })
           }
           isLoading={isTeacherLoading}
