@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiRequest } from '../services/api';
+import { requestStudyGuidance } from '../services/studyGuidance';
 import { Button } from '../components/ui/Button';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 import { SqlSchemaTables } from '../components/workspace/SqlSchemaTables';
+import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
 import { HighlightedCode, HighlightedCodeEditor } from '../components/ui/CodeHighlight';
 import {
   Database,
@@ -19,6 +21,7 @@ import {
   Copy,
   Check,
   X,
+  Sparkles,
 } from 'lucide-react';
 
 interface SqlProblemData {
@@ -68,9 +71,18 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   // Reference solution modal state
   const [showSolution, setShowSolution] = useState(false);
   const [solutionSql, setSolutionSql] = useState<string | null>(null);
+  const [solutionError, setSolutionError] = useState<string | null>(null);
   const [isUnlockingSolution, setIsUnlockingSolution] = useState(false);
   const [copiedSolution, setCopiedSolution] = useState(false);
   const [showSqlCheatSheet, setShowSqlCheatSheet] = useState(false);
+
+  // SQL AI Coach drawer state
+  const [isCoachOpen, setIsCoachOpen] = useState(false);
+  const [coachGuidance, setCoachGuidance] = useState('');
+  const [coachAnalysis, setCoachAnalysis] = useState<MethodAnalysisData | null>(null);
+  const [coachProvider, setCoachProvider] = useState<'gemini' | 'local' | undefined>(undefined);
+  const [isCoachLoading, setIsCoachLoading] = useState(false);
+  const [hasUnreadCoach, setHasUnreadCoach] = useState(false);
 
   const savedQueryRef = useRef<string>('');
   const activeQueryRef = useRef<string>('');
@@ -102,6 +114,11 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       setResult(null);
       setShowSolution(false);
       setSolutionSql(null);
+      setSolutionError(null);
+      setCoachGuidance('');
+      setCoachAnalysis(null);
+      setCoachProvider(undefined);
+      setHasUnreadCoach(false);
       try {
         const res = await apiRequest<{ problem: SqlProblemData }>(`/problems/${problemId}`);
         const initialSql =
@@ -150,6 +167,39 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     };
   }, [persistDraftNow]);
 
+  const requestSqlCoach = async (options?: {
+    verdict?: string;
+    queryResult?: SqlQueryResult;
+    hintLevel?: number;
+    requestMode?: 'analyze' | 'hint' | 'coach' | 'optimizer';
+    userQuestion?: string;
+  }) => {
+    if (!problem) return;
+    setIsCoachLoading(true);
+    try {
+      const feedback = await requestStudyGuidance({
+        problemId: problem.id,
+        userCode: query,
+        verdict: options?.verdict,
+        executionResult: options?.queryResult,
+        hintLevel: options?.hintLevel ?? 1,
+        isSolved: problem.isSolved || options?.queryResult?.verdict === 'Accepted',
+        requestMode: options?.requestMode,
+        userQuestion: options?.userQuestion,
+      });
+      setCoachGuidance(feedback.message);
+      setCoachAnalysis(feedback.analysis ?? null);
+      setCoachProvider(feedback.provider);
+      if (!isCoachOpen) {
+        setHasUnreadCoach(true);
+      }
+    } catch {
+      setCoachGuidance('Use "Analyze My Query" or progressive hints to inspect JOINs, filters, and GROUP BY clauses.');
+    } finally {
+      setIsCoachLoading(false);
+    }
+  };
+
   const handleRunQuery = async () => {
     if (!problem) return;
     void persistDraftNow(problem.id, query);
@@ -163,12 +213,15 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         }),
       });
       setResult(res.result);
+      void requestSqlCoach({ verdict: res.result.verdict, queryResult: res.result });
     } catch (err: unknown) {
-      setResult({
+      const fallbackErr: SqlQueryResult = {
         verdict: 'Query Error',
         runtimeMs: 0,
         error: err instanceof Error ? err.message : 'Database query failed.',
-      });
+      };
+      setResult(fallbackErr);
+      void requestSqlCoach({ verdict: fallbackErr.verdict, queryResult: fallbackErr });
     } finally {
       setIsRunning(false);
     }
@@ -191,12 +244,15 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         setProblem({ ...problem, isSolved: true });
         window.dispatchEvent(new CustomEvent('codeprep:progress-updated'));
       }
+      void requestSqlCoach({ verdict: res.result.verdict, queryResult: res.result });
     } catch (err: unknown) {
-      setResult({
+      const fallbackErr: SqlQueryResult = {
         verdict: 'Query Error',
         runtimeMs: 0,
         error: err instanceof Error ? err.message : 'Submission failed.',
-      });
+      };
+      setResult(fallbackErr);
+      void requestSqlCoach({ verdict: fallbackErr.verdict, queryResult: fallbackErr });
     } finally {
       setIsRunning(false);
     }
@@ -217,13 +273,15 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   const handleUnlockAndLoadSolution = async () => {
     if (!problem) return;
     setIsUnlockingSolution(true);
+    setSolutionError(null);
     try {
       await apiRequest(`/study/timer/unlock/${problem.id}`, { method: 'POST' });
       const res = await apiRequest<{ lesson: { verifiedSolution: string } }>(`/study/lesson/${problem.id}`);
       setSolutionSql(res.lesson.verifiedSolution);
       setProblem((prev) => (prev ? { ...prev, unlockedAiSolution: true } : null));
-    } catch {
-      setSolutionSql('-- Unable to load reference query right now.');
+    } catch (err: unknown) {
+      setSolutionSql(null);
+      setSolutionError(err instanceof Error ? err.message : 'Unable to load reference query right now.');
     } finally {
       setIsUnlockingSolution(false);
     }
@@ -303,6 +361,30 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setIsCoachOpen((prev) => {
+                const next = !prev;
+                if (next) setHasUnreadCoach(false);
+                return next;
+              });
+            }}
+            aria-expanded={isCoachOpen}
+            className={`relative px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold border flex items-center gap-1.5 transition-colors ${
+              isCoachOpen
+                ? 'bg-primary text-black border-primary'
+                : 'bg-primary-subtle hover:bg-primary/20 text-primary border-primary/35'
+            }`}
+            title="Toggle AI SQL Coach & Mistake Analyzer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>AI Coach</span>
+            {hasUnreadCoach && !isCoachOpen && (
+              <span className="h-2 w-2 rounded-full bg-success animate-ping" />
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -398,9 +480,13 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
               </div>
               {!solutionSql ? (
                 <div className="space-y-2.5">
-                  <p className="text-xs text-text-secondary">
-                    Reveal the reference query for #{problem.id} cleanly in one click.
-                  </p>
+                  {solutionError ? (
+                    <p className="text-xs font-mono text-danger">{solutionError}</p>
+                  ) : (
+                    <p className="text-xs text-text-secondary">
+                      Reveal the reference query for #{problem.id} cleanly in one click.
+                    </p>
+                  )}
                   <Button
                     variant="primary"
                     size="sm"
@@ -408,7 +494,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                     isLoading={isUnlockingSolution}
                     icon={<Unlock className="w-3.5 h-3.5" />}
                   >
-                    Unlock Solution
+                    {solutionError ? 'Retry Loading Solution' : 'Unlock Solution'}
                   </Button>
                 </div>
               ) : (
@@ -595,6 +681,33 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           </div>
         </div>
       </div>
+
+      <HintsDrawer
+        isOpen={isCoachOpen}
+        onClose={() => setIsCoachOpen(false)}
+        guidanceMessage={coachGuidance}
+        analysis={coachAnalysis}
+        provider={coachProvider}
+        isSolved={Boolean(problem.isSolved)}
+        category="SQL"
+        onAnalyzeMethod={(question) =>
+          requestSqlCoach({
+            requestMode: 'analyze',
+            userQuestion: question,
+            verdict: result?.verdict,
+            queryResult: result ?? undefined,
+          })
+        }
+        onRequestHint={(lvl) =>
+          requestSqlCoach({
+            hintLevel: lvl,
+            requestMode: 'hint',
+            verdict: result?.verdict,
+            queryResult: result ?? undefined,
+          })
+        }
+        isLoading={isCoachLoading}
+      />
     </div>
   );
 };

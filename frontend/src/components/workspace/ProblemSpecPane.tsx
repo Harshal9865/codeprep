@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Problem } from '../../types/problem';
 import { DataStructureDiagram } from './DataStructureDiagram';
 import { INTERVIEW_PREP_SETS } from '../../data/interviewTracks';
@@ -67,9 +67,13 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
   useEffect(() => {
     setNotesText(problem.userNotes || '');
     setNotesStatus('saved');
+  }, [problem.id, problem.userNotes]);
+
+  useEffect(() => {
     setLesson(null);
     setSolutionError(null);
-  }, [problem.id, problem.userNotes]);
+    setIsLoadingSolution(false);
+  }, [problem.id]);
 
   const matchingPrepSets = INTERVIEW_PREP_SETS.filter((s) => s.matchProblem(problem));
   const companyTags = Array.from(new Set(matchingPrepSets.flatMap((s) => s.companies)));
@@ -80,7 +84,7 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  const fetchSolution = async (forceUnlock = false) => {
+  const fetchSolution = useCallback(async (forceUnlock = false) => {
     setIsLoadingSolution(true);
     setSolutionError(null);
     try {
@@ -95,12 +99,24 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
     } finally {
       setIsLoadingSolution(false);
     }
-  };
+  }, [problem.id, onSolutionUnlocked]);
+
+  useEffect(() => {
+    if (
+      activeTab === 'solution' &&
+      (problem.isSolved || problem.unlockedAiSolution) &&
+      !lesson &&
+      !isLoadingSolution &&
+      !solutionError
+    ) {
+      void fetchSolution(false);
+    }
+  }, [activeTab, problem.isSolved, problem.unlockedAiSolution, lesson, isLoadingSolution, solutionError, fetchSolution]);
 
   const handleSwitchTab = (tab: 'description' | 'solution' | 'notes' | 'submissions') => {
     setActiveTab(tab);
     if (tab === 'solution' && !lesson && (problem.isSolved || problem.unlockedAiSolution)) {
-      fetchSolution(false);
+      void fetchSolution(false);
     }
   };
 
@@ -440,9 +456,13 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                         <span className="w-2.5 h-2.5 rounded-full bg-warning/60" />
                         <span className="w-2.5 h-2.5 rounded-full bg-success/60" />
                       </span>
-                      <span className="ml-1 text-text-secondary">solution.cpp</span>
+                      <span className="ml-1 text-text-secondary">
+                        {problem.category === 'SQL' ? 'solution.sql' : 'solution.cpp'}
+                      </span>
                     </div>
-                    <span className="text-[10px] uppercase tracking-wider text-text-muted/80">C++17 Optimal</span>
+                    <span className="text-[10px] uppercase tracking-wider text-text-muted/80">
+                      {problem.category === 'SQL' ? 'SQLite Optimal' : 'C++17 Optimal'}
+                    </span>
                   </div>
                   <div className="p-4 font-mono text-[13px] overflow-x-auto bg-canvas/55">
                     <HighlightedCode
@@ -472,9 +492,24 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                 </div>
               </div>
             ) : (
-              <Button variant="primary" size="md" onClick={() => fetchSolution(true)}>
-                Load Solution
-              </Button>
+              <div className="p-5 rounded-2xl bg-surface-subtle border border-border-subtle text-center space-y-3">
+                {solutionError ? (
+                  <p className="text-xs font-mono text-danger">{solutionError}</p>
+                ) : (
+                  <p className="text-xs text-text-secondary">
+                    Ready to load the reference implementation and pattern walkthrough.
+                  </p>
+                )}
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => fetchSolution(true)}
+                  isLoading={isLoadingSolution}
+                  icon={<Unlock className="w-4 h-4" />}
+                >
+                  {solutionError ? 'Retry Loading Solution' : 'Load Solution'}
+                </Button>
+              </div>
             )}
           </div>
         )}

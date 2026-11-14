@@ -1,7 +1,11 @@
 import { prisma } from './prisma.service';
+import { env } from '../config/env';
 import { VERIFIED_5_LESSONS } from '../data/lessons5';
 import { DSA_500_PROBLEMS } from '../data/dsa500';
 import { SQL_100_PROBLEMS } from '../data/sql100';
+import { findCuratedSolution } from '../data/curatedSolutions';
+import { AiTeacherService } from './aiTeacher.service';
+import { ProblemService } from './problem.service';
 import { TimerService } from './timer.service';
 import { Logger } from '../utils/logger';
 
@@ -82,197 +86,29 @@ const DEFAULT_GUIDE: LessonTopicGuide = {
   progression: '1. Brute Force baseline matching exact specification.\n2. Eliminate repeated work via precomputation or monotonic state.\n3. Optimal single-pass or logarithmic solution.',
 };
 
-const CURATED_CPP_SOLUTIONS: Record<string, string> = {
-  'contains-duplicate': `class Solution {
-public:
-    bool containsDuplicate(vector<int>& nums) {
-        unordered_set<int> seen;
-        seen.reserve(nums.size());
-        for (int x : nums) {
-            if (!seen.insert(x).second) return true;
-        }
-        return false;
-    }
-};`,
-  'valid-anagram': `class Solution {
-public:
-    bool isAnagram(string s, string t) {
-        if (s.size() != t.size()) return false;
-        int freq[26] = {0};
-        for (size_t i = 0; i < s.size(); ++i) {
-            freq[s[i] - 'a']++;
-            freq[t[i] - 'a']--;
-        }
-        for (int c : freq) {
-            if (c != 0) return false;
-        }
-        return true;
-    }
-};`,
-  'valid-palindrome': `class Solution {
-public:
-    bool isPalindrome(string s) {
-        int l = 0, r = static_cast<int>(s.size()) - 1;
-        while (l < r) {
-            while (l < r && !isalnum(static_cast<unsigned char>(s[l]))) l++;
-            while (l < r && !isalnum(static_cast<unsigned char>(s[r]))) r--;
-            if (tolower(static_cast<unsigned char>(s[l])) != tolower(static_cast<unsigned char>(s[r]))) {
-                return false;
-            }
-            l++;
-            r--;
-        }
-        return true;
-    }
-};`,
-  'trapping-rain-water': `class Solution {
-public:
-    int trap(vector<int>& height) {
-        int l = 0, r = static_cast<int>(height.size()) - 1;
-        int leftMax = 0, rightMax = 0, water = 0;
-        while (l < r) {
-            if (height[l] < height[r]) {
-                leftMax = max(leftMax, height[l]);
-                water += leftMax - height[l];
-                l++;
-            } else {
-                rightMax = max(rightMax, height[r]);
-                water += rightMax - height[r];
-                r--;
-            }
-        }
-        return water;
-    }
-};`,
-  'longest-substring-without-repeating-characters': `class Solution {
-public:
-    int lengthOfLongestSubstring(string s) {
-        vector<int> last(256, -1);
-        int best = 0, start = 0;
-        for (int i = 0; i < static_cast<int>(s.size()); ++i) {
-            unsigned char ch = static_cast<unsigned char>(s[i]);
-            if (last[ch] >= start) start = last[ch] + 1;
-            last[ch] = i;
-            best = max(best, i - start + 1);
-        }
-        return best;
-    }
-};`,
-  'merge-intervals': `class Solution {
-public:
-    vector<vector<int>> merge(vector<vector<int>>& intervals) {
-        sort(intervals.begin(), intervals.end());
-        vector<vector<int>> merged;
-        for (const auto& iv : intervals) {
-            if (merged.empty() || merged.back()[1] < iv[0]) {
-                merged.push_back(iv);
-            } else {
-                merged.back()[1] = max(merged.back()[1], iv[1]);
-            }
-        }
-        return merged;
-    }
-};`,
-  'search-in-rotated-sorted-array': `class Solution {
-public:
-    int search(vector<int>& nums, int target) {
-        int l = 0, r = static_cast<int>(nums.size()) - 1;
-        while (l <= r) {
-            int mid = l + (r - l) / 2;
-            if (nums[mid] == target) return mid;
-            if (nums[l] <= nums[mid]) {
-                if (nums[l] <= target && target < nums[mid]) r = mid - 1;
-                else l = mid + 1;
-            } else {
-                if (nums[mid] < target && target <= nums[r]) l = mid + 1;
-                else r = mid - 1;
-            }
-        }
-        return -1;
-    }
-};`,
-  'find-minimum-in-rotated-sorted-array': `class Solution {
-public:
-    int findMin(vector<int>& nums) {
-        int l = 0, r = static_cast<int>(nums.size()) - 1;
-        while (l < r) {
-            int mid = l + (r - l) / 2;
-            if (nums[mid] > nums[r]) l = mid + 1;
-            else r = mid;
-        }
-        return nums[l];
-    }
-};`,
-  'daily-temperatures': `class Solution {
-public:
-    vector<int> dailyTemperatures(vector<int>& temperatures) {
-        int n = static_cast<int>(temperatures.size());
-        vector<int> ans(n, 0);
-        vector<int> st;
-        for (int i = 0; i < n; ++i) {
-            while (!st.empty() && temperatures[i] > temperatures[st.back()]) {
-                int idx = st.back();
-                st.pop_back();
-                ans[idx] = i - idx;
-            }
-            st.push_back(i);
-        }
-        return ans;
-    }
-};`,
-  'number-of-islands': `class Solution {
-public:
-    int numIslands(vector<vector<char>>& grid) {
-        int m = static_cast<int>(grid.size()), n = static_cast<int>(grid[0].size());
-        int islands = 0;
-        auto dfs = [&](auto& self, int r, int c) -> void {
-            if (r < 0 || c < 0 || r >= m || c >= n || grid[r][c] != '1') return;
-            grid[r][c] = '0';
-            self(self, r + 1, c);
-            self(self, r - 1, c);
-            self(self, r, c + 1);
-            self(self, r, c - 1);
-        };
-        for (int r = 0; r < m; ++r) {
-            for (int c = 0; c < n; ++c) {
-                if (grid[r][c] == '1') {
-                    islands++;
-                    dfs(dfs, r, c);
-                }
-            }
-        }
-        return islands;
-    }
-};`,
-  'coin-change': `class Solution {
-public:
-    int coinChange(vector<int>& coins, int amount) {
-        const int INF = amount + 1;
-        vector<int> dp(amount + 1, INF);
-        dp[0] = 0;
-        for (int i = 1; i <= amount; ++i) {
-            for (int c : coins) {
-                if (c <= i) dp[i] = min(dp[i], dp[i - c] + 1);
-            }
-        }
-        return dp[amount] > amount ? -1 : dp[amount];
-    }
-};`,
-  'longest-increasing-subsequence': `class Solution {
-public:
-    int lengthOfLIS(vector<int>& nums) {
-        vector<int> tails;
-        for (int x : nums) {
-            auto it = lower_bound(tails.begin(), tails.end(), x);
-            if (it == tails.end()) tails.push_back(x);
-            else *it = x;
-        }
-        return static_cast<int>(tails.size());
-    }
-};`,
-};
-
 export class LessonService {
+  private static safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
+    if (!raw) return fallback;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private static isPlaceholderSolution(code: string | null | undefined): boolean {
+    if (!code) return true;
+    const trimmed = code.trim();
+    return (
+      trimmed.length < 30 ||
+      trimmed.includes('// Reference Strategy Blueprint') ||
+      trimmed.includes('// Optimal Strategy Blueprint') ||
+      trimmed.includes('// Implement your solution here') ||
+      trimmed.includes('// Write your solution here') ||
+      trimmed.includes('// Your code here')
+    );
+  }
+
   static async seedLessons(): Promise<void> {
     try {
       for (const lesson of VERIFIED_5_LESSONS) {
@@ -303,17 +139,12 @@ export class LessonService {
     }
   }
 
-  private static findCuratedCppBySlug(slug: string): string | null {
-    for (const [key, code] of Object.entries(CURATED_CPP_SOLUTIONS)) {
-      if (slug === key || slug.endsWith(`-${key}`)) {
-        return code;
-      }
-    }
-    return null;
-  }
-
   private static async buildAndPersistDynamicLesson(problemId: number) {
-    const dbProblem = await prisma.problem.findUnique({ where: { id: problemId } });
+    let dbProblem = await prisma.problem.findUnique({ where: { id: problemId } });
+    if (!dbProblem) {
+      await ProblemService.seedInitialProblems();
+      dbProblem = await prisma.problem.findUnique({ where: { id: problemId } });
+    }
     if (!dbProblem) {
       throw new Error(`Problem #${problemId} not found.`);
     }
@@ -353,7 +184,7 @@ export class LessonService {
           });
 
     const isSql = dbProblem.category === 'SQL';
-    const baseTechnique = `### Pattern: ${dbProblem.pattern || dbProblem.topic}
+    let baseTechnique = `### Pattern: ${dbProblem.pattern || dbProblem.topic}
 
 #### Core Intuition (${dbProblem.topic} • ${dbProblem.difficulty})
 ${guide.intuition}
@@ -399,15 +230,46 @@ ${guide.mistakes}`;
       ],
     };
 
+    let approachProgression = guide.progression;
     let verifiedSolution = '';
+
     if (isSql && sqlDef) {
       verifiedSolution = `-- Reference Query for #${dbProblem.id}: ${dbProblem.title}\n${sqlDef.expectedQuery}`;
     } else {
-      verifiedSolution =
-        this.findCuratedCppBySlug(dbProblem.slug) ||
-        `// Reference Strategy Blueprint for #${dbProblem.id}: ${dbProblem.title}
-// Pattern: ${dbProblem.pattern || dbProblem.topic}
-${dbProblem.cppHarnessTemplate || dsaDef?.defaultCodeStub || `class Solution {\npublic:\n    ${dbProblem.functionSignature} {\n        // Apply ${dbProblem.pattern || dbProblem.topic}\n    }\n};`}`;
+      const curated = findCuratedSolution(dbProblem.id, dbProblem.slug);
+      if (curated) {
+        verifiedSolution = curated.code;
+        if (curated.complexity) {
+          approachProgression = `${curated.complexity}\n\n${guide.progression}`;
+        }
+      } else {
+        const aiGenerated = await AiTeacherService.generateReferenceLessonContent({
+          problemId: dbProblem.id,
+          title: dbProblem.title,
+          topic: dbProblem.topic,
+          pattern: dbProblem.pattern,
+          difficulty: dbProblem.difficulty,
+          category: dbProblem.category,
+          statement: dbProblem.statement,
+          constraints: dbProblem.constraints,
+          functionSignature: dbProblem.functionSignature,
+        });
+
+        if (aiGenerated) {
+          verifiedSolution = aiGenerated.verifiedSolution;
+          if (aiGenerated.techniqueLesson) baseTechnique = aiGenerated.techniqueLesson;
+          if (aiGenerated.approachProgression) approachProgression = aiGenerated.approachProgression;
+        } else {
+          verifiedSolution =
+            `// Optimal Strategy Blueprint for #${dbProblem.id}: ${dbProblem.title}\n` +
+            `// Pattern: ${dbProblem.pattern || dbProblem.topic}\n` +
+            `// Intuition: ${guide.intuition}\n` +
+            `// Pitfalls: ${guide.mistakes}\n` +
+            (dbProblem.cppHarnessTemplate ||
+              dsaDef?.defaultCodeStub ||
+              `class Solution {\npublic:\n    ${dbProblem.functionSignature} {\n        // Apply ${dbProblem.pattern || dbProblem.topic}\n    }\n};`);
+        }
+      }
     }
 
     const saved = await prisma.aiLesson.upsert({
@@ -416,7 +278,7 @@ ${dbProblem.cppHarnessTemplate || dsaDef?.defaultCodeStub || `class Solution {\n
         techniqueLesson: baseTechnique,
         visualTraceJson: JSON.stringify(visualTrace),
         workedExamples: workedExamplesText,
-        approachProgression: guide.progression,
+        approachProgression,
         verifiedSolution,
         similarProblemsJson: JSON.stringify(fallbackRelated),
       },
@@ -425,7 +287,7 @@ ${dbProblem.cppHarnessTemplate || dsaDef?.defaultCodeStub || `class Solution {\n
         techniqueLesson: baseTechnique,
         visualTraceJson: JSON.stringify(visualTrace),
         workedExamples: workedExamplesText,
-        approachProgression: guide.progression,
+        approachProgression,
         verifiedSolution,
         similarProblemsJson: JSON.stringify(fallbackRelated),
       },
@@ -435,6 +297,12 @@ ${dbProblem.cppHarnessTemplate || dsaDef?.defaultCodeStub || `class Solution {\n
   }
 
   static async getLessonByProblemId(problemId: number, userId: string) {
+    // Ensure catalog is seeded if a cold boot receives a direct lesson request
+    const probExists = await prisma.problem.findUnique({ where: { id: problemId }, select: { id: true } });
+    if (!probExists) {
+      await ProblemService.seedInitialProblems();
+    }
+
     let timerStatus = await TimerService.getStatus(problemId, userId);
 
     // Unlock cleanly on explicit solution inspection instead of failing with 403
@@ -447,18 +315,33 @@ ${dbProblem.cppHarnessTemplate || dsaDef?.defaultCodeStub || `class Solution {\n
       where: { problemId },
     });
 
-    if (!lesson) {
+    const probMeta = await prisma.problem.findUnique({
+      where: { id: problemId },
+      select: { slug: true },
+    });
+    const curatedOverride =
+      lesson && probMeta ? findCuratedSolution(problemId, probMeta.slug) : null;
+    const hasAiKey = Boolean(
+      env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+    );
+
+    if (
+      !lesson ||
+      (this.isPlaceholderSolution(lesson.verifiedSolution) && (curatedOverride || hasAiKey)) ||
+      !lesson.visualTraceJson ||
+      !lesson.similarProblemsJson
+    ) {
       lesson = await this.buildAndPersistDynamicLesson(problemId);
     }
 
     return {
       problemId: lesson.problemId,
       techniqueLesson: lesson.techniqueLesson,
-      visualTrace: JSON.parse(lesson.visualTraceJson),
+      visualTrace: this.safeJsonParse(lesson.visualTraceJson, { steps: [] }),
       workedExamples: lesson.workedExamples,
       approachProgression: lesson.approachProgression,
       verifiedSolution: lesson.verifiedSolution,
-      similarProblems: JSON.parse(lesson.similarProblemsJson),
+      similarProblems: this.safeJsonParse(lesson.similarProblemsJson, []),
       isSolved: timerStatus.isSolved,
       solvedWithAiHelp: timerStatus.solvedWithAiHelp,
     };

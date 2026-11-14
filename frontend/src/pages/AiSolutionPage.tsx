@@ -57,27 +57,27 @@ export const AiSolutionPage: React.FC<AiSolutionPageProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      setErrorMsg(null);
-      try {
-        const timerRes = await apiRequest<{ timer: TimerStatus }>(`/study/timer/status/${problemId}`);
-        setTimerStatus(timerRes.timer);
+  const loadSolutionData = React.useCallback(async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const timerRes = await apiRequest<{ timer: TimerStatus }>(`/study/timer/status/${problemId}`);
+      setTimerStatus(timerRes.timer);
 
-        if (timerRes.timer.isUnlocked) {
-          const lessonRes = await apiRequest<{ lesson: AiLessonResponse }>(`/study/lesson/${problemId}`);
-          setLesson(lessonRes.lesson);
-        }
-      } catch (err: unknown) {
-        setErrorMsg(err instanceof Error ? err.message : 'Unable to check solution status.');
-      } finally {
-        setIsLoading(false);
+      if (timerRes.timer.isUnlocked) {
+        const lessonRes = await apiRequest<{ lesson: AiLessonResponse }>(`/study/lesson/${problemId}`);
+        setLesson(lessonRes.lesson);
       }
-    };
-
-    fetchData();
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Unable to check solution status.');
+    } finally {
+      setIsLoading(false);
+    }
   }, [problemId]);
+
+  useEffect(() => {
+    void loadSolutionData();
+  }, [loadSolutionData]);
 
   const handleUnlock = async () => {
     setIsUnlocking(true);
@@ -166,6 +166,44 @@ export const AiSolutionPage: React.FC<AiSolutionPageProps> = ({
               Unlock Solution Now
             </Button>
 
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={onBackToProblem}
+              icon={<ArrowLeft className="w-4 h-4" />}
+            >
+              Back to Problem
+            </Button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!lesson) {
+    return (
+      <AppLayout showFooter={true}>
+        <div className="max-w-xl mx-auto px-4 py-20 flex flex-col items-center text-center space-y-6">
+          <div className="h-16 w-16 rounded-2xl bg-danger-subtle border border-danger/30 flex items-center justify-center text-danger">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="font-headline font-bold text-2xl text-text-primary">
+              Unable to Load Reference Solution
+            </h1>
+            <p className="text-sm text-text-secondary leading-relaxed">
+              {errorMsg || 'The solution payload could not be loaded for this problem right now.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => void loadSolutionData()}
+              icon={<Unlock className="w-4 h-4" />}
+            >
+              Retry Loading Solution
+            </Button>
             <Button
               variant="secondary"
               size="lg"

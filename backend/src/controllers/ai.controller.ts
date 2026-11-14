@@ -66,20 +66,33 @@ export class AiController {
 
   static async getGuidance(req: Request, res: Response): Promise<void> {
     try {
-      const { problemId, userCode, verdict, executionResult, hintLevel, isSolved } = req.body;
+      const {
+        problemId,
+        userCode,
+        verdict,
+        executionResult,
+        hintLevel,
+        isSolved,
+        userQuestion,
+        requestMode,
+      } = req.body;
       const numericId = parseInt(problemId, 10);
       const def =
         DSA_500_PROBLEMS.find((p) => p.id === numericId) ||
         SQL_100_PROBLEMS.find((p) => p.id === numericId);
 
       const feedback = await AiTeacherService.getFeedback({
-        problemId: def ? def.id : parseInt(problemId, 10),
-        problemTitle: def ? def.title : 'Problem',
+        problemId: def ? def.id : numericId,
+        problemTitle: def ? def.title : `Problem #${numericId}`,
         problemStatement: def ? def.statement : '',
+        functionSignature: def?.functionSignature,
+        constraints: def?.constraints,
         userCode: userCode || '',
         verdict,
         executionResult,
         hintLevel: hintLevel ? parseInt(hintLevel, 10) : 1,
+        requestMode,
+        userQuestion: typeof userQuestion === 'string' ? userQuestion.slice(0, 500) : undefined,
         isSolved: Boolean(isSolved),
         topic: def?.topic,
         pattern: def?.pattern,

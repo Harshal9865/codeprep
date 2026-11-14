@@ -4,10 +4,11 @@ import { ProblemHeader } from '../components/workspace/ProblemHeader';
 import { ProblemSpecPane } from '../components/workspace/ProblemSpecPane';
 import { EditorPane } from '../components/workspace/EditorPane';
 import { TestRunnerPane } from '../components/workspace/TestRunnerPane';
-import { HintsDrawer } from '../components/workspace/HintsDrawer';
+import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
 import { PerformanceCurveModal } from '../components/workspace/PerformanceCurveModal';
 import { Activity, BookOpen, Lightbulb, Flame, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../services/api';
+import { requestStudyGuidance } from '../services/studyGuidance';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 
 interface ProblemWorkspacePageProps {
@@ -34,6 +35,8 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
 
   // Separate Hints & Diagnostics pane state
   const [teacherGuidance, setTeacherGuidance] = useState<string>('');
+  const [teacherAnalysis, setTeacherAnalysis] = useState<MethodAnalysisData | null>(null);
+  const [teacherProvider, setTeacherProvider] = useState<'gemini' | 'local' | undefined>(undefined);
   const [isTeacherLoading, setIsTeacherLoading] = useState<boolean>(false);
   const [isHintsOpen, setIsHintsOpen] = useState<boolean>(false);
   const [hasUnreadGuidance, setHasUnreadGuidance] = useState<boolean>(false);
@@ -129,6 +132,8 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       setSaveStatus('saved');
       setExecutionResult(null);
       setTeacherGuidance('');
+      setTeacherAnalysis(null);
+      setTeacherProvider(undefined);
       setHasUnreadGuidance(false);
 
       const potd = dashRes?.analytics?.potd;
@@ -180,27 +185,34 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     setSaveStatus(newCode === savedCodeRef.current ? 'saved' : 'dirty');
   };
 
-  const requestTeacherFeedback = async (verdict?: string, result?: ExecutionResult, hintLevel = 1) => {
+  const requestTeacherFeedback = async (options?: {
+    verdict?: string;
+    result?: ExecutionResult;
+    hintLevel?: number;
+    requestMode?: 'analyze' | 'hint' | 'coach' | 'optimizer';
+    userQuestion?: string;
+  }) => {
     if (!problem) return;
     setIsTeacherLoading(true);
     try {
-      const res = await apiRequest<{ feedback: { message: string } }>('/study/guidance', {
-        method: 'POST',
-        body: JSON.stringify({
-          problemId: problem.id,
-          userCode: code,
-          verdict,
-          executionResult: result,
-          hintLevel,
-          isSolved: problem.isSolved || result?.verdict === 'Accepted',
-        }),
+      const feedback = await requestStudyGuidance({
+        problemId: problem.id,
+        userCode: code,
+        verdict: options?.verdict,
+        executionResult: options?.result,
+        hintLevel: options?.hintLevel ?? 1,
+        isSolved: problem.isSolved || options?.result?.verdict === 'Accepted',
+        requestMode: options?.requestMode,
+        userQuestion: options?.userQuestion,
       });
-      setTeacherGuidance(res.feedback.message);
+      setTeacherGuidance(feedback.message);
+      setTeacherAnalysis(feedback.analysis ?? null);
+      setTeacherProvider(feedback.provider);
       if (!isHintsOpen) {
         setHasUnreadGuidance(true);
       }
     } catch {
-      setTeacherGuidance('Use the progressive hint buttons below to inspect intuition and edge cases.');
+      setTeacherGuidance('Use "Analyze My Method" or the progressive hint buttons below to inspect edge cases.');
     } finally {
       setIsTeacherLoading(false);
     }
@@ -230,7 +242,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         }),
       });
       setExecutionResult(res.result);
-      requestTeacherFeedback(res.result.verdict, res.result);
+      requestTeacherFeedback({ verdict: res.result.verdict, result: res.result });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Run failed');
     } finally {
@@ -288,7 +300,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         }
       }
 
-      requestTeacherFeedback(res.result.verdict, res.result);
+      requestTeacherFeedback({ verdict: res.result.verdict, result: res.result });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Submission failed');
     } finally {
@@ -378,10 +390,10 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
                   ? 'bg-primary text-black border-primary shadow-sm'
                   : 'bg-primary-subtle hover:bg-primary/20 text-primary border-primary/35'
               }`}
-              title="Toggle Hints & Diagnostics Pane"
+              title="Toggle AI Code Coach & Method Diagnostics"
             >
               <Lightbulb className="w-3.5 h-3.5" />
-              <span>Hints</span>
+              <span>AI Coach</span>
               {hasUnreadGuidance && !isHintsOpen && (
                 <span className="h-2 w-2 rounded-full bg-success animate-ping" />
               )}
@@ -438,8 +450,26 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
           isOpen={isHintsOpen}
           onClose={() => setIsHintsOpen(false)}
           guidanceMessage={teacherGuidance}
+          analysis={teacherAnalysis}
+          provider={teacherProvider}
           isSolved={Boolean(problem.isSolved)}
-          onRequestHint={(lvl) => requestTeacherFeedback(undefined, undefined, lvl)}
+          category="DSA"
+          onAnalyzeMethod={(question) =>
+            requestTeacherFeedback({
+              requestMode: 'analyze',
+              userQuestion: question,
+              verdict: executionResult?.verdict,
+              result: executionResult ?? undefined,
+            })
+          }
+          onRequestHint={(lvl) =>
+            requestTeacherFeedback({
+              hintLevel: lvl,
+              requestMode: 'hint',
+              verdict: executionResult?.verdict,
+              result: executionResult ?? undefined,
+            })
+          }
           isLoading={isTeacherLoading}
         />
       </div>
