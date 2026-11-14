@@ -2,11 +2,26 @@
 
 Built by **Harshal Patel** (B.Tech ICT, Dhirubhai Ambani University).
 
-CodePrep is a local-first, LeetCode-style interview preparation workbench engineered to practice algorithms, relational SQL queries, and aptitude assessments in one unified interface.
+CodePrep is a full-stack, container-ready, LeetCode-style interview preparation workbench engineered to practice C++ algorithms, C++ Object-Oriented Design, relational SQL queries, and aptitude assessments in one unified workspace.
 
-- **Primary Focus**: 500 C++ Data Structures & Algorithms problems across 18 core patterns.
-- **Secondary Focus**: 100 SQL problems spanning joins, aggregations, window functions, and CTEs.
-- **Study Workflow**: Active-time timer locks, deterministic hints drawer, and step-by-step trace visualizers.
+- **Primary Focus**: **2,500 C++ Data Structures & Algorithms** problems across classic patterns, high-frequency sheets, and logic-building drills.
+- **OOPs Workbench**: **100 C++ OOP Design** coding problems (`#631`–`#730`) paired with a structured **OOPs Study & MCQ Hub** (`/oops`).
+- **SQL Query Lab**: **400 SQL Sandbox** problems spanning joins, aggregations, window functions, CTEs, gaps & islands, and retention analytics.
+- **Total Practice Bank**: **3,000 Executable Coding & SQL Problems** + curated Aptitude & OOPs MCQ drills, truthful code-grounded AI coaching, and Render persistent storage (`/data`).
+
+---
+
+## Engineering & Architecture Documentation
+
+Built with full SDLC traceability for engineering reviews and technical interviews:
+
+| Document | Audience & What It Covers |
+| :--- | :--- |
+| [**Requirements & Product Spec (`docs/REQUIREMENTS.md`)**](docs/REQUIREMENTS.md) | User personas, functional requirements (`FR-01`..`FR-07`), non-functional constraints, Render disk budget, and acceptance criteria. |
+| [**Database Architecture & Schema (`docs/DATABASE_SCHEMA.md`)**](docs/DATABASE_SCHEMA.md) | ER diagram, all 9 Prisma models (`User`, `Problem`, `UserProblemState`, `Submission`, etc.), WAL tuning, startup DDL bootstrap, and JSON backups. |
+| [**Multi-Role Team Report (`docs/TEAM_PERSPECTIVES_REPORT.md`)**](docs/TEAM_PERSPECTIVES_REPORT.md) | Findings from Product, DB/Backend, Compiler/Judge, AI/Learning, Frontend/UX, and QA/DevOps lenses + transparent AI-tooling ownership statement. |
+| [**Architecture Decision Log (`DECISIONS.md`)**](DECISIONS.md) | 17 ADRs explaining key tradeoffs (`.gch` headers, UUID anti-spoofing, SQLite WAL, `CodeAnalyzerService`, multi-user isolation). |
+| [**Build & Delivery Log (`PROGRESS.md`)**](PROGRESS.md) | Phase-by-phase engineering history and verification coverage. |
 
 ---
 
@@ -44,8 +59,8 @@ CodePrep is designed as a self-hosted web application with clean separation of c
 
 2. **Backend**:
    - Node.js with Express and TypeScript.
-   - Prisma ORM managing an embedded SQLite database (`dev.db`).
-   - Single-user ownership model with bcrypt password hashing (12 rounds).
+   - Prisma ORM managing embedded SQLite WAL (`/data/codeprep.db` in production, `dev.db` locally) with `UserProblemState` isolation.
+   - Multi-user authentication (`MAX_USERS = 100`) + 1-click **Guest Demo** with bcrypt password hashing (12 rounds).
    - Dual-token session management: short-lived access tokens (15m) and rolling refresh tokens (30 days) stored in httpOnly cookies.
 
 3. **Code Execution Sandbox (C++)**:
@@ -125,17 +140,18 @@ npm run dev
 
 #### Step 3: Access the Application
 - Open `http://localhost:5173` in your browser.
-- Register your single owner account to lock the instance.
+- Sign in with your seeded owner credentials, register a personal account, or click **Guest Demo** to explore immediately.
 
 ---
 
-## 4. Single-User Account & Security Model
+## 4. Multi-User Account Isolation, Guest Demo & Security Model
 
-CodePrep is your private personal prep environment:
+CodePrep isolates each user's progress cleanly while staying lightweight to self-host:
 
-1. **Initial Registration**:
-   - The first visitor to the platform sees the "Initialize Instance" screen and registers the master owner account.
-   - Once registered, the database closes registration permanently. Any subsequent attempt to register returns `HTTP 403 Forbidden`.
+1. **Owner Bootstrap & Multi-User Capacity (`MAX_USERS = 100`)**:
+   - Configure `OWNER_EMAIL`, `OWNER_PASSWORD`, and `OWNER_NAME` in environment variables so the primary owner account is ready on first boot.
+   - Additional learners and reviewers can register personal accounts (up to `MAX_USERS = 100`), with isolated `UserProblemState`, drafts, active timers, streaks, notes, and submissions.
+   - **Interviewer Guest Demo**: Visitors opening a deployed Render link can inspect the full IDE, compiler, SQL lab, OOPs hub, and AI Coach in one click via Guest Demo.
 
 2. **Master Passphrase Reset**:
    - Because CodePrep runs privately without third-party email providers (like SendGrid or AWS SES), there is no email reset link.
@@ -226,35 +242,15 @@ node scripts/restore-db.js
 
 ---
 
-## 7. Curriculum Breakdown (600 Total Questions)
+## 7. Curriculum Breakdown (3,000 Executable Problems + Study/MCQ Tracks)
 
-| Curriculum | Topic / Pattern | Question Count | Target Difficulties |
+| Curriculum | Topic / Scope | Count | Coverage Details |
 | :--- | :--- | :--- | :--- |
-| **C++ DSA** | Arrays and Hashing | 50 | 12 Easy / 30 Med / 8 Hard |
-| **C++ DSA** | Two Pointers | 30 | 8 Easy / 18 Med / 4 Hard |
-| **C++ DSA** | Sliding Window | 25 | 6 Easy / 15 Med / 4 Hard |
-| **C++ DSA** | Strings | 30 | 8 Easy / 18 Med / 4 Hard |
-| **C++ DSA** | Linked List | 30 | 8 Easy / 18 Med / 4 Hard |
-| **C++ DSA** | Stack & Queue | 30 | 8 Easy / 18 Med / 4 Hard |
-| **C++ DSA** | Binary Search | 30 | 8 Easy / 18 Med / 4 Hard |
-| **C++ DSA** | Trees (Binary Trees) | 40 | 10 Easy / 24 Med / 6 Hard |
-| **C++ DSA** | Binary Search Tree (BST) | 10 | 3 Easy / 6 Med / 1 Hard |
-| **C++ DSA** | Heap / Priority Queue | 20 | 5 Easy / 12 Med / 3 Hard |
-| **C++ DSA** | Graphs (BFS, DFS, Dijkstra, Topo) | 45 | 11 Easy / 27 Med / 7 Hard |
-| **C++ DSA** | Backtracking | 25 | 6 Easy / 15 Med / 4 Hard |
-| **C++ DSA** | Dynamic Programming | 60 | 15 Easy / 36 Med / 9 Hard |
-| **C++ DSA** | Greedy | 25 | 6 Easy / 15 Med / 4 Hard |
-| **C++ DSA** | Intervals | 10 | 3 Easy / 6 Med / 1 Hard |
-| **C++ DSA** | Bit Manipulation | 15 | 4 Easy / 9 Med / 2 Hard |
-| **C++ DSA** | Math & Geometry | 15 | 4 Easy / 9 Med / 2 Hard |
-| **C++ DSA** | Tries | 10 | 3 Easy / 6 Med / 1 Hard |
-| **SQL Sandbox** | Aggregations & Joins | 25 | 10 Very Easy / 15 Easy |
-| **SQL Sandbox** | Window Functions (ROW_NUMBER, DENSE_RANK) | 30 | 30 Medium |
-| **SQL Sandbox** | Common Table Expressions (CTEs) | 20 | 20 Medium |
-| **SQL Sandbox** | Gaps & Islands | 15 | 10 Medium / 5 Hard |
-| **SQL Sandbox** | Advanced Analytics & Retention | 10 | 10 Hard |
-| **Aptitude** | Quantitative, Logical & Verbal MCQs | Curated | Easy / Med / Hard |
-| **TOTAL** | **Full System Scope** | **600 Questions** | **150 Easy / 360 Med / 90 Hard** |
+| **C++ DSA** | Arrays, Two Pointers, Sliding Window, Strings, Linked Lists, Stacks/Queues, Binary Search, Trees, BST, Heaps, Graphs, Backtracking, DP, Greedy, Intervals, Bitwise, Math, Tries | **2,500** | Curated Blind 75 / NeetCode 150 / GFG SDE classics (`DSA_BATCH_1..10`, `famousCurriculum`), logic-building Easy drills (`dsa_logic_easy`), and extended algorithmic problems (`dsaExtended2000`). |
+| **C++ OOP Design** | Encapsulation, Constructors & RAII, Inheritance & Polymorphism, Operator Overloading, Design Patterns | **100** | Problems `#631`–`#730` (`category: 'OOP'`), executable via the C++17 harness runner. |
+| **SQL Sandbox** | Joins, Aggregations, Window Functions, CTEs, Gaps & Islands, Retention Analytics | **400** | `SQL_BATCH_1..3` + `SQL_EXTENDED_300` executed inside isolated read-only SQLite contexts. |
+| **Study & MCQ Hubs** | OOPs Theory & MCQs (`/oops`), Quant/Logical/Verbal Aptitude (`/aptitude`), Mock Interview Simulator (`/interview-prep`) | **Included** | Interactive revision notes, timed drills, and code-grounded diagnostics. |
+| **TOTAL EXECUTABLE BANK** | **Unified C++17 & SQLite Workbench** | **3,000 Problems** | Server-paginated (`ProblemService` metadata cache + seeded shuffle). |
 
 ---
 

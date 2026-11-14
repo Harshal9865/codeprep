@@ -140,3 +140,12 @@ Author: Harshal Patel (B.Tech ICT, Dhirubhai Ambani University)
   - `LeetCodeRecentSubmissions.tsx`: Tabbed submissions history (Recent AC, List, Solutions, Discuss) with relative timestamps.
   - `ActivityHeatmap.tsx`: 52-week submission calendar with borderless cells, 4-step green levels, dynamic month labels, and streak metrics.
   - `ProblemListPage.tsx`: Pill category buttons (`All Topics`, `Algorithms`, `Blind 75`, `NeetCode 150`, `GFG SDE Sheet`), topic count chips, search bar with circular progress, and borderless table with pure colored text difficulties.
+
+---
+
+## Phase 8: OOPs Track, Truthful AI Coach & Render Persistent Multi-User Scaling (Completed)
+- [x] Expanded platform curriculum from 600 to **3,000 total problems**: **2,500 DSA** (including logic-building foundations + extended algorithmic problems), **400 SQL Sandbox** queries, and **100 OOPs C++ Design** problems (`#631`–`#730`), plus a dedicated `/oops` OOPs Study & MCQ Hub.
+- [x] Added server-side pagination, metadata caching (`catalogMetaCache`), and seeded shuffling (`shuffleSeed`) in `ProblemService` for instant rendering at 3,000+ records.
+- [x] Engineered `CodeAnalyzerService` + `StudyGuideService` grounding to attach live compiler errors, failed test cases, and AST loop/stub diagnostics so AI Coach never hallucinates praise on failing code.
+- [x] Added multi-user isolation (`UserProblemState`, `MAX_USERS = 100`), 1-click **Guest Demo** login for technical interviewers, timezone-aware daily streak animation, and `/data` persistent disk colocation (`codeprep.db` + `/data/uploads`) for Render deploys.
+- [x] Added complete SDLC & architectural documentation suite (`docs/REQUIREMENTS.md`, `docs/DATABASE_SCHEMA.md`, `docs/TEAM_PERSPECTIVES_REPORT.md`) and interactive **"How I Planned & Built CodePrep"** section in `/about`.

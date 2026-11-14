@@ -78,4 +78,27 @@ Author: Harshal Patel (B.Tech ICT, Dhirubhai Ambani University)
   - The platform is designed as a personal, single-user interview preparation workbench. Requiring external database services (e.g. running a separate PostgreSQL or MySQL daemon) creates unnecessary installation friction, port conflicts, and background service overhead.
   - SQLite runs completely in-process inside Node.js with zero configuration and zero external background processes.
   - To eliminate database path divergence between the Prisma CLI (`prisma/dev.db`) and runtime working directory (`./dev.db`), `prisma.service.ts` dynamically resolves and synchronizes the active SQLite database file.
-  - The login interface provides an instant 1-Click login (`admin@codeprep.dev` / `Password123!`), auto-seeds the owner account if empty, and offers an explicit toggle between Sign In and Account Creation.
+  - The login interface supports standard email/password authentication, account registration (capped at `MAX_USERS = 100`), owner seeding via `OWNER_EMAIL` / `OWNER_PASSWORD` / `OWNER_NAME`, and a 1-click Guest Demo for interviewers.
+
+---
+
+## 14. Scaling from 600 to 3,000 Problems Without UI or DB Degradation
+- **Decision**: Implemented an in-memory catalog metadata cache (`catalogMetaCache`) in `ProblemService`, server-side filtering + deterministic seeded shuffling (`shuffleSeed`), paginated API responses, and chunked seeding (`CHUNK_SIZE = 50`).
+- **Reasoning**:
+  - Loading 3,000 full problem statements and test harnesses on list routes would bloat memory and serialize multi-megabyte JSON responses.
+  - Chunking inserts into batches of 50 respects SQLite bind limits while keeping startup `/health` probes non-blocking (`app.listen()` runs before background seeding).
+
+## 15. Dedicated OOPs Track (100 C++ Problems + Study & MCQ Hub)
+- **Decision**: Assigned IDs `#631`–`#730` (`category: 'OOP'`) in `backend/src/data/oop100.ts` spanning 5 core pillars (Encapsulation, Constructors & RAII, Inheritance & Polymorphism, Operator Overloading, and Design Patterns), paired with a dedicated `/oops` study/MCQ workbench in the navbar beside SQL.
+- **Reasoning**:
+  - OOP rounds test both conceptual clarity (vtables, virtual destructors, slicing, SOLID) and actual C++ class implementation—unifying study guides, MCQs, and compiled C++ harness verification solves both.
+
+## 16. Truthful AI Code Coaching via `CodeAnalyzerService` Grounding
+- **Decision**: Coupled `StudyGuideService` (`aiTeacher.service.ts`) with a deterministic static analyzer (`CodeAnalyzerService`) and live `Submission` context (`verdict`, `failedTestCase`, `stderr`) prior to invoking Gemini (`gemini-2.5-flash`).
+- **Reasoning**:
+  - Unconstrained LLM coaching can falsely praise broken or stubbed submissions (e.g., calling empty functions `O(1)`). Inspecting syntax risks, nested loop complexity, stub returns, and actual failing assertions first guarantees honest, code-specific feedback even when running locally offline.
+
+## 17. Multi-User Isolation, Guest Demo & Persistent `/data` Deployment
+- **Decision**: Added `UserProblemState` (composite `(problemId, userId)` key) for per-user bookmarks, notes, and AI solution state, configurable `MAX_USERS = 100`, 1-click Guest Demo access for interviewers, and `/data/codeprep.db` + `/data/uploads` persistent disk colocation on Render.
+- **Reasoning**:
+  - Allows interviewers to inspect a live Render link cleanly while protecting the owner's streak, submissions, notes, and uploaded profile photo across container redeploys.
