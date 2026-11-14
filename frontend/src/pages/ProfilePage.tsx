@@ -467,8 +467,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
         <CodePrepLoader
           variant="section"
           className="flex-1 min-h-[420px]"
-          label="Loading Developer Profile"
-          sublabel="Fetching telemetry, pixel characters & saved preferences..."
+          label="Loading Profile"
+          sublabel="Loading profile settings and saved preferences..."
         />
       </AppLayout>
     );
@@ -497,14 +497,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
           </div>
         )}
 
-        {/* 1. Developer Hero Banner + Live Telemetry */}
+        {/* 1. Developer Hero Banner */}
         <section className="relative overflow-hidden rounded-2xl border border-border-subtle bg-surface p-6 shadow-sm">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -top-20 -right-20 h-56 w-56 rounded-full blur-3xl opacity-10"
-            style={{ backgroundColor: 'var(--border-active)' }}
-          />
-
           <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             {/* Avatar & Identity */}
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
@@ -554,15 +548,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                   <h1 className="text-xl sm:text-2xl font-bold text-text-primary tracking-tight">
                     {profile?.displayName || 'Harshal Patel'}
                   </h1>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-success-subtle text-success text-[11px] font-mono font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                    Active Workspace
-                  </span>
-                  {profile?.avatarUrl && !profile.avatarUrl.startsWith('pixel:') && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-subtle text-primary text-[10px] font-mono font-semibold">
-                      Custom Photo
-                    </span>
-                  )}
                 </div>
                 <div className="text-xs font-mono text-text-secondary">{profile?.email}</div>
                 <div className="text-xs font-mono text-primary">
@@ -1080,7 +1065,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
               </p>
               {localSnapshotMeta && (
                 <div className="p-2.5 rounded-xl bg-surface-subtle border border-border-subtle text-[11px] font-mono text-text-muted space-y-0.5">
-                  <div className="text-text-secondary font-semibold">Auto-Snapshot Ready</div>
+                  <div className="text-text-secondary font-semibold">Saved Browser Backup</div>
                   <div>
                     {localSnapshotMeta.acceptedSubmissions} solved • {localSnapshotMeta.totalSubmissions} submissions • {localSnapshotMeta.draftsCount} drafts
                   </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, CalendarCheck2, Clock, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { Flame, CalendarCheck2, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { PotdSummary, usePotdCountdown } from '../../types/potd';
 
 interface PotdBannerCardProps {
@@ -32,15 +32,6 @@ export const PotdBannerCard: React.FC<PotdBannerCardProps> = ({
           : 'bg-surface border-primary/35'
       }`}
     >
-      {/* Subtle ambient corner glow */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-16 -right-16 h-44 w-44 rounded-full blur-3xl opacity-15"
-        style={{
-          backgroundColor: potd.solvedToday ? '#2cbb5d' : 'var(--border-active)',
-        }}
-      />
-
       <div className="relative flex flex-col xl:flex-row xl:items-center justify-between gap-5">
         {/* Left: POTD Identity & Metadata */}
         <div className="space-y-2.5 min-w-0 flex-1">
@@ -62,8 +53,7 @@ export const PotdBannerCard: React.FC<PotdBannerCardProps> = ({
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-warning-subtle text-warning text-[11px] font-mono font-semibold">
-                <Sparkles className="w-3 h-3" />
-                <span>Solve to reach {targetNextStreak}d streak</span>
+                <span>Solve for {targetNextStreak}d streak</span>
               </span>
             )}
           </div>

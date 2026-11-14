@@ -11,12 +11,10 @@ import {
   generateOopMcqBatch,
 } from '../data/oopsCurriculum';
 import {
-  Boxes,
   BookOpen,
   Code2,
   CheckCircle2,
   XCircle,
-  Sparkles,
   Search,
   ChevronRight,
   ChevronLeft,
@@ -230,13 +228,8 @@ function renderQuestionContent(question: string): React.ReactNode {
             className="rounded-xl border border-border-subtle overflow-hidden bg-canvas shadow-inner"
           >
             <div className="px-3.5 py-1.5 bg-surface-elevated/80 border-b border-border-subtle flex items-center justify-between text-[10px] font-mono text-text-muted">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-danger/70" />
-                <span className="w-2 h-2 rounded-full bg-warning/70" />
-                <span className="w-2 h-2 rounded-full bg-success/70" />
-                <span className="ml-1 text-text-secondary">trace_snippet.cpp</span>
-              </div>
-              <span className="uppercase tracking-wider text-primary/80">C++17 Trace</span>
+              <span className="text-text-secondary">trace_snippet.cpp</span>
+              <span className="uppercase tracking-wider text-text-muted">C++17</span>
             </div>
             <div className="p-3.5 text-xs leading-relaxed overflow-x-auto">
               <HighlightedCode code={seg.content} language="cpp" className="text-xs leading-5" />
@@ -728,28 +721,20 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
   return (
     <AppLayout currentTab="oops" onTabChange={onTabChange}>
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* COMMAND HERO BANNER */}
+        {/* HERO BANNER */}
         <div className="rounded-2xl bg-surface border border-border-subtle p-5 sm:p-6 shadow-sm">
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-            <div className="space-y-2.5 max-w-3xl">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs font-mono font-semibold inline-flex items-center gap-1.5">
-                  <Boxes className="w-3.5 h-3.5 text-purple-400" />
-                  OOPs &amp; Low-Level C++17 Engineering Hub
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-[11px] font-mono text-text-secondary">
-                  IDs #631–#730 • 5 Core Pillars
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-success-subtle text-success text-[11px] font-mono font-semibold">
+            <div className="space-y-2 max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="font-bold text-2xl sm:text-3xl text-text-primary tracking-tight">
+                  Object-Oriented Design &amp; C++17 LLD
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-xs font-mono text-text-secondary">
                   {oopSolved} / {oopTotal} Solved
                 </span>
               </div>
-
-              <h1 className="font-bold text-2xl sm:text-3xl text-text-primary tracking-tight">
-                Object-Oriented Design, Memory Lifecycles &amp; LLD Lab
-              </h1>
               <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
-                Practice 100 executable C++17 class-design problems, inspect 64-bit VTable &amp; RAII memory blueprints across 8 interactive modules, and drill company-tagged placement MCQs.
+                Practice 100 executable C++17 class-design problems (#631–#730), inspect 64-bit VTable &amp; RAII memory layouts across 8 study modules, and drill placement MCQs.
               </p>
 
               <div className="flex flex-wrap items-center gap-2.5 pt-1">
@@ -882,7 +867,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               </div>
               <div>
                 <div className="text-sm font-bold text-text-primary flex items-center gap-2">
-                  <span>1. OOPs Coding Lab</span>
+                  <span>OOPs Coding Lab</span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-high text-text-secondary">
                     {oopTotal} Problems
                   </span>
@@ -918,7 +903,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               </div>
               <div>
                 <div className="text-sm font-bold text-text-primary flex items-center gap-2">
-                  <span>2. Study &amp; LLD Blueprints</span>
+                  <span>Study &amp; LLD Blueprints</span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-high text-text-secondary">
                     {OOPS_STUDY_MODULES.length} Modules
                   </span>
@@ -952,11 +937,11 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                     : 'bg-amber-500/15 text-amber-400'
                 }`}
               >
-                <Sparkles className="w-5 h-5" />
+                <Target className="w-5 h-5" />
               </div>
               <div>
                 <div className="text-sm font-bold text-text-primary flex items-center gap-2">
-                  <span>3. Placement MCQ Arena</span>
+                  <span>Placement MCQ Arena</span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-high text-text-secondary">
                     100+ Drills
                   </span>
@@ -1415,26 +1400,16 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
-                    Canonical Production C++17 Implementation
+                    C++17 Implementation Reference
                   </h3>
-                  <span className="text-[11px] font-mono text-text-muted">
-                    Zero-Overhead • Exception-Safe
-                  </span>
                 </div>
 
                 <div className="rounded-2xl border border-border-subtle overflow-hidden bg-canvas shadow-sm">
                   {/* Window Titlebar */}
                   <div className="px-4 py-2.5 bg-surface-elevated border-b border-border-subtle flex items-center justify-between text-xs font-mono">
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-danger/70" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-warning/70" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-success/70" />
-                      </span>
-                      <span className="ml-1.5 text-text-secondary font-medium">
-                        {MODULE_FILENAMES[activeModule.id] || 'pattern.cpp'}
-                      </span>
-                    </div>
+                    <span className="text-text-secondary font-medium">
+                      {MODULE_FILENAMES[activeModule.id] || 'pattern.cpp'}
+                    </span>
 
                     <div className="flex items-center gap-2">
                       <span className="px-2 py-0.5 rounded bg-surface-high text-[10px] text-text-muted">

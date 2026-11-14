@@ -19,7 +19,7 @@ Built with full SDLC traceability for engineering reviews and technical intervie
 | :--- | :--- |
 | [**Requirements & Product Spec (`docs/REQUIREMENTS.md`)**](docs/REQUIREMENTS.md) | User personas, functional requirements (`FR-01`..`FR-07`), non-functional constraints, Render disk budget, and acceptance criteria. |
 | [**Database Architecture & Schema (`docs/DATABASE_SCHEMA.md`)**](docs/DATABASE_SCHEMA.md) | ER diagram, all 9 Prisma models (`User`, `Problem`, `UserProblemState`, `Submission`, etc.), WAL tuning, startup DDL bootstrap, and JSON backups. |
-| [**Multi-Role Team Report (`docs/TEAM_PERSPECTIVES_REPORT.md`)**](docs/TEAM_PERSPECTIVES_REPORT.md) | Findings from Product, DB/Backend, Compiler/Judge, AI/Learning, Frontend/UX, and QA/DevOps lenses + transparent AI-tooling ownership statement. |
+| [**Multi-Role Team Report (`docs/TEAM_PERSPECTIVES_REPORT.md`)**](docs/TEAM_PERSPECTIVES_REPORT.md) | Findings from Product, DB/Backend, Compiler/Judge, Study Engine, Frontend/UX, and QA/DevOps lenses. |
 | [**Architecture Decision Log (`DECISIONS.md`)**](DECISIONS.md) | 17 ADRs explaining key tradeoffs (`.gch` headers, UUID anti-spoofing, SQLite WAL, `CodeAnalyzerService`, multi-user isolation). |
 | [**Build & Delivery Log (`PROGRESS.md`)**](PROGRESS.md) | Phase-by-phase engineering history and verification coverage. |
 

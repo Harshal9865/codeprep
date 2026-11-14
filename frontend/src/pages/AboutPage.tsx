@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Terminal,
   Database,
@@ -202,7 +202,7 @@ const HowIBuiltSection: React.FC = () => {
     { id: 'journey', label: 'How I Built It', icon: <Wrench className="w-3.5 h-3.5" /> },
     { id: 'team', label: 'Team-Hat Reports', icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'schema', label: 'Database Design', icon: <Database className="w-3.5 h-3.5" /> },
-    { id: 'ownership', label: 'Planning & AI Context', icon: <GitBranch className="w-3.5 h-3.5" /> },
+    { id: 'ownership', label: 'Testing & Verification', icon: <GitBranch className="w-3.5 h-3.5" /> },
   ];
 
   return (
@@ -329,13 +329,13 @@ const HowIBuiltSection: React.FC = () => {
 
           <div className="rounded-lg bg-surface-subtle border border-border-subtle p-4 space-y-2.5">
             <h3 className="text-sm font-semibold text-text-primary">
-              How I Used AI Assistance Responsibly
+              End-to-End Verification &amp; Pre-Deploy Testing
             </h3>
             <p className="text-xs text-text-secondary leading-relaxed">
-              Just as engineering teams use AI pair-programmers in daily workflows, I used AI tools to accelerate repetitive tasks—expanding structured test-case pools toward 3,000 problems, drafting repetitive UI scaffolding, and cross-checking TypeScript interfaces.
+              Before deployment, the platform was verified across automated Node.js test suites covering C++ judge boundary markers, line-number remapping, SQL read-only guardrails, and 365-day activity calculations.
             </p>
             <p className="text-xs text-text-secondary leading-relaxed">
-              Every architectural tradeoff, security check (magic-byte file checks, UUID judge delimiters, SQL read-only enforcement), and bug fix was specified, reviewed, and integrated by me—and documented across GitHub in <span className="font-mono text-text-primary">docs/REQUIREMENTS.md</span>, <span className="font-mono text-text-primary">docs/DATABASE_SCHEMA.md</span>, <span className="font-mono text-text-primary">docs/TEAM_PERSPECTIVES_REPORT.md</span>, and <span className="font-mono text-text-primary">DECISIONS.md</span>.
+              Architectural tradeoffs, security checks (magic-byte file validation, UUID judge delimiters, SQL DDL blocking), and schema details are documented in <span className="font-mono text-text-primary">docs/REQUIREMENTS.md</span>, <span className="font-mono text-text-primary">docs/DATABASE_SCHEMA.md</span>, <span className="font-mono text-text-primary">docs/TEAM_PERSPECTIVES_REPORT.md</span>, and <span className="font-mono text-text-primary">DECISIONS.md</span>.
             </p>
           </div>
         </div>
@@ -346,21 +346,6 @@ const HowIBuiltSection: React.FC = () => {
 
 export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate }) => {
   const { user } = useAuth();
-  const [serverHealthy, setServerHealthy] = useState<'checking' | 'online' | 'offline'>('checking');
-
-  useEffect(() => {
-    let active = true;
-    fetch('/health')
-      .then((res) => {
-        if (active) setServerHealthy(res.ok ? 'online' : 'offline');
-      })
-      .catch(() => {
-        if (active) setServerHealthy('offline');
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const avatarPreset = resolvePixelAvatarPreset(user?.avatarUrl);
 
@@ -385,18 +370,6 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate }) => {
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-primary-subtle text-primary border border-primary/25">
                   <GraduationCap className="w-3.5 h-3.5" />
                   B.Tech ICT • Dhirubhai Ambani University
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-surface-elevated text-text-secondary border border-border-default">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      serverHealthy === 'online'
-                        ? 'bg-success'
-                        : serverHealthy === 'offline'
-                        ? 'bg-danger'
-                        : 'bg-warning'
-                    }`}
-                  />
-                  API {serverHealthy === 'online' ? 'Connected' : serverHealthy === 'offline' ? 'Unreachable' : 'Checking...'}
                 </span>
               </div>
 

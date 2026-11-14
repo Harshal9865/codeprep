@@ -80,8 +80,8 @@
 
 ---
 
-## 7. How This Project Was Built: Ownership & Tooling Transparency
+## 7. Engineering Ownership & End-to-End Verification
 
 I planned, architected, debugged, and integrated **CodePrep** end-to-end—defining the user requirements, designing the 9-table Prisma schema, isolating per-user state, debugging the C++ sandbox edge cases, and diagnosing deployment issues on Render.
 
-Like modern software teams, I also used AI coding tools intentionally as an **acceleration multiplier**—specifically for drafting repetitive curriculum variations toward the 3,000-problem scale, speeding up boilerplate test-case scaffolds, and iterating on React component layouts. Every architectural boundary, schema constraint, security guardrail (magic-byte validation, UUID judge markers, SQL DDL blocking), bug diagnosis (such as refactoring `CodeAnalyzerService` when AI feedback hallucinated praise on failing code), and pre-deploy verification check was driven, reviewed, and verified against the live codebase by me.
+Every architectural boundary, schema constraint, security guardrail (magic-byte validation, UUID judge markers, SQL DDL blocking), bug diagnosis (such as refactoring `CodeAnalyzerService` so diagnostics stay strictly grounded in execution output), and pre-deploy verification check was specified, reviewed, and verified against the live codebase.

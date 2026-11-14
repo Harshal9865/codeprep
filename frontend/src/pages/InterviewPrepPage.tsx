@@ -717,13 +717,9 @@ export const InterviewPrepPage: React.FC<InterviewPrepPageProps> = ({
 
         {/* Main Interview Kit Stage */}
         <main className="flex-1 min-w-0 w-full space-y-5">
-          {/* Top Telemetry Banner */}
+          {/* Top Header Banner */}
           <div className="bg-surface border border-border-subtle rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
             <div>
-              <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-primary uppercase tracking-wider mb-1">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Procedural + Technical Bank • New Question Every Time</span>
-              </div>
               <h1 className="text-xl font-bold text-text-primary tracking-tight">
                 {mode === 'mock'
                   ? 'Timed Technical Interview Mock Round'
@@ -778,7 +774,7 @@ export const InterviewPrepPage: React.FC<InterviewPrepPageProps> = ({
                           {acc}% acc
                         </span>
                       ) : (
-                        <span className="text-[11px] font-mono text-text-muted">Live Gen</span>
+                        <span className="text-[11px] font-mono text-text-muted">Practice →</span>
                       )}
                     </div>
                     <div>
@@ -1782,7 +1778,7 @@ export const InterviewPrepPage: React.FC<InterviewPrepPageProps> = ({
             <div className="space-y-6 animate-fade-up">
               <div className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-3 shadow-sm">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-primary" />
+                  <MessageSquare className="w-4 h-4 text-primary" />
                   <h2 className="text-sm font-semibold text-text-primary">
                     How to Recover Gracefully When Stuck Live (Exact Scripts)
                   </h2>

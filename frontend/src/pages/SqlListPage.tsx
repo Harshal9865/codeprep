@@ -120,18 +120,14 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
         {/* Database Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-sky-500/15 text-sky-400 text-xs font-mono font-medium">
-                SQLite Sandbox Active
-              </span>
-              <span className="text-xs text-text-muted">•</span>
-              <span className="text-xs text-success font-medium">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="font-bold text-2xl text-text-primary tracking-tight">
+                SQL Query Lab ({sqlTotal})
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-xs font-mono text-text-secondary">
                 {filteredSolvedCount} / {filteredTotal} Solved
               </span>
             </div>
-            <h1 className="font-bold text-2xl text-text-primary tracking-tight">
-              SQL Query Lab ({sqlTotal}) • Relational Curriculum
-            </h1>
             <p className="text-xs text-text-muted max-w-2xl leading-relaxed">
               Isolated relational database drills covering recursive CTEs, window functions (ROW_NUMBER, DENSE_RANK, LEAD/LAG), joins, cohort retention, and schema sandboxing.
             </p>

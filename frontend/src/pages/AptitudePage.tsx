@@ -18,7 +18,6 @@ import {
   Zap,
   Trophy,
   Play,
-  Sparkles,
   Boxes,
 } from 'lucide-react';
 import {
@@ -505,13 +504,9 @@ export const AptitudePage: React.FC<AptitudePageProps> = ({ onTabChange }) => {
 
         {/* Main Dynamic Aptitude Stage */}
         <main className="flex-1 min-w-0 w-full space-y-5">
-          {/* Top Telemetry Banner */}
+          {/* Top Header Banner */}
           <div className="bg-surface border border-border-subtle rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
             <div>
-              <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-primary uppercase tracking-wider mb-1">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Procedural Engine • New Question Every Time</span>
-              </div>
               <h1 className="text-xl font-bold text-text-primary tracking-tight">
                 {mode === 'mock'
                   ? 'Timed Placement Mock Round'
@@ -560,7 +555,7 @@ export const AptitudePage: React.FC<AptitudePageProps> = ({ onTabChange }) => {
                           {acc}% acc
                         </span>
                       ) : (
-                        <span className="text-[11px] font-mono text-text-muted">Live Gen</span>
+                        <span className="text-[11px] font-mono text-text-muted">Practice →</span>
                       )}
                     </div>
                     <div>

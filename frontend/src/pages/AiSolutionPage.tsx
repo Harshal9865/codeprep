@@ -319,17 +319,12 @@ export const AiSolutionPage: React.FC<AiSolutionPageProps> = ({
             return (
               <div className="rounded-2xl border border-border-subtle overflow-hidden code-window-card">
                 <div className="px-4 py-2.5 bg-surface-elevated/60 border-b border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-danger/60" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-warning/60" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-success/60" />
-                    </span>
-                    <span className="ml-1 text-text-secondary">
-                      {isSqlProblem ? 'solution.sql' : 'solution.cpp'}
-                    </span>
-                  </div>
-                  <span className="text-[10px] uppercase tracking-wider text-text-muted/80">Verified Reference</span>
+                  <span className="text-text-secondary">
+                    {isSqlProblem ? 'solution.sql' : 'solution.cpp'}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-text-muted/80">
+                    {isSqlProblem ? 'SQLite' : 'C++17'}
+                  </span>
                 </div>
                 <div className="p-5 font-mono text-[13px] overflow-x-auto bg-canvas/55">
                   <HighlightedCode

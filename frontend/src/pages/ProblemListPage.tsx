@@ -665,7 +665,6 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-elevated text-xs font-mono text-text-muted border border-border-subtle">
-                  <span className="w-2 h-2 rounded-full bg-success" />
                   <span>
                     <strong className="text-text-primary font-medium">
                       {meta.filteredSolvedCount}
