@@ -1,5 +1,5 @@
 import React from 'react';
-import { Code2, Database } from 'lucide-react';
+import { Code2, Database, Boxes } from 'lucide-react';
 
 interface TopicStat {
   topic: string;
@@ -14,6 +14,8 @@ interface LeetCodeSkillsPanelProps {
   dsaTotal: number;
   sqlSolved: number;
   sqlTotal: number;
+  oopSolved?: number;
+  oopTotal?: number;
   onSelectTopic?: (topic: string) => void;
   onNavigate?: (tab: string) => void;
 }
@@ -24,6 +26,8 @@ export const LeetCodeSkillsPanel: React.FC<LeetCodeSkillsPanelProps> = ({
   dsaTotal,
   sqlSolved,
   sqlTotal,
+  oopSolved = 0,
+  oopTotal = 100,
   onSelectTopic,
   onNavigate,
 }) => {
@@ -64,6 +68,20 @@ export const LeetCodeSkillsPanel: React.FC<LeetCodeSkillsPanelProps> = ({
             </div>
             <div className="text-text-muted font-mono">
               <strong className="text-text-primary">{sqlSolved}</strong> / {sqlTotal}
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigate?.('oops')}
+            className="w-full flex items-center justify-between text-xs py-2 px-2.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle transition-colors"
+          >
+            <div className="flex items-center gap-2 text-text-primary font-medium">
+              <Boxes className="w-3.5 h-3.5 text-purple-400" />
+              <span>OOPs C++ Design</span>
+            </div>
+            <div className="text-text-muted font-mono">
+              <strong className="text-text-primary">{oopSolved}</strong> / {oopTotal}
             </div>
           </button>
         </div>

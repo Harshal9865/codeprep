@@ -26,6 +26,7 @@ import {
   X,
   Flame,
   Sparkles,
+  Boxes,
 } from 'lucide-react';
 
 interface ProblemListPageProps {
@@ -40,19 +41,26 @@ interface ProblemListPageProps {
   initialSearchVersion?: number;
 }
 
-type CategoryTab = 'all' | 'algorithms' | 'logic-easy' | 'database' | 'blind75' | 'neetcode150' | 'gfg';
+type CategoryTab =
+  | 'all'
+  | 'algorithms'
+  | 'logic-easy'
+  | 'database'
+  | 'oop'
+  | 'blind75'
+  | 'neetcode150'
+  | 'gfg';
 
-function shuffleWithSeed<T>(items: T[], seed: number): T[] {
-  const copy = [...items];
-  let s = seed >>> 0 || 1;
-  for (let i = copy.length - 1; i > 0; i--) {
-    s = (Math.imul(1664525, s) + 1013904223) >>> 0;
-    const j = s % (i + 1);
-    const tmp = copy[i];
-    copy[i] = copy[j];
-    copy[j] = tmp;
-  }
-  return copy;
+interface CatalogMeta {
+  totalProblems: number;
+  dsaTotal: number;
+  sqlTotal: number;
+  oopTotal: number;
+  totalSolved: number;
+  filteredSolvedCount: number;
+  topicCounts: Record<string, number>;
+  prepCounts: Record<string, { total: number; solved: number }>;
+  randomMatchId: number | null;
 }
 
 export const ProblemListPage: React.FC<ProblemListPageProps> = ({
@@ -67,12 +75,27 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   initialSearchVersion = 0,
 }) => {
   const [problems, setProblems] = useState<Problem[]>([]);
+  const [filteredTotal, setFilteredTotal] = useState(3000);
+  const [meta, setMeta] = useState<CatalogMeta>({
+    totalProblems: 3000,
+    dsaTotal: 2500,
+    sqlTotal: 400,
+    oopTotal: 100,
+    totalSolved: 0,
+    filteredSolvedCount: 0,
+    topicCounts: {},
+    prepCounts: {},
+    randomMatchId: null,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearchQuery);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>(initialDifficultyFilter || 'All');
   const [selectedTopic, setSelectedTopic] = useState<string>(initialTopicFilter || 'All');
   const [selectedCategory, setSelectedCategory] = useState<CategoryTab>('all');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Solved' | 'Unsolved' | 'Bookmarked'>(initialStatusFilter);
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Solved' | 'Unsolved' | 'Bookmarked'>(
+    initialStatusFilter
+  );
   const [selectedPrepSetId, setSelectedPrepSetId] = useState<string | null>(initialPrepSetId);
   const [isTagsExpanded, setIsTagsExpanded] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -86,24 +109,42 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
   useEffect(() => {
     setSelectedPrepSetId(initialPrepSetId || null);
+    setCurrentPage(1);
   }, [initialPrepSetId]);
 
   useEffect(() => {
     setStatusFilter(initialStatusFilter || 'All');
+    setCurrentPage(1);
   }, [initialStatusFilter]);
 
   useEffect(() => {
     if (initialFilterVersion > 0) {
       setSelectedDifficulty(initialDifficultyFilter || 'All');
       setSelectedTopic(initialTopicFilter || 'All');
+      setCurrentPage(1);
     }
   }, [initialDifficultyFilter, initialTopicFilter, initialFilterVersion]);
 
   useEffect(() => {
     if (initialSearchVersion > 0) {
-      setSearchQuery(initialSearchQuery ?? '');
+      const nextQ = initialSearchQuery ?? '';
+      setSearchQuery(nextQ);
+      setDebouncedSearch(nextQ);
+      setCurrentPage(1);
     }
   }, [initialSearchQuery, initialSearchVersion]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch((prev) => {
+        if (prev !== searchQuery) {
+          setCurrentPage(1);
+        }
+        return searchQuery;
+      });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,21 +177,53 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
     };
   }, []);
 
-  // Fetch lightweight problem catalog ONCE on mount so typing/filtering is instant (0ms latency)
+  // Server-side pagination + filtering + seeded shuffle (30 rows per query for O(1) UI speed)
   const fetchProblems = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await apiRequest<{ problems: Problem[] }>('/problems?pageSize=2000');
+      const params = new URLSearchParams();
+      params.set('page', String(currentPage));
+      params.set('pageSize', String(PAGE_SIZE));
+      params.set('includeMeta', '1');
+
+      const track = selectedPrepSetId || (selectedCategory !== 'all' ? selectedCategory : '');
+      if (track) params.set('track', track);
+      if (selectedDifficulty !== 'All') params.set('difficulty', selectedDifficulty);
+      if (selectedTopic !== 'All') params.set('topic', selectedTopic);
+      if (statusFilter !== 'All') params.set('status', statusFilter.toLowerCase());
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
+      if (isShuffled) params.set('shuffleSeed', String(shuffleSeed));
+
+      const res = await apiRequest<{
+        problems: Problem[];
+        pagination?: { total: number; totalPages: number };
+        meta?: CatalogMeta;
+      }>(`/problems?${params.toString()}`);
+
       setProblems(res.problems || []);
+      setFilteredTotal(res.pagination?.total ?? (res.problems?.length || 0));
+      if (res.meta) {
+        setMeta(res.meta);
+      }
     } catch {
       setProblems([]);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [
+    currentPage,
+    selectedPrepSetId,
+    selectedCategory,
+    selectedDifficulty,
+    selectedTopic,
+    statusFilter,
+    debouncedSearch,
+    isShuffled,
+    shuffleSeed,
+  ]);
 
-    useEffect(() => {
-    fetchProblems();
+  useEffect(() => {
+    void fetchProblems();
     const handleProgressUpdated = () => {
       void fetchProblems();
     };
@@ -160,132 +233,38 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
     };
   }, [fetchProblems]);
 
-  const { topicCounts, uniqueTopics } = useMemo(() => {
-    const counts: Record<string, number> = {};
-    const topicsSet = new Set<string>();
-
-    for (const p of problems) {
-      if (p.topic) {
-        counts[p.topic] = (counts[p.topic] || 0) + 1;
-        topicsSet.add(p.topic);
-      }
-    }
-
-    const sortedTopics = Array.from(topicsSet).sort((a, b) => (counts[b] || 0) - (counts[a] || 0));
-    return { topicCounts: counts, uniqueTopics: sortedTopics };
-  }, [problems]);
+  const uniqueTopics = useMemo(() => {
+    return Object.keys(meta.topicCounts).sort(
+      (a, b) => (meta.topicCounts[b] || 0) - (meta.topicCounts[a] || 0)
+    );
+  }, [meta.topicCounts]);
 
   const activePrepSet = useMemo(
     () => INTERVIEW_PREP_SETS.find((s) => s.id === selectedPrepSetId) || null,
     [selectedPrepSetId]
   );
 
-  // Instant client-side filtering across search, difficulty, status, bookmarks, prep cards & topics
-  const filteredProblems = useMemo(() => {
-    let result = problems;
-
-    if (activePrepSet) {
-      result = result.filter((p) => activePrepSet.matchProblem(p));
-    }
-
-    if (selectedCategory === 'database') {
-      result = result.filter((p) => p.category === 'SQL');
-    } else if (selectedCategory === 'algorithms') {
-      result = result.filter((p) => p.category === 'DSA');
-    } else if (selectedCategory === 'logic-easy') {
-      result = result.filter((p) => p.topic === 'Logic Building' || p.id >= 601);
-    } else if (selectedCategory === 'blind75') {
-      result = result.filter((p) => p.id <= 75);
-    } else if (selectedCategory === 'neetcode150') {
-      result = result.filter((p) => p.id <= 150);
-    } else if (selectedCategory === 'gfg') {
-      result = result.filter((p) => p.id >= 100 && p.id <= 250);
-    }
-
-    if (selectedDifficulty !== 'All') {
-      result = result.filter((p) => p.difficulty === selectedDifficulty);
-    }
-
-    if (statusFilter === 'Solved') {
-      result = result.filter((p) => p.isSolved);
-    } else if (statusFilter === 'Unsolved') {
-      result = result.filter((p) => !p.isSolved);
-    } else if (statusFilter === 'Bookmarked') {
-      result = result.filter((p) => p.isBookmark);
-    }
-
-    if (selectedTopic !== 'All') {
-      result = result.filter(
-        (p) =>
-          p.topic.toLowerCase().includes(selectedTopic.toLowerCase()) ||
-          p.pattern.toLowerCase().includes(selectedTopic.toLowerCase())
-      );
-    }
-
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      result = result.filter(
-        (p) =>
-          p.title.toLowerCase().includes(q) ||
-          p.topic.toLowerCase().includes(q) ||
-          p.pattern.toLowerCase().includes(q) ||
-          String(p.id).includes(q)
-      );
-    }
-
-    if (isShuffled) {
-      result = shuffleWithSeed(result, shuffleSeed);
-    }
-
-    return result;
-  }, [
-    problems,
-    activePrepSet,
-    selectedCategory,
-    selectedDifficulty,
-    statusFilter,
-    selectedTopic,
-    searchQuery,
-    isShuffled,
-    shuffleSeed,
-  ]);
-
-  const filteredSolvedCount = filteredProblems.filter((p) => p.isSolved).length;
-  const totalSolvedAll = problems.filter((p) => p.isSolved).length;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    selectedPrepSetId,
-    selectedCategory,
-    selectedDifficulty,
-    statusFilter,
-    selectedTopic,
-    searchQuery,
-    isShuffled,
-    shuffleSeed,
-  ]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredProblems.length / PAGE_SIZE));
-  const safePage = Math.min(currentPage, totalPages);
-  const paginatedProblems = useMemo(() => {
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredProblems.slice(start, start + PAGE_SIZE);
-  }, [filteredProblems, safePage]);
-
   const handleShuffleList = () => {
     setIsShuffled(true);
     setShuffleSeed(Math.floor(Math.random() * 1_000_000_000) + 1);
+    setCurrentPage(1);
   };
 
   const handlePickRandom = () => {
-    if (filteredProblems.length === 0) return;
-    const randomProblem = filteredProblems[Math.floor(Math.random() * filteredProblems.length)];
-    onSelectProblem(randomProblem.id);
+    if (meta.randomMatchId) {
+      onSelectProblem(meta.randomMatchId);
+      return;
+    }
+    if (problems.length > 0) {
+      const randomProblem = problems[Math.floor(Math.random() * problems.length)];
+      onSelectProblem(randomProblem.id);
+    }
   };
 
-  const dsaTotal = problems.filter((p) => p.category === 'DSA').length || 530;
-  const sqlTotal = problems.filter((p) => p.category === 'SQL').length || 100;
+  const totalProblems = meta.totalProblems || 3000;
+  const dsaTotal = meta.dsaTotal || 2500;
+  const sqlTotal = meta.sqlTotal || 400;
+  const oopTotal = meta.oopTotal || 100;
 
   return (
     <AppLayout currentTab="dsa" onTabChange={onTabChange} currentStreak={currentStreak}>
@@ -294,15 +273,26 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
           {/* Left Sidebar */}
           <ProblemLeftSidebar
             activeTab={statusFilter === 'Bookmarked' ? 'favorites' : selectedCategory}
+            totalProblems={totalProblems}
+            sqlTotal={sqlTotal}
+            oopTotal={oopTotal}
             onSelectCategory={(cat) => {
               setSelectedPrepSetId(null);
+              setCurrentPage(1);
               if (cat === 'favorites') {
                 setSelectedCategory('all');
                 setSelectedTopic('All');
                 setStatusFilter('Bookmarked');
               } else {
                 setStatusFilter('All');
-                if (cat === 'all' || cat === 'blind75' || cat === 'neetcode150' || cat === 'gfg' || cat === 'database') {
+                if (
+                  cat === 'all' ||
+                  cat === 'blind75' ||
+                  cat === 'neetcode150' ||
+                  cat === 'gfg' ||
+                  cat === 'database' ||
+                  cat === 'oop'
+                ) {
                   setSelectedCategory(cat as CategoryTab);
                   setSelectedTopic('All');
                 } else if (cat === 'graphs') {
@@ -327,9 +317,11 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
             {/* Interview Prep Cards Strip */}
             <ProblemBannersRow
               problems={problems}
+              prepCounts={meta.prepCounts}
               selectedPrepSetId={selectedPrepSetId}
               onSelectPrepSet={(id) => {
                 setSelectedPrepSetId(id);
+                setCurrentPage(1);
                 if (id) {
                   setSelectedCategory('all');
                   setSelectedTopic('All');
@@ -347,7 +339,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                       {activePrepSet.badge}
                     </span>
                     <span className="text-xs font-mono text-text-muted">
-                      • {filteredSolvedCount}/{filteredProblems.length} Solved
+                      • {meta.filteredSolvedCount}/{filteredTotal} Solved
                     </span>
                   </div>
                   <h2 className="text-base font-bold text-text-primary">{activePrepSet.title}</h2>
@@ -355,7 +347,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedPrepSetId(null)}
+                  onClick={() => {
+                    setSelectedPrepSetId(null);
+                    setCurrentPage(1);
+                  }}
                   className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-medium text-text-primary flex items-center gap-1.5"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -373,24 +368,30 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               >
                 <button
                   type="button"
-                  onClick={() => setSelectedTopic('All')}
+                  onClick={() => {
+                    setSelectedTopic('All');
+                    setCurrentPage(1);
+                  }}
                   className={`px-3 py-1.5 rounded-full text-xs transition-colors shrink-0 border ${
                     selectedTopic === 'All'
                       ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
                       : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                   }`}
                 >
-                  All Topics ({problems.length})
+                  All Topics ({totalProblems})
                 </button>
 
                 {uniqueTopics.map((topicName) => {
                   const isActive = selectedTopic === topicName;
-                  const count = topicCounts[topicName] || 0;
+                  const count = meta.topicCounts[topicName] || 0;
                   return (
                     <button
                       key={topicName}
                       type="button"
-                      onClick={() => setSelectedTopic(isActive ? 'All' : topicName)}
+                      onClick={() => {
+                        setSelectedTopic(isActive ? 'All' : topicName);
+                        setCurrentPage(1);
+                      }}
                       className={`px-3 py-1.5 rounded-full text-xs transition-colors flex items-center gap-1.5 shrink-0 border ${
                         isActive
                           ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
@@ -433,6 +434,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 onClick={() => {
                   setSelectedCategory('all');
                   setStatusFilter('All');
+                  setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
                   selectedCategory === 'all' && statusFilter === 'All'
@@ -440,7 +442,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}
               >
-                <span>All {problems.length || 630}</span>
+                <span>All {totalProblems}</span>
               </button>
 
               <button
@@ -448,6 +450,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 onClick={() => {
                   setSelectedCategory('logic-easy');
                   setStatusFilter('All');
+                  setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
                   selectedCategory === 'logic-easy'
@@ -464,6 +467,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 onClick={() => {
                   setSelectedCategory('algorithms');
                   setStatusFilter('All');
+                  setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
                   selectedCategory === 'algorithms'
@@ -480,6 +484,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 onClick={() => {
                   setSelectedCategory('database');
                   setStatusFilter('All');
+                  setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
                   selectedCategory === 'database'
@@ -493,7 +498,27 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setStatusFilter((prev) => (prev === 'Bookmarked' ? 'All' : 'Bookmarked'))}
+                onClick={() => {
+                  setSelectedCategory('oop');
+                  setStatusFilter('All');
+                  setCurrentPage(1);
+                }}
+                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
+                  selectedCategory === 'oop'
+                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
+                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
+                }`}
+              >
+                <Boxes className="w-3.5 h-3.5 text-purple-400" />
+                <span>OOPs {oopTotal}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter((prev) => (prev === 'Bookmarked' ? 'All' : 'Bookmarked'));
+                  setCurrentPage(1);
+                }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
                   statusFilter === 'Bookmarked'
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
@@ -506,7 +531,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setSelectedCategory('neetcode150')}
+                onClick={() => {
+                  setSelectedCategory('neetcode150');
+                  setCurrentPage(1);
+                }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
                   selectedCategory === 'neetcode150'
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
@@ -519,7 +547,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setSelectedCategory('gfg')}
+                onClick={() => {
+                  setSelectedCategory('gfg');
+                  setCurrentPage(1);
+                }}
                 className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
                   selectedCategory === 'gfg'
                     ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
@@ -562,9 +593,11 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                     {potd.difficulty}
                   </span>
                 </div>
-                <span className={`text-xs font-mono font-semibold shrink-0 flex items-center gap-1 ${
-                  potd.solvedToday ? 'text-success' : 'text-primary'
-                }`}>
+                <span
+                  className={`text-xs font-mono font-semibold shrink-0 flex items-center gap-1 ${
+                    potd.solvedToday ? 'text-success' : 'text-primary'
+                  }`}
+                >
                   <span>{potd.solvedToday ? 'Solved ✓' : 'Solve'}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </span>
@@ -588,7 +621,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 <div className="hidden lg:flex items-center gap-1 bg-surface-elevated p-1 rounded-full text-xs border border-border-subtle">
                   {['All', 'Easy', 'Medium', 'Hard'].map((diff) => {
                     const isActive = selectedDifficulty === diff;
-                    let activeClass = 'bg-surface-high text-text-primary font-semibold border border-border-subtle';
+                    let activeClass =
+                      'bg-surface-high text-text-primary font-semibold border border-border-subtle';
                     if (diff === 'Easy' && isActive)
                       activeClass = 'bg-success-subtle text-success font-semibold';
                     if (diff === 'Medium' && isActive)
@@ -600,7 +634,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                       <button
                         key={diff}
                         type="button"
-                        onClick={() => setSelectedDifficulty(diff)}
+                        onClick={() => {
+                          setSelectedDifficulty(diff);
+                          setCurrentPage(1);
+                        }}
                         className={`px-3 py-1 rounded-full text-xs transition-colors ${
                           isActive ? activeClass : 'text-text-muted hover:text-text-primary'
                         }`}
@@ -614,8 +651,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-elevated text-xs font-mono text-text-muted border border-border-subtle">
                   <span className="w-2 h-2 rounded-full bg-success" />
                   <span>
-                    <strong className="text-text-primary font-medium">{filteredSolvedCount}</strong>/
-                    {filteredProblems.length} Solved
+                    <strong className="text-text-primary font-medium">
+                      {meta.filteredSolvedCount}
+                    </strong>
+                    /{filteredTotal} Solved
                   </span>
                 </div>
 
@@ -631,7 +670,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setIsShuffled((prev) => !prev)}
+                  onClick={() => {
+                    setIsShuffled((prev) => !prev);
+                    setCurrentPage(1);
+                  }}
                   className={`px-2.5 py-1.5 rounded-full text-xs font-mono border transition-colors flex items-center gap-1 ${
                     !isShuffled
                       ? 'bg-surface-high text-text-primary border-border-default font-semibold'
@@ -674,18 +716,18 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                           variant="section"
                           className="min-h-[180px]"
                           label="Loading Problem Catalog"
-                          sublabel="Indexing 630 DSA, Logic Building & SQL challenges..."
+                          sublabel={`Fetching page ${currentPage} of ${totalProblems} DSA, Logic Building, OOPs & SQL challenges...`}
                         />
                       </td>
                     </tr>
-                  ) : filteredProblems.length === 0 ? (
+                  ) : problems.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-16 text-center text-text-muted font-mono text-xs">
                         No questions found matching your current filters.
                       </td>
                     </tr>
                   ) : (
-                    paginatedProblems.map((prob, idx) => (
+                    problems.map((prob, idx) => (
                       <tr
                         key={prob.id}
                         onClick={() => onSelectProblem(prob.id)}
@@ -706,6 +748,16 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                             <span className="font-medium text-text-primary group-hover:text-primary transition-colors">
                               #{prob.id}. {prob.title}
                             </span>
+                            {prob.category === 'OOP' && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">
+                                OOP
+                              </span>
+                            )}
+                            {prob.category === 'SQL' && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 shrink-0">
+                                SQL
+                              </span>
+                            )}
                             {potd?.id === prob.id && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-primary-subtle text-primary border border-primary/30 shrink-0">
                                 <Flame className="w-3 h-3 fill-primary/30" />
@@ -728,13 +780,16 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
                         <td className="py-3.5 px-4 font-semibold text-xs">
                           {prob.difficulty === 'Easy' && <span className="text-success">Easy</span>}
-                          {prob.difficulty === 'Medium' && <span className="text-warning">Medium</span>}
+                          {prob.difficulty === 'Medium' && (
+                            <span className="text-warning">Medium</span>
+                          )}
                           {prob.difficulty === 'Hard' && <span className="text-danger">Hard</span>}
                         </td>
 
                         <td className="py-3.5 px-4 text-right">
                           <span className="inline-flex items-center gap-1 text-xs text-text-muted group-hover:text-text-primary transition-colors font-mono">
-                            Solve <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                            Solve{' '}
+                            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                           </span>
                         </td>
                       </tr>
@@ -744,8 +799,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               </table>
 
               <PaginationBar
-                currentPage={safePage}
-                totalItems={filteredProblems.length}
+                currentPage={currentPage}
+                totalItems={filteredTotal}
                 pageSize={PAGE_SIZE}
                 onPageChange={setCurrentPage}
                 itemLabel="problems"
@@ -755,10 +810,11 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
           {/* Right Sidebar */}
           <ProblemRightSidebar
-            totalSolved={totalSolvedAll}
-            totalProblems={problems.length || 630}
+            totalSolved={meta.totalSolved}
+            totalProblems={totalProblems}
             dsaTotal={dsaTotal}
             sqlTotal={sqlTotal}
+            oopTotal={oopTotal}
             currentStreak={currentStreak}
             longestStreak={longestStreak}
             heatmap={heatmap}

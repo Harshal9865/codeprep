@@ -10,13 +10,115 @@ export interface ProblemFilterOptions {
   difficulty?: string;
   status?: string; // 'solved' | 'unsolved' | 'ai-solved' | 'bookmarked'
   search?: string;
+  track?: string;
+  shuffleSeed?: number;
+  includeMeta?: boolean;
   page?: number;
   pageSize?: number;
+}
+
+const PREP_SET_SLUGS: Record<string, string[]> = {
+  'top-interview-classics': [
+    'two-sum', 'contains-duplicate', 'valid-anagram', 'valid-palindrome',
+    'best-time-to-buy-and-sell-stock', 'maximum-subarray', 'valid-parentheses',
+    'longest-substring-without-repeating-characters', 'merge-intervals',
+    'search-in-rotated-sorted-array', 'find-minimum-in-rotated-sorted-array',
+    'number-of-islands', 'course-schedule', 'coin-change',
+    'longest-increasing-subsequence', 'word-break', 'subsets',
+    'kth-largest-element-in-an-array',
+  ],
+  'arrays-window-stack': [
+    'two-sum', 'contains-duplicate', 'trapping-rain-water',
+    'longest-substring-without-repeating-characters',
+    'longest-repeating-character-replacement', 'minimum-window-substring',
+    'sliding-window-maximum', 'merge-intervals', 'rotate-image',
+    'generate-parentheses', 'daily-temperatures', 'largest-rectangle-in-histogram',
+  ],
+  'graphs-trees-dp': [
+    'search-in-rotated-sorted-array', 'find-minimum-in-rotated-sorted-array',
+    'koko-eating-bananas', 'kth-largest-element-in-an-array',
+    'number-of-islands', 'rotting-oranges', 'course-schedule', 'word-ladder',
+    'detect-cycle-in-undirected-graph-gfg', 'coin-change',
+    'longest-increasing-subsequence', 'word-break', 'edit-distance',
+    '0-1-knapsack-problem-gfg',
+  ],
+  'backtracking-greedy': [
+    'subsets', 'combination-sum', 'word-search', 'generate-parentheses',
+    'the-celebrity-problem-gfg', 'job-sequencing-problem-gfg',
+  ],
+};
+
+function matchesSlugTail(slug: string, title: string, candidates: string[]): boolean {
+  const s = slug.toLowerCase();
+  const t = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return candidates.some((c) => s === c || s.endsWith(`-${c}`) || t.includes(c));
+}
+
+function matchesPrepSet(
+  setId: string,
+  p: { id: number; slug: string; title: string; category: string; topic: string }
+): boolean {
+  if (setId === 'top-interview-classics') {
+    return matchesSlugTail(p.slug, p.title, PREP_SET_SLUGS['top-interview-classics']);
+  }
+  if (setId === 'arrays-window-stack') {
+    return (
+      matchesSlugTail(p.slug, p.title, PREP_SET_SLUGS['arrays-window-stack']) ||
+      (p.category === 'DSA' &&
+        (p.topic === 'Sliding Window' || p.topic === 'Stack and Queues') &&
+        p.id <= 60)
+    );
+  }
+  if (setId === 'graphs-trees-dp') {
+    return (
+      matchesSlugTail(p.slug, p.title, PREP_SET_SLUGS['graphs-trees-dp']) ||
+      (p.category === 'DSA' &&
+        (p.topic === 'Graphs' || p.topic === '1-D Dynamic Programming') &&
+        p.id <= 125)
+    );
+  }
+  if (setId === 'backtracking-greedy') {
+    return (
+      matchesSlugTail(p.slug, p.title, PREP_SET_SLUGS['backtracking-greedy']) ||
+      (p.category === 'DSA' &&
+        (p.topic === 'Backtracking' || p.topic === 'Greedy' || p.topic === 'Heap and Priority Queue') &&
+        p.id <= 140)
+    );
+  }
+  if (setId === 'blind75-ladder') {
+    return p.category === 'DSA' && p.id >= 1 && p.id <= 75;
+  }
+  if (setId === 'sql-interview-50') {
+    return p.category === 'SQL' && p.id >= 501 && p.id <= 550;
+  }
+  return false;
+}
+
+function shuffleIdsWithSeed(ids: number[], seed: number): number[] {
+  const copy = [...ids];
+  let s = seed >>> 0 || 1;
+  for (let i = copy.length - 1; i > 0; i--) {
+    s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+    const j = s % (i + 1);
+    const tmp = copy[i];
+    copy[i] = copy[j];
+    copy[j] = tmp;
+  }
+  return copy;
 }
 
 export class ProblemService {
   private static seedingPromise: Promise<void> | null = null;
   private static catalogReady = false;
+  private static catalogMetaCache: Array<{
+    id: number;
+    slug: string;
+    title: string;
+    difficulty: string;
+    category: string;
+    topic: string;
+    pattern: string;
+  }> | null = null;
 
   static getTargetCatalogSize(): number {
     return DSA_500_PROBLEMS.length + SQL_100_PROBLEMS.length;
@@ -83,8 +185,8 @@ export class ProblemService {
         const existingIdSet = new Set(existingRows.map((row) => row.id));
         const missingRecords = allRecords.filter((rec) => !existingIdSet.has(rec.id));
 
-        // Insert missing problems in safe chunks of 25 records to respect SQLite parameter limits
-        const CHUNK_SIZE = 25;
+        // Insert missing problems in safe chunks of 50 records to balance speed and SQLite bind limits
+        const CHUNK_SIZE = 50;
         for (let i = 0; i < missingRecords.length; i += CHUNK_SIZE) {
           const chunk = missingRecords.slice(i, i + CHUNK_SIZE);
           try {
@@ -244,10 +346,33 @@ export class ProblemService {
       if (updatedCount >= totalTarget) {
         ProblemService.catalogReady = true;
       }
+      ProblemService.catalogMetaCache = null;
       Logger.info('ProblemService', `Curriculum questions synchronized into SQLite (${updatedCount} total).`);
     } catch (err) {
       Logger.error('ProblemService', 'Error during problem seeding', err);
     }
+  }
+
+  private static async getCatalogMetadata() {
+    if (ProblemService.catalogMetaCache && ProblemService.catalogMetaCache.length >= ProblemService.getTargetCatalogSize()) {
+      return ProblemService.catalogMetaCache;
+    }
+    const rows = await prisma.problem.findMany({
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        difficulty: true,
+        category: true,
+        topic: true,
+        pattern: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+    if (rows.length >= ProblemService.getTargetCatalogSize()) {
+      ProblemService.catalogMetaCache = rows;
+    }
+    return rows;
   }
 
   static async listProblems(userId: string, options: ProblemFilterOptions = {}) {
@@ -261,89 +386,222 @@ export class ProblemService {
     }
 
     const page = Math.max(1, options.page || 1);
-    const pageSize = Math.max(1, options.pageSize || 30);
+    const pageSize = Math.min(200, Math.max(1, options.pageSize || 30));
     const skip = (page - 1) * pageSize;
 
-    const where: Record<string, unknown> = {};
-
-    if (options.category) where.category = options.category;
-    if (options.topic) where.topic = options.topic;
-    if (options.difficulty) where.difficulty = options.difficulty;
-    if (options.search) {
-      where.OR = [
-        { title: { contains: options.search } },
-        { pattern: { contains: options.search } },
-        { topic: { contains: options.search } },
-      ];
-    }
-
-    const userSubmissions = await prisma.submission.findMany({
-      where: { userId, verdict: 'Accepted' },
-      select: { problemId: true },
-      distinct: ['problemId'],
-    });
-    const solvedIds = userSubmissions.map((s) => s.problemId);
-    const solvedSet = new Set(solvedIds);
-
     const statusLower = (options.status || '').toLowerCase();
-    if (statusLower === 'solved') {
-      where.id = { in: solvedIds };
-    } else if (statusLower === 'unsolved') {
-      if (solvedIds.length > 0) {
-        where.id = { notIn: solvedIds };
+    const [catalog, userSubmissions, bookmarkedIds] = await Promise.all([
+      ProblemService.getCatalogMetadata(),
+      prisma.submission.findMany({
+        where: { userId, verdict: 'Accepted' },
+        select: { problemId: true },
+        distinct: ['problemId'],
+      }),
+      statusLower === 'bookmarked' || statusLower === 'saved'
+        ? UserProblemStateService.getBookmarkedProblemIds(userId)
+        : Promise.resolve([] as number[]),
+    ]);
+
+    const solvedSet = new Set(userSubmissions.map((s) => s.problemId));
+    const bookmarkedSet = new Set(bookmarkedIds);
+
+    const catFilter = (options.category || '').trim().toUpperCase();
+    const trackFilter = (options.track || '').trim().toLowerCase();
+    const diffFilter = (options.difficulty || '').trim().toLowerCase();
+    const topicFilter = (options.topic || '').trim().toLowerCase();
+    const searchQ = (options.search || '').trim().toLowerCase();
+
+    const filtered = catalog.filter((p) => {
+      if (catFilter && catFilter !== 'ALL' && p.category.toUpperCase() !== catFilter) {
+        return false;
       }
-    } else if (statusLower === 'bookmarked' || statusLower === 'saved') {
-      const bookmarkedIds = await UserProblemStateService.getBookmarkedProblemIds(userId);
-      where.id = { in: bookmarkedIds };
+
+      if (trackFilter && trackFilter !== 'all') {
+        if (trackFilter === 'database' || trackFilter === 'sql') {
+          if (p.category !== 'SQL') return false;
+        } else if (trackFilter === 'algorithms' || trackFilter === 'dsa') {
+          if (p.category !== 'DSA') return false;
+        } else if (trackFilter === 'oop' || trackFilter === 'oops') {
+          if (p.category !== 'OOP') return false;
+        } else if (trackFilter === 'logic-easy') {
+          if (p.topic !== 'Logic Building' && !(p.id >= 601 && p.id <= 630)) return false;
+        } else if (trackFilter === 'blind75') {
+          if (p.id > 75) return false;
+        } else if (trackFilter === 'neetcode150') {
+          if (p.id > 150) return false;
+        } else if (trackFilter === 'gfg') {
+          if (p.id < 100 || p.id > 250) return false;
+        } else if (!matchesPrepSet(trackFilter, p)) {
+          return false;
+        }
+      }
+
+      if (diffFilter && diffFilter !== 'all' && p.difficulty.toLowerCase() !== diffFilter) {
+        return false;
+      }
+
+      if (topicFilter && topicFilter !== 'all') {
+        if (
+          !p.topic.toLowerCase().includes(topicFilter) &&
+          !p.pattern.toLowerCase().includes(topicFilter)
+        ) {
+          return false;
+        }
+      }
+
+      if (statusLower === 'solved' && !solvedSet.has(p.id)) return false;
+      if (statusLower === 'unsolved' && solvedSet.has(p.id)) return false;
+      if ((statusLower === 'bookmarked' || statusLower === 'saved') && !bookmarkedSet.has(p.id)) {
+        return false;
+      }
+
+      if (searchQ) {
+        const cleanNumQ = searchQ.startsWith('#') ? searchQ.slice(1) : searchQ;
+        const hit =
+          p.title.toLowerCase().includes(searchQ) ||
+          p.topic.toLowerCase().includes(searchQ) ||
+          p.pattern.toLowerCase().includes(searchQ) ||
+          String(p.id).includes(cleanNumQ);
+        if (!hit) return false;
+      }
+
+      return true;
+    });
+
+    const total = filtered.length;
+    let filteredSolvedCount = 0;
+    for (const p of filtered) {
+      if (solvedSet.has(p.id)) filteredSolvedCount++;
     }
 
-    const [total, problems] = await Promise.all([
-      prisma.problem.count({ where }),
-      prisma.problem.findMany({
-        where,
-        skip,
-        take: pageSize,
-        orderBy: { id: 'asc' },
-        select: {
-          id: true,
-          slug: true,
-          title: true,
-          difficulty: true,
-          category: true,
-          topic: true,
-          pattern: true,
-          isBookmark: true,
-          unlockedAiSolution: true,
-          solvedWithAiHelp: true,
-        },
-      }),
-    ]);
+    const orderedIds =
+      options.shuffleSeed && options.shuffleSeed > 0
+        ? shuffleIdsWithSeed(
+            filtered.map((p) => p.id),
+            options.shuffleSeed
+          )
+        : filtered.map((p) => p.id);
+
+    const pageIds = orderedIds.slice(skip, skip + pageSize);
+    const metaById = new Map(filtered.map((p) => [p.id, p]));
 
     const { stateMap, allowLegacy } = await UserProblemStateService.getStateMapForProblems(
       userId,
-      problems.map((p) => p.id)
+      pageIds
     );
 
-    const enriched = problems.map((prob) => {
-      const effective = UserProblemStateService.resolveEffectiveState(
-        stateMap.get(prob.id),
-        prob,
-        allowLegacy
-      );
-      return {
-        id: prob.id,
-        slug: prob.slug,
-        title: prob.title,
-        difficulty: prob.difficulty,
-        category: prob.category,
-        topic: prob.topic,
-        pattern: prob.pattern,
-        isSolved: solvedSet.has(prob.id),
-        isBookmark: effective.isBookmark,
-        unlockedAiSolution: effective.unlockedAiSolution,
-        solvedWithAiHelp: effective.solvedWithAiHelp,
+    // Fetch legacy columns only for the 30 visible page rows if legacy fallback applies
+    const dbPageRows =
+      pageIds.length > 0 && allowLegacy
+        ? await prisma.problem.findMany({
+            where: { id: { in: pageIds } },
+            select: {
+              id: true,
+              isBookmark: true,
+              unlockedAiSolution: true,
+              solvedWithAiHelp: true,
+            },
+          })
+        : [];
+    const legacyRowMap = new Map(dbPageRows.map((r) => [r.id, r]));
+
+    const enriched = pageIds
+      .map((id) => metaById.get(id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((prob) => {
+        const legacy = legacyRowMap.get(prob.id) || {
+          isBookmark: false,
+          unlockedAiSolution: false,
+          solvedWithAiHelp: false,
+        };
+        const effective = UserProblemStateService.resolveEffectiveState(
+          stateMap.get(prob.id),
+          legacy,
+          allowLegacy
+        );
+        return {
+          id: prob.id,
+          slug: prob.slug,
+          title: prob.title,
+          difficulty: prob.difficulty,
+          category: prob.category,
+          topic: prob.topic,
+          pattern: prob.pattern,
+          isSolved: solvedSet.has(prob.id),
+          isBookmark: effective.isBookmark,
+          unlockedAiSolution: effective.unlockedAiSolution,
+          solvedWithAiHelp: effective.solvedWithAiHelp,
+        };
+      });
+
+    let meta: Record<string, unknown> | undefined;
+    if (options.includeMeta) {
+      let dsaTotal = 0;
+      let dsaSolved = 0;
+      let sqlTotal = 0;
+      let sqlSolved = 0;
+      let oopTotal = 0;
+      let oopSolved = 0;
+      let easyTotal = 0;
+      let mediumTotal = 0;
+      let hardTotal = 0;
+      const topicCounts: Record<string, number> = {};
+      const prepCounts: Record<string, { total: number; solved: number }> = {
+        'top-interview-classics': { total: 0, solved: 0 },
+        'arrays-window-stack': { total: 0, solved: 0 },
+        'graphs-trees-dp': { total: 0, solved: 0 },
+        'backtracking-greedy': { total: 0, solved: 0 },
       };
-    });
+
+      for (const p of catalog) {
+        const isSolved = solvedSet.has(p.id);
+        if (p.category === 'SQL') {
+          sqlTotal++;
+          if (isSolved) sqlSolved++;
+        } else if (p.category === 'OOP') {
+          oopTotal++;
+          if (isSolved) oopSolved++;
+        } else {
+          dsaTotal++;
+          if (isSolved) dsaSolved++;
+        }
+
+        if (!catFilter || catFilter === 'ALL' || p.category.toUpperCase() === catFilter) {
+          topicCounts[p.topic] = (topicCounts[p.topic] || 0) + 1;
+          if (p.difficulty === 'Easy') easyTotal++;
+          else if (p.difficulty === 'Medium') mediumTotal++;
+          else if (p.difficulty === 'Hard') hardTotal++;
+        }
+
+        for (const key of Object.keys(prepCounts)) {
+          if (matchesPrepSet(key, p)) {
+            prepCounts[key].total++;
+            if (isSolved) prepCounts[key].solved++;
+          }
+        }
+      }
+
+      const randomMatchId =
+        orderedIds.length > 0
+          ? orderedIds[Math.floor(Math.random() * orderedIds.length)]
+          : null;
+
+      meta = {
+        totalProblems: catalog.length,
+        dsaTotal,
+        sqlTotal,
+        oopTotal,
+        totalSolved: solvedSet.size,
+        dsaSolved,
+        sqlSolved,
+        oopSolved,
+        filteredSolvedCount,
+        difficultyTotals: { Easy: easyTotal, Medium: mediumTotal, Hard: hardTotal },
+        topicCounts,
+        prepCounts,
+        randomMatchId,
+      };
+    }
 
     return {
       problems: enriched,
@@ -351,8 +609,9 @@ export class ProblemService {
         page,
         pageSize,
         total,
-        totalPages: Math.ceil(total / pageSize),
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
       },
+      ...(meta ? { meta } : {}),
     };
   }
 

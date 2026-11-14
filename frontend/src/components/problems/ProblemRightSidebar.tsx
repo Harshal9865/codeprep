@@ -8,6 +8,7 @@ interface ProblemRightSidebarProps {
   totalProblems?: number;
   dsaTotal?: number;
   sqlTotal?: number;
+  oopTotal?: number;
   currentStreak?: number;
   longestStreak?: number;
   heatmap?: HeatmapDay[];
@@ -17,9 +18,10 @@ interface ProblemRightSidebarProps {
 
 export const ProblemRightSidebar: React.FC<ProblemRightSidebarProps> = ({
   totalSolved = 0,
-  totalProblems = 600,
-  dsaTotal = 500,
-  sqlTotal = 100,
+  totalProblems = 3000,
+  dsaTotal = 2500,
+  sqlTotal = 400,
+  oopTotal = 100,
   currentStreak = 0,
   longestStreak = 0,
   heatmap = [],
@@ -229,6 +231,14 @@ export const ProblemRightSidebar: React.FC<ProblemRightSidebarProps> = ({
               <span className="text-sm text-text-secondary">SQL Queries</span>
             </div>
             <span className="font-mono text-xs text-text-muted">{sqlTotal} Queries</span>
+          </div>
+
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-elevated border border-border-subtle">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />
+              <span className="text-sm text-text-secondary">OOPs C++ Design</span>
+            </div>
+            <span className="font-mono text-xs text-text-muted">{oopTotal} Questions</span>
           </div>
         </div>
       </div>

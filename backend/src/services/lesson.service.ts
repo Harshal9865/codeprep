@@ -77,6 +77,42 @@ const TOPIC_GUIDES: Record<string, LessonTopicGuide> = {
     mistakes: 'Swapping 1-indexed DP table offset vs 0-indexed string/array lookups.',
     progression: '1. Recursive Subtree: Exponential.\n2. 2D Tabulation: O(M * N) time, often compressible to O(N) rolling 1D array.',
   },
+  'Encapsulation & Class Invariants': {
+    intuition: 'Hide mutable fields behind private members and validate every mutator atomically before committing state.',
+    recognition: 'Stateful domain objects with caps, balances, quotas, or atomic commit/rollback semantics.',
+    mistakes: 'Allowing negative inputs, leaking mutable internal references, or partially mutating state before checking invariants.',
+    progression: '1. Guarded validation before mutation.\n2. Const-correct read accessors.\n3. Atomic O(1) invariant preservation.',
+  },
+  'Constructors, RAII & Lifecycles': {
+    intuition: 'Tie resource acquisition directly to object construction and deterministic release to ~Destructor() scope exit.',
+    recognition: 'Scoped locks, ref-counting, deep copy constructors, and deterministic LIFO cleanup tracking.',
+    mistakes: 'Forgetting virtual/noexcept move semantics or leaking active counts when copies share ownership pointers.',
+    progression: '1. Explicit initializer lists.\n2. Rule-of-3 / Rule-of-5 parity.\n3. Zero-leak RAII smart pointers.',
+  },
+  'Inheritance & Virtual Polymorphism': {
+    intuition: 'Program against pure virtual base interfaces and let vtable dynamic dispatch resolve concrete subclass behavior at runtime.',
+    recognition: 'Heterogeneous collections behind a common base interface with behavior varying by runtime kind.',
+    mistakes: 'Missing virtual destructor on base class (UB on delete), object slicing by value, or forgetting override.',
+    progression: '1. Abstract base class with = 0 pure virtual method.\n2. unique_ptr<Base> polymorphic storage.\n3. Clean Open/Closed extensibility.',
+  },
+  'Operator Overloading & Value Types': {
+    intuition: 'Give user-defined value types natural algebraic (+, *) or strict weak ordering (<) semantics usable with STL algorithms.',
+    recognition: 'Vectors, fractions, complex numbers, multi-key sorting structs, or reusable functor objects.',
+    mistakes: 'Forgetting const-qualification on operator methods or breaking strict weak ordering in operator<.',
+    progression: '1. Value-semantic struct with initializer constructor.\n2. Const operator overloads / functors.\n3. Seamless std::sort and fold interoperability.',
+  },
+  'Design Patterns & SOLID Systems': {
+    intuition: 'Compose small single-responsibility interfaces (Strategy, Command, Observer, State, Cache) rather than monolithic conditionals.',
+    recognition: 'Undo/redo stacks, runtime policy swaps, pub/sub dispatchers, finite state transitions, and bounded eviction.',
+    mistakes: 'Tightly coupling dispatcher to concrete implementations or skipping empty/edge capacity checks.',
+    progression: '1. Interface segregation.\n2. Dependency injection via unique_ptr/interfaces.\n3. O(1) / O(N) extensible behavioral execution.',
+  },
+  'Logic Building': {
+    intuition: 'Break arithmetic, digit, parity, and loop conditions into clean single-pass statements and edge-case checks.',
+    recognition: 'Digit manipulation, modular arithmetic, parity branching, or direct sequence transformations.',
+    mistakes: 'Off-by-one loop limits, dividing by zero, or forgetting zero/empty input handling.',
+    progression: '1. Trace small concrete examples.\n2. Handle n == 0 and negative signs.\n3. O(N) or O(log N) clean single-pass solution.',
+  },
 };
 
 const DEFAULT_GUIDE: LessonTopicGuide = {

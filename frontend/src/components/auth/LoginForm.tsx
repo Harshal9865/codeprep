@@ -159,7 +159,7 @@ export const LoginForm: React.FC = () => {
                 CodePrep
               </h1>
               <p className="text-xs font-mono text-primary">
-                600 Problems • C++17 & SQL
+                3,000 Problems • DSA, OOPs &amp; SQL
               </p>
             </div>
           </div>
@@ -192,7 +192,7 @@ export const LoginForm: React.FC = () => {
             </li>
             <li className="flex items-center gap-2">
               <Check className="w-3.5 h-3.5 text-success shrink-0" />
-              <span>Curated Blind 75, NeetCode 150 & SQL</span>
+              <span>Curated Blind 75, NeetCode 150, OOPs &amp; SQL</span>
             </li>
             <li className="flex items-center gap-2">
               <Check className="w-3.5 h-3.5 text-success shrink-0" />

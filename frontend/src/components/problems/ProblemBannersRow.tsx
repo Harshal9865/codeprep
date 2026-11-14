@@ -5,12 +5,14 @@ import { INTERVIEW_PREP_SETS } from '../../data/interviewTracks';
 
 interface ProblemBannersRowProps {
   problems?: Problem[];
+  prepCounts?: Record<string, { total: number; solved: number }>;
   selectedPrepSetId?: string | null;
   onSelectPrepSet?: (setId: string | null) => void;
 }
 
 export const ProblemBannersRow: React.FC<ProblemBannersRowProps> = ({
   problems = [],
+  prepCounts,
   selectedPrepSetId = null,
   onSelectPrepSet,
 }) => {
@@ -36,9 +38,10 @@ export const ProblemBannersRow: React.FC<ProblemBannersRowProps> = ({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
         {featuredSets.map((prepSet) => {
-          const matched = problems.filter((p) => prepSet.matchProblem(p));
-          const solved = matched.filter((p) => p.isSolved).length;
-          const total = matched.length;
+          const fromServer = prepCounts?.[prepSet.id];
+          const matched = fromServer ? [] : problems.filter((p) => prepSet.matchProblem(p));
+          const solved = fromServer ? fromServer.solved : matched.filter((p) => p.isSolved).length;
+          const total = fromServer ? fromServer.total : matched.length;
           const pct = total > 0 ? Math.round((solved / total) * 100) : 0;
           const isSelected = selectedPrepSetId === prepSet.id;
 

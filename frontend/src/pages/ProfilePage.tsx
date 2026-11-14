@@ -42,6 +42,7 @@ import {
   Loader2,
   X,
   Camera,
+  Boxes,
 } from 'lucide-react';
 
 interface UserProfile {
@@ -70,6 +71,8 @@ interface ProfileTelemetry {
   dsaTotal: number;
   sqlSolved: number;
   sqlTotal: number;
+  oopSolved: number;
+  oopTotal: number;
   currentStreak: number;
   longestStreak: number;
   badges: BadgeSummary[];
@@ -166,11 +169,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
         const stats = analyticsRes.analytics || (analyticsRes as ProfileTelemetry);
         setTelemetry({
           totalSolved: stats.totalSolved ?? 0,
-          totalProblems: stats.totalProblems ?? 600,
+          totalProblems: stats.totalProblems ?? 3000,
           dsaSolved: stats.dsaSolved ?? 0,
-          dsaTotal: stats.dsaTotal ?? 500,
+          dsaTotal: stats.dsaTotal ?? 2500,
           sqlSolved: stats.sqlSolved ?? 0,
-          sqlTotal: stats.sqlTotal ?? 100,
+          sqlTotal: stats.sqlTotal ?? 400,
+          oopSolved: stats.oopSolved ?? 0,
+          oopTotal: stats.oopTotal ?? 100,
           currentStreak: stats.currentStreak ?? 0,
           longestStreak: stats.longestStreak ?? 0,
           badges: Array.isArray(stats.badges) ? stats.badges : [],
@@ -471,6 +476,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
 
   const dsaPct = telemetry && telemetry.dsaTotal > 0 ? Math.round((telemetry.dsaSolved / telemetry.dsaTotal) * 100) : 0;
   const sqlPct = telemetry && telemetry.sqlTotal > 0 ? Math.round((telemetry.sqlSolved / telemetry.sqlTotal) * 100) : 0;
+  const oopPct = telemetry && telemetry.oopTotal > 0 ? Math.round((telemetry.oopSolved / telemetry.oopTotal) * 100) : 0;
   const unlockedBadgesCount = telemetry ? telemetry.badges.filter((b) => b.unlocked).length : 0;
 
   return (
@@ -592,7 +598,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                 </div>
                 <div className="text-lg font-bold font-mono text-text-primary mt-0.5">
                   {telemetry?.totalSolved ?? 0}
-                  <span className="text-xs font-normal text-text-muted">/{telemetry?.totalProblems ?? 600}</span>
+                  <span className="text-xs font-normal text-text-muted">/{telemetry?.totalProblems ?? 3000}</span>
                 </div>
               </div>
 
@@ -630,7 +636,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
 
           {/* Curriculum Progress Bars */}
           {telemetry && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-5 border-t border-border-subtle">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-5 border-t border-border-subtle">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-mono">
                   <span className="flex items-center gap-1.5 text-text-secondary">
@@ -663,6 +669,24 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                   <div
                     className="h-full bg-sky-500 rounded-full transition-all duration-500"
                     style={{ width: `${sqlPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="flex items-center gap-1.5 text-text-secondary">
+                    <Boxes className="w-3.5 h-3.5 text-purple-400" />
+                    OOPs C++ Design
+                  </span>
+                  <span className="text-text-primary font-semibold">
+                    {telemetry.oopSolved}/{telemetry.oopTotal} ({oopPct}%)
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-surface-elevated overflow-hidden">
+                  <div
+                    className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                    style={{ width: `${oopPct}%` }}
                   />
                 </div>
               </div>

@@ -1,13 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { apiRequest } from '../services/api';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
-import {
-  Search,
-  Check,
-  ChevronRight,
-} from 'lucide-react';
+import { Search, Check, ChevronRight, Shuffle } from 'lucide-react';
 
 interface SqlProblemItem {
   id: number;
@@ -24,21 +20,89 @@ interface SqlListPageProps {
   onTabChange?: (tab: string) => void;
 }
 
-export const SqlListPage: React.FC<SqlListPageProps> = ({
-  onSelectProblem,
-  onTabChange,
-}) => {
+export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTabChange }) => {
   const [problems, setProblems] = useState<SqlProblemItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'solved' | 'unsolved'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [filteredTotal, setFilteredTotal] = useState(400);
+  const [sqlTotal, setSqlTotal] = useState(400);
+  const [sqlSolvedTotal, setSqlSolvedTotal] = useState(0);
+  const [filteredSolvedCount, setFilteredSolvedCount] = useState(0);
+  const [difficultyTotals, setDifficultyTotals] = useState({ Easy: 125, Medium: 170, Hard: 105 });
+  const [isShuffled, setIsShuffled] = useState(false);
+  const [shuffleSeed, setShuffleSeed] = useState(1);
   const PAGE_SIZE = 30;
 
   useEffect(() => {
-    fetchProblems();
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch((prev) => {
+        if (prev !== searchQuery) {
+          setCurrentPage(1);
+        }
+        return searchQuery;
+      });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  const fetchProblems = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const queryParams = new URLSearchParams({
+        category: 'SQL',
+        page: String(currentPage),
+        pageSize: String(PAGE_SIZE),
+        includeMeta: '1',
+      });
+      if (selectedDifficulty !== 'all') queryParams.append('difficulty', selectedDifficulty);
+      if (selectedTopic !== 'all') queryParams.append('topic', selectedTopic);
+      if (statusFilter !== 'all') queryParams.append('status', statusFilter);
+      if (debouncedSearch.trim()) queryParams.append('search', debouncedSearch.trim());
+      if (isShuffled) queryParams.append('shuffleSeed', String(shuffleSeed));
+
+      const res = await apiRequest<{
+        problems: SqlProblemItem[];
+        pagination?: { total: number };
+        meta?: {
+          sqlTotal?: number;
+          sqlSolved?: number;
+          filteredSolvedCount?: number;
+          difficultyTotals?: { Easy: number; Medium: number; Hard: number };
+        };
+      }>(`/problems?${queryParams.toString()}`);
+
+      setProblems(res.problems || []);
+      setFilteredTotal(res.pagination?.total ?? (res.problems?.length || 0));
+      if (res.meta) {
+        if (typeof res.meta.sqlTotal === 'number') setSqlTotal(res.meta.sqlTotal);
+        if (typeof res.meta.sqlSolved === 'number') setSqlSolvedTotal(res.meta.sqlSolved);
+        if (typeof res.meta.filteredSolvedCount === 'number') {
+          setFilteredSolvedCount(res.meta.filteredSolvedCount);
+        }
+        if (res.meta.difficultyTotals) setDifficultyTotals(res.meta.difficultyTotals);
+      }
+    } catch {
+      setProblems([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    currentPage,
+    selectedDifficulty,
+    selectedTopic,
+    statusFilter,
+    debouncedSearch,
+    isShuffled,
+    shuffleSeed,
+  ]);
+
+  useEffect(() => {
+    void fetchProblems();
     const handleProgressUpdated = () => {
       void fetchProblems();
     };
@@ -46,72 +110,14 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({
     return () => {
       window.removeEventListener('codeprep:progress-updated', handleProgressUpdated);
     };
-  }, [selectedDifficulty, selectedTopic]);
+  }, [fetchProblems]);
 
-  const fetchProblems = async () => {
-    setIsLoading(true);
-    try {
-      const queryParams = new URLSearchParams({
-        category: 'SQL',
-        pageSize: '100',
-      });
-      if (selectedDifficulty !== 'all') queryParams.append('difficulty', selectedDifficulty);
-      if (selectedTopic !== 'all') queryParams.append('topic', selectedTopic);
-
-      const res = await apiRequest<{ problems: SqlProblemItem[] }>(`/problems?${queryParams.toString()}`);
-      setProblems(res.problems);
-    } catch {
-      setProblems(
-        Array.from({ length: 100 }, (_, i) => ({
-          id: 501 + i,
-          slug: `sql-problem-${501 + i}`,
-          title: `SQL Query Problem #${501 + i}`,
-          difficulty: i < 25 ? 'Easy' : i >= 85 ? 'Hard' : 'Medium',
-          topic:
-            i < 25
-              ? 'Aggregations & Joins'
-              : i < 55
-              ? 'Window Functions'
-              : 'Common Table Expressions',
-          pattern: 'Relational Query Logic',
-        }))
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const filteredProblems = problems.filter((p) => {
-    if (statusFilter === 'solved' && !p.isSolved) return false;
-    if (statusFilter === 'unsolved' && p.isSolved) return false;
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      p.title.toLowerCase().includes(q) ||
-      p.topic.toLowerCase().includes(q) ||
-      String(p.id).includes(q)
-    );
-  });
-
-  const totalSolvedAll = problems.filter((p) => p.isSolved).length;
-  const solvedCount = filteredProblems.filter((p) => p.isSolved).length;
-  const sqlPct = problems.length > 0 ? Math.round((totalSolvedAll / problems.length) * 100) : 0;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedDifficulty, selectedTopic, statusFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredProblems.length / PAGE_SIZE));
-  const safePage = Math.min(currentPage, totalPages);
-  const paginatedProblems = useMemo(() => {
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredProblems.slice(start, start + PAGE_SIZE);
-  }, [filteredProblems, safePage]);
+  const sqlPct = sqlTotal > 0 ? Math.round((sqlSolvedTotal / sqlTotal) * 100) : 0;
 
   return (
     <AppLayout currentTab="sql" onTabChange={onTabChange}>
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 py-6 space-y-5">
-        {/* LeetCode Database Header */}
+        {/* Database Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -120,24 +126,29 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({
               </span>
               <span className="text-xs text-text-muted">•</span>
               <span className="text-xs text-success font-medium">
-                {solvedCount} / {filteredProblems.length} Solved
+                {filteredSolvedCount} / {filteredTotal} Solved
               </span>
             </div>
             <h1 className="font-bold text-2xl text-text-primary tracking-tight">
-              SQL Query Lab (100) • Relational Curriculum
+              SQL Query Lab ({sqlTotal}) • Relational Curriculum
             </h1>
             <p className="text-xs text-text-muted max-w-2xl leading-relaxed">
-              Isolated relational database drills covering recursive CTEs, window functions (ROW_NUMBER, DENSE_RANK, LEAD/LAG), joins, and schema sandboxing.
+              Isolated relational database drills covering recursive CTEs, window functions (ROW_NUMBER, DENSE_RANK, LEAD/LAG), joins, cohort retention, and schema sandboxing.
             </p>
           </div>
 
           <div className="min-w-[200px] bg-surface border border-border-subtle rounded-xl p-3 space-y-1.5">
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-text-muted">Lab Progress</span>
-              <span className="text-text-primary font-semibold">{totalSolvedAll}/{problems.length || 100} ({sqlPct}%)</span>
+              <span className="text-text-primary font-semibold">
+                {sqlSolvedTotal}/{sqlTotal} ({sqlPct}%)
+              </span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-surface-high overflow-hidden">
-              <div className="h-full bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${sqlPct}%` }} />
+              <div
+                className="h-full bg-sky-500 rounded-full transition-all duration-500"
+                style={{ width: `${sqlPct}%` }}
+              />
             </div>
           </div>
         </div>
@@ -161,7 +172,10 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({
                 <button
                   key={status}
                   type="button"
-                  onClick={() => setStatusFilter(status)}
+                  onClick={() => {
+                    setStatusFilter(status);
+                    setCurrentPage(1);
+                  }}
                   className={`px-3 py-1 rounded-full capitalize transition-colors ${
                     statusFilter === status
                       ? 'bg-primary text-black font-semibold'
@@ -175,27 +189,47 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({
 
             <select
               value={selectedTopic}
-              onChange={(e) => setSelectedTopic(e.target.value)}
+              onChange={(e) => {
+                setSelectedTopic(e.target.value);
+                setCurrentPage(1);
+              }}
               className="px-3 py-2 bg-surface-elevated border border-border-default rounded-full text-xs text-text-secondary hover:text-text-primary focus:outline-none cursor-pointer"
             >
               <option value="all">All Topics</option>
-              <option value="Aggregations & Joins">Aggregations & Joins</option>
+              <option value="Aggregations & Joins">Aggregations &amp; Joins</option>
               <option value="Window Functions">Window Functions</option>
               <option value="Common Table Expressions">Common Table Expressions (CTEs)</option>
-              <option value="Gaps and Islands">Gaps & Islands</option>
-              <option value="Advanced Analytics & Retention">Advanced Analytics & Retention</option>
+              <option value="Gaps and Islands">Gaps &amp; Islands</option>
+              <option value="Advanced Analytics & Retention">Advanced Analytics &amp; Retention</option>
             </select>
 
             <select
               value={selectedDifficulty}
-              onChange={(e) => setSelectedDifficulty(e.target.value)}
+              onChange={(e) => {
+                setSelectedDifficulty(e.target.value);
+                setCurrentPage(1);
+              }}
               className="px-3 py-2 bg-surface-elevated border border-border-default rounded-full text-xs text-text-secondary hover:text-text-primary focus:outline-none cursor-pointer"
             >
               <option value="all">All Difficulties</option>
-              <option value="Easy">Easy (25)</option>
-              <option value="Medium">Medium (60)</option>
-              <option value="Hard">Hard (15)</option>
+              <option value="Easy">Easy ({difficultyTotals.Easy})</option>
+              <option value="Medium">Medium ({difficultyTotals.Medium})</option>
+              <option value="Hard">Hard ({difficultyTotals.Hard})</option>
             </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsShuffled(true);
+                setShuffleSeed(Math.floor(Math.random() * 1_000_000) + 1);
+                setCurrentPage(1);
+              }}
+              className="px-3 py-2 bg-surface-elevated border border-border-default rounded-full text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5"
+              title="Shuffle SQL problem order"
+            >
+              <Shuffle className="w-3.5 h-3.5 text-primary" />
+              <span>Shuffle</span>
+            </button>
           </div>
         </div>
 
@@ -220,18 +254,18 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({
                       variant="section"
                       className="min-h-[160px]"
                       label="Loading SQL Query Lab"
-                      sublabel="Preparing 100 relational schema problems..."
+                      sublabel={`Preparing page ${currentPage} of ${sqlTotal} relational schema problems...`}
                     />
                   </td>
                 </tr>
-              ) : filteredProblems.length === 0 ? (
+              ) : problems.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-16 text-center text-text-muted font-mono">
                     No SQL problems match your criteria.
                   </td>
                 </tr>
               ) : (
-                paginatedProblems.map((prob, idx) => (
+                problems.map((prob, idx) => (
                   <tr
                     key={prob.id}
                     onClick={() => onSelectProblem(prob.id)}
@@ -252,15 +286,9 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({
                     </td>
                     <td className="py-3 px-4 text-text-muted hidden sm:table-cell">{prob.topic}</td>
                     <td className="py-3 px-4 font-medium">
-                      {prob.difficulty === 'Easy' && (
-                        <span className="text-success">Easy</span>
-                      )}
-                      {prob.difficulty === 'Medium' && (
-                        <span className="text-warning">Med.</span>
-                      )}
-                      {prob.difficulty === 'Hard' && (
-                        <span className="text-danger">Hard</span>
-                      )}
+                      {prob.difficulty === 'Easy' && <span className="text-success">Easy</span>}
+                      {prob.difficulty === 'Medium' && <span className="text-warning">Med.</span>}
+                      {prob.difficulty === 'Hard' && <span className="text-danger">Hard</span>}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <span className="inline-flex items-center text-primary opacity-0 group-hover:opacity-100 transition-opacity">
@@ -274,8 +302,8 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({
           </table>
 
           <PaginationBar
-            currentPage={safePage}
-            totalItems={filteredProblems.length}
+            currentPage={currentPage}
+            totalItems={filteredTotal}
             pageSize={PAGE_SIZE}
             onPageChange={setCurrentPage}
             itemLabel="SQL queries"

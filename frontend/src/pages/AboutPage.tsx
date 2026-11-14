@@ -14,6 +14,7 @@ import {
   Server,
   CheckCircle2,
   Bookmark,
+  Boxes,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { useAuth } from '../contexts/AuthContext';
@@ -29,12 +30,12 @@ const ARCHITECTURE_PILLARS = [
     title: 'Isolated C++17 Judge',
     subtitle: 'Local Compilation & Harness Execution',
     description:
-      'Compiles candidate solutions locally with g++ and runs multi-case input/output drivers with memory guards, execution timeouts, and line-level compiler diagnostics.',
+      'Compiles candidate DSA and OOP C++17 solutions locally with g++ and runs multi-case input/output drivers with memory guards, execution timeouts, and line-level compiler diagnostics.',
   },
   {
     icon: Database,
     title: 'SQLite Query Sandbox',
-    subtitle: '100 Schema-Isolated Relational Tasks',
+    subtitle: '400 Schema-Isolated Relational Tasks',
     description:
       'Seeds clean relational schemas per execution inside an isolated SQLite context, normalizes common SQL idioms, and verifies result sets deterministically.',
   },
@@ -43,7 +44,7 @@ const ARCHITECTURE_PILLARS = [
     title: 'Persistent Study State',
     subtitle: 'Prisma ORM + SQLite WAL Storage',
     description:
-      'Stores all 600 curriculum questions, autosaved editor drafts, active study timers, earned badges, timezone-accurate streak heatmaps, and full JSON exports locally.',
+      'Stores all 3,000 curriculum questions (2,500 DSA + 400 SQL + 100 OOPs C++ Design), autosaved editor drafts, active study timers, earned badges, timezone-accurate streak heatmaps, and full JSON exports.',
   },
   {
     icon: Sliders,
@@ -65,23 +66,30 @@ const WORKSPACE_MAP = [
   {
     id: 'dsa',
     icon: Code2,
-    label: 'Problems (DSA 500)',
+    label: 'Problems (3,000 Total Curriculum)',
     route: '#dsa',
-    purpose: 'Curated interview sets (Blind 75, NeetCode 150, Top 100), topic filters, and split-pane C++17 IDE.',
+    purpose: 'Curated interview sets (Blind 75, NeetCode 150, Top 100), server-paginated topic filters, and split-pane C++17 IDE.',
   },
   {
     id: 'sql',
     icon: Database,
-    label: 'SQL Lab (100)',
+    label: 'SQL Lab (400)',
     route: '#sql',
     purpose: 'Relational schema explorer, query runner, join/window-function drills, and result diff verification.',
+  },
+  {
+    id: 'oops',
+    icon: Boxes,
+    label: 'OOPs Hub (100 Coding + Study + MCQs)',
+    route: '#oops',
+    purpose: 'Pillar-by-pillar OOP & SOLID study modules, 100 executable C++17 OOP design challenges, and placement MCQs.',
   },
   {
     id: 'aptitude',
     icon: Brain,
     label: 'Aptitude',
     route: '#aptitude',
-    purpose: 'Category-filtered placement MCQs across Quantitative, Logical Reasoning, and Verbal with timed drills.',
+    purpose: 'Category-filtered placement MCQs across Quantitative, Logical Reasoning, Verbal, and OOPs & C++ Design.',
   },
   {
     id: 'profile',
@@ -183,7 +191,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate }) => {
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-black text-xs font-semibold hover:opacity-90 transition-opacity"
             >
               <Code2 className="w-4 h-4" />
-              Open DSA 500
+              Open 3,000 Problems
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
               <button

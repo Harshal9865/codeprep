@@ -8,8 +8,9 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const navItems = [
     { id: 'dashboard', label: 'Explore' },
-    { id: 'dsa', label: 'DSA 500' },
+    { id: 'dsa', label: 'Problems' },
     { id: 'sql', label: 'SQL Lab' },
+    { id: 'oops', label: 'OOPs' },
     { id: 'aptitude', label: 'Aptitude' },
     { id: 'prep', label: 'Interview Kit' },
     { id: 'about', label: 'About' },

@@ -41,6 +41,8 @@ interface DashboardAnalytics {
   dsaTotal: number;
   sqlSolved: number;
   sqlTotal: number;
+  oopSolved?: number;
+  oopTotal?: number;
   dailyProblemId: number;
   potd?: PotdSummary;
   randomPoolIds: number[];
@@ -135,7 +137,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     const pool = data?.randomPoolIds && data.randomPoolIds.length > 0 ? data.randomPoolIds : null;
     const picked = pool
       ? pool[Math.floor(Math.random() * pool.length)]
-      : Math.floor(Math.random() * 500) + 1;
+      : Math.floor(Math.random() * 3000) + 1;
     onSelectProblem(picked);
   };
 
@@ -170,11 +172,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   }
 
   const totalSolved = data.totalSolved ?? 0;
-  const totalProblems = data.totalProblems ?? 600;
+  const totalProblems = data.totalProblems ?? 3000;
   const dsaSolved = data.dsaSolved ?? 0;
-  const dsaTotal = data.dsaTotal ?? 500;
+  const dsaTotal = data.dsaTotal ?? 2500;
   const sqlSolved = data.sqlSolved ?? 0;
-  const sqlTotal = data.sqlTotal ?? 100;
+  const sqlTotal = data.sqlTotal ?? 400;
+  const oopSolved = data.oopSolved ?? 0;
+  const oopTotal = data.oopTotal ?? 100;
   const dailyProblemId = data.dailyProblemId ?? 1;
   const currentStreak = data.currentStreak ?? 0;
   const longestStreak = data.longestStreak ?? 0;
@@ -212,6 +216,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             dsaTotal={dsaTotal}
             sqlSolved={sqlSolved}
             sqlTotal={sqlTotal}
+            oopSolved={oopSolved}
+            oopTotal={oopTotal}
             onNavigate={onTabChange}
             onSelectTopic={(topic) => {
               if (onOpenProblemsWithFilter) {

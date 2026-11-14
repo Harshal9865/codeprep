@@ -386,7 +386,11 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
-              onClick={() => handleNavigate(() => onNavigateProblem?.(problem.id - 1))}
+              onClick={() =>
+                handleNavigate(() =>
+                  onNavigateProblem?.(problem.id === 731 ? 600 : problem.id - 1)
+                )
+              }
               disabled={problem.id <= 501}
               className="p-1 rounded hover:bg-surface-elevated disabled:opacity-30 disabled:cursor-not-allowed text-text-secondary hover:text-text-primary transition-colors"
               title="Previous SQL Problem"
@@ -396,8 +400,12 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
             <span className="font-mono text-xs text-text-muted">#{problem.id}</span>
             <button
               type="button"
-              onClick={() => handleNavigate(() => onNavigateProblem?.(problem.id + 1))}
-              disabled={problem.id >= 600}
+              onClick={() =>
+                handleNavigate(() =>
+                  onNavigateProblem?.(problem.id === 600 ? 731 : problem.id + 1)
+                )
+              }
+              disabled={problem.id >= 1030}
               className="p-1 rounded hover:bg-surface-elevated disabled:opacity-30 disabled:cursor-not-allowed text-text-secondary hover:text-text-primary transition-colors"
               title="Next SQL Problem"
             >

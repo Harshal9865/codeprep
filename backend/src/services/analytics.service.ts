@@ -62,6 +62,8 @@ export interface DashboardAnalytics {
   dsaTotal: number;
   sqlSolved: number;
   sqlTotal: number;
+  oopSolved: number;
+  oopTotal: number;
   dailyProblemId: number;
   potd: PotdSummary;
   randomPoolIds: number[];
@@ -516,11 +518,16 @@ export class AnalyticsService {
     let dsaSolved = 0;
     let sqlTotal = 0;
     let sqlSolved = 0;
+    let oopTotal = 0;
+    let oopSolved = 0;
 
     for (const prob of allProblems) {
       if (prob.category === 'SQL') {
         sqlTotal++;
         if (solvedProblemIds.has(prob.id)) sqlSolved++;
+      } else if (prob.category === 'OOP') {
+        oopTotal++;
+        if (solvedProblemIds.has(prob.id)) oopSolved++;
       } else {
         dsaTotal++;
         if (solvedProblemIds.has(prob.id)) dsaSolved++;
@@ -582,6 +589,8 @@ export class AnalyticsService {
       dsaTotal,
       sqlSolved,
       sqlTotal,
+      oopSolved,
+      oopTotal,
       dailyProblemId,
       potd,
       randomPoolIds,

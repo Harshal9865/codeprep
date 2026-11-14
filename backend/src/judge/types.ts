@@ -36,7 +36,7 @@ export interface ProblemDefinition {
   slug: string;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
-  category: 'DSA' | 'SQL';
+  category: 'DSA' | 'SQL' | 'OOP';
   topic: string;
   pattern: string;
   statement: string;

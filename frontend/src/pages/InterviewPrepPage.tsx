@@ -94,7 +94,7 @@ interface ProblemLite {
   id: number;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
-  category: 'DSA' | 'SQL';
+  category: 'DSA' | 'SQL' | 'OOP';
   topic: string;
   isSolved?: boolean;
 }
@@ -353,8 +353,17 @@ export const InterviewPrepPage: React.FC<InterviewPrepPageProps> = ({
   }, [mockHistory]);
 
   useEffect(() => {
-    apiRequest<{ problems: ProblemLite[] }>('/problems?pageSize=600')
-      .then((res) => setCatalog(res.problems || []))
+    Promise.all([
+      apiRequest<{ problems: ProblemLite[] }>('/problems?track=algorithms&pageSize=200').catch(() => ({ problems: [] })),
+      apiRequest<{ problems: ProblemLite[] }>('/problems?category=SQL&pageSize=100').catch(() => ({ problems: [] })),
+      apiRequest<{ problems: ProblemLite[] }>('/problems?category=OOP&pageSize=50').catch(() => ({ problems: [] })),
+    ])
+      .then(([dsaRes, sqlRes, oopRes]) => {
+        const merged = [...(dsaRes.problems || []), ...(sqlRes.problems || []), ...(oopRes.problems || [])];
+        const byId = new Map<number, ProblemLite>();
+        for (const p of merged) byId.set(p.id, p);
+        setCatalog(Array.from(byId.values()));
+      })
       .catch(() => {});
 
     apiRequest<{ analytics?: { currentStreak?: number } }>('/analytics/dashboard')

@@ -412,13 +412,21 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       <ProblemHeader
         problem={problem}
         onPrev={() =>
-          handleNavigateSafely(() => onNavigateProblem(problemId === 601 ? 500 : problemId - 1))
+          handleNavigateSafely(() => {
+            const prevId =
+              problemId === 601 ? 500 : problemId === 1031 ? 730 : problemId - 1;
+            onNavigateProblem(prevId);
+          })
         }
         onNext={() =>
-          handleNavigateSafely(() => onNavigateProblem(problemId === 500 ? 601 : problemId + 1))
+          handleNavigateSafely(() => {
+            const nextId =
+              problemId === 500 ? 601 : problemId === 730 ? 1031 : problemId + 1;
+            onNavigateProblem(nextId);
+          })
         }
         hasPrev={problemId > 1}
-        hasNext={problemId < 500 || (problemId >= 601 && problemId < 630)}
+        hasNext={problemId < 3000}
         onBookmarkToggle={handleBookmarkToggle}
         onBackToList={() => handleNavigateSafely(onBackToList)}
         isPotd={potdInfo.isPotd}

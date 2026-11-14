@@ -1,4 +1,6 @@
 import { LOGIC_EASY_SOLUTIONS } from './logicEasySolutions';
+import { getOopSolution } from './oop100';
+import { getExtendedDsaSolution } from './dsaExtended2000';
 
 export interface CuratedSolutionEntry {
   code: string;
@@ -711,6 +713,14 @@ export function findCuratedSolution(problemId: number, slug: string): CuratedSol
   }
   if (LOGIC_EASY_SOLUTIONS[problemId]) {
     return LOGIC_EASY_SOLUTIONS[problemId];
+  }
+  const oopSol = getOopSolution(problemId);
+  if (oopSol) {
+    return oopSol;
+  }
+  const extSol = getExtendedDsaSolution(problemId);
+  if (extSol) {
+    return extSol;
   }
   const stripped = slug.replace(/^\d+-/, '');
   if (SOLUTIONS_BY_SLUG[slug]) return SOLUTIONS_BY_SLUG[slug];

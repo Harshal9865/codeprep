@@ -10,6 +10,7 @@ import { AboutPage } from './pages/AboutPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SqlListPage } from './pages/SqlListPage';
 import { SqlWorkspacePage } from './pages/SqlWorkspacePage';
+import { OopsPage } from './pages/OopsPage';
 import { AptitudePage } from './pages/AptitudePage';
 import { InterviewPrepPage } from './pages/InterviewPrepPage';
 import { CodePrepLoader } from './components/ui/CodePrepLoader';
@@ -24,6 +25,7 @@ type AppView =
   | 'dashboard'
   | 'dsa'
   | 'sql'
+  | 'oops'
   | 'workspace'
   | 'sql-workspace'
   | 'ai-solution'
@@ -34,7 +36,7 @@ type AppView =
 
 type ProblemStatusFilter = 'All' | 'Solved' | 'Unsolved' | 'Bookmarked';
 
-const isSqlProblemId = (id: number) => id >= 501 && id <= 600;
+const isSqlProblemId = (id: number) => (id >= 501 && id <= 600) || (id >= 731 && id <= 1030);
 
 function parseRouteFromHash(): {
   view: AppView;
@@ -57,6 +59,9 @@ function parseRouteFromHash(): {
   }
   if (raw === 'sql') {
     return { view: 'sql', problemId: 501, statusFilter: 'All' };
+  }
+  if (raw === 'oops') {
+    return { view: 'oops', problemId: 631, statusFilter: 'All' };
   }
   if (raw === 'aptitude') {
     return { view: 'aptitude', problemId: 1, statusFilter: 'All' };
@@ -112,6 +117,8 @@ function buildHashForRoute(
       return statusFilter === 'Bookmarked' ? '#bookmarks' : '#dsa';
     case 'sql':
       return '#sql';
+    case 'oops':
+      return '#oops';
     case 'aptitude':
       return '#aptitude';
     case 'prep':
@@ -302,6 +309,8 @@ export const App: React.FC = () => {
       setCurrentView('dsa');
     } else if (tab === 'sql') {
       setCurrentView('sql');
+    } else if (tab === 'oops') {
+      setCurrentView('oops');
     } else if (tab === 'aptitude') {
       setCurrentView('aptitude');
     } else if (tab === 'prep') {
@@ -366,6 +375,16 @@ export const App: React.FC = () => {
         onTabChange={handleTabNavigate}
       />
     );
+  } else if (currentView === 'oops') {
+    activePage = (
+      <OopsPage
+        onSelectProblem={(id) => {
+          setActiveProblemId(id);
+          setCurrentView('workspace');
+        }}
+        onTabChange={handleTabNavigate}
+      />
+    );
   } else if (currentView === 'sql-workspace') {
     activePage = (
       <SqlWorkspacePage
@@ -424,7 +443,7 @@ export const App: React.FC = () => {
             prepSetId: null,
             statusFilter: 'All',
             difficultyFilter: filter.difficulty || 'All',
-            topicFilter: filter.topic || 'All Topics',
+            topicFilter: filter.topic || 'All',
             filterVersion: (prev.filterVersion ?? 0) + 1,
             searchQuery: '',
             searchVersion: (prev.searchVersion ?? 0) + 1,

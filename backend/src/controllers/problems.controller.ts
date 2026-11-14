@@ -7,14 +7,29 @@ export class ProblemsController {
   static async list(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user?.id || '';
-      const { category, topic, difficulty, status, search, page, pageSize } = req.query;
+      const {
+        category,
+        topic,
+        difficulty,
+        status,
+        search,
+        track,
+        shuffleSeed,
+        includeMeta,
+        page,
+        pageSize,
+      } = req.query;
 
+      const parsedSeed = shuffleSeed ? parseInt(shuffleSeed as string, 10) : undefined;
       const result = await ProblemService.listProblems(userId, {
         category: category as string,
         topic: topic as string,
         difficulty: difficulty as string,
         status: status as string,
         search: search as string,
+        track: track as string,
+        shuffleSeed: parsedSeed && !isNaN(parsedSeed) ? parsedSeed : undefined,
+        includeMeta: includeMeta === '1' || includeMeta === 'true',
         page: page ? parseInt(page as string, 10) : 1,
         pageSize: pageSize ? parseInt(pageSize as string, 10) : 30,
       });

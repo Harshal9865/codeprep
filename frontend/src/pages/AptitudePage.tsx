@@ -19,6 +19,7 @@ import {
   Trophy,
   Play,
   Sparkles,
+  Boxes,
 } from 'lucide-react';
 import {
   AptitudeCategory,
@@ -92,6 +93,12 @@ const CATEGORY_META: Array<{
     label: 'Interview Puzzles',
     desc: 'Two Eggs, Poisoned Bottles, Clock Angle, Pirates & Weighing',
     icon: <Puzzle className="w-4 h-4" />,
+  },
+  {
+    id: 'OOPs & C++ Design',
+    label: 'OOPs & C++ Design',
+    desc: 'VTables, Inheritance, RAII, Smart Pointers, SOLID & GoF Patterns',
+    icon: <Boxes className="w-4 h-4" />,
   },
 ];
 

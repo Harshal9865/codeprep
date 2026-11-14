@@ -1,3 +1,5 @@
+import { generateOopMcq } from '../data/oopsCurriculum';
+
 export type AptitudeCategory =
   | 'Arithmetic Aptitude'
   | 'Data Interpretation'
@@ -5,7 +7,8 @@ export type AptitudeCategory =
   | 'Logical Reasoning'
   | 'Verbal Reasoning'
   | 'Nonverbal Reasoning'
-  | 'Interview Puzzles';
+  | 'Interview Puzzles'
+  | 'OOPs & C++ Design';
 
 export const APTITUDE_CATEGORIES: AptitudeCategory[] = [
   'Arithmetic Aptitude',
@@ -15,6 +18,7 @@ export const APTITUDE_CATEGORIES: AptitudeCategory[] = [
   'Verbal Reasoning',
   'Nonverbal Reasoning',
   'Interview Puzzles',
+  'OOPs & C++ Design',
 ];
 
 export type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
@@ -1243,6 +1247,22 @@ function genPigeonholeSocks(): GeneratedAptitudeQuestion {
 /* PUBLIC GENERATOR API                                                       */
 /* -------------------------------------------------------------------------- */
 
+function genOopsMcqQuestion(): GeneratedAptitudeQuestion {
+  const item = generateOopMcq();
+  return {
+    id: item.id,
+    category: 'OOPs & C++ Design',
+    subtopic: item.subtopic,
+    difficulty: item.difficulty,
+    askedIn: item.askedIn,
+    question: item.question,
+    options: item.options,
+    correctIndex: item.correctIndex,
+    explanation: item.explanation,
+    shortcutTip: item.shortcutTip,
+  };
+}
+
 const CATEGORY_GENERATORS: Record<AptitudeCategory, Array<() => GeneratedAptitudeQuestion>> = {
   'Arithmetic Aptitude': [
     genTrainPlatform,
@@ -1268,6 +1288,7 @@ const CATEGORY_GENERATORS: Record<AptitudeCategory, Array<() => GeneratedAptitud
     genPiratesGoldPuzzle,
     genPigeonholeSocks,
   ],
+  'OOPs & C++ Design': [genOopsMcqQuestion],
 };
 
 export function generateAptitudeQuestion(

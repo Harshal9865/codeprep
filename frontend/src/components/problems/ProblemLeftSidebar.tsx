@@ -9,16 +9,23 @@ import {
   Briefcase,
   Binary,
   Database,
+  Boxes,
 } from 'lucide-react';
 
 interface ProblemLeftSidebarProps {
   activeTab: string;
   onSelectCategory: (category: string) => void;
+  totalProblems?: number;
+  sqlTotal?: number;
+  oopTotal?: number;
 }
 
 export const ProblemLeftSidebar: React.FC<ProblemLeftSidebarProps> = ({
   activeTab,
   onSelectCategory,
+  totalProblems = 3000,
+  sqlTotal = 400,
+  oopTotal = 100,
 }) => {
   return (
     <aside className="w-60 shrink-0 hidden xl:flex flex-col gap-6 text-sm text-text-muted select-none">
@@ -34,7 +41,7 @@ export const ProblemLeftSidebar: React.FC<ProblemLeftSidebarProps> = ({
           }`}
         >
           <Library className="w-4 h-4 text-text-primary" />
-          <span>All 600 Questions</span>
+          <span>All {totalProblems} Questions</span>
         </button>
 
         <button
@@ -86,7 +93,20 @@ export const ProblemLeftSidebar: React.FC<ProblemLeftSidebarProps> = ({
           }`}
         >
           <Database className="w-4 h-4 text-sky-400" />
-          <span>SQL Queries (100)</span>
+          <span>SQL Queries ({sqlTotal})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onSelectCategory('oop')}
+          className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium transition-colors border ${
+            activeTab === 'oop'
+              ? 'bg-surface-elevated text-text-primary font-semibold border-border-default'
+              : 'border-transparent hover:bg-surface-elevated hover:text-text-primary'
+          }`}
+        >
+          <Boxes className="w-4 h-4 text-purple-400" />
+          <span>OOPs Design ({oopTotal})</span>
         </button>
       </div>
 
