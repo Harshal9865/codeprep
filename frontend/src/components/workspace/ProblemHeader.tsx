@@ -62,7 +62,7 @@ export const ProblemHeader: React.FC<ProblemHeaderProps> = ({
   };
 
   return (
-    <div className="h-12 bg-surface/95 backdrop-blur-md px-3 sm:px-4 flex items-center justify-between gap-2 select-none shrink-0 border-b border-border-subtle transition-colors">
+    <div className="relative z-40 h-12 bg-surface/95 backdrop-blur-md px-3 sm:px-4 flex items-center justify-between gap-2 select-none shrink-0 border-b border-border-subtle transition-colors">
       {/* Left: Navigation and Problem Context */}
       <div className="flex items-center gap-2 min-w-0">
         <button

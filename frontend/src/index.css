@@ -84,7 +84,7 @@
   }
 
   /* LeetCode Classic Dark Theme */
-  [data-theme='leetcode'] {
+  html[data-theme='leetcode'] {
     --bg-canvas: #1a1a1a;
     --bg-surface: #282828;
     --bg-surface-elevated: #303030;
@@ -119,7 +119,7 @@
   }
 
   /* VS Code Dark+ Coding Theme */
-  [data-theme='vscode'] {
+  html[data-theme='vscode'] {
     --bg-canvas: #181818;
     --bg-surface: #1e1e1e;
     --bg-surface-elevated: #252526;
@@ -154,7 +154,7 @@
   }
 
   /* Tokyo Night Coding Theme */
-  [data-theme='tokyo'] {
+  html[data-theme='tokyo'] {
     --bg-canvas: #16161e;
     --bg-surface: #1a1b26;
     --bg-surface-elevated: #24283b;
@@ -189,7 +189,7 @@
   }
 
   /* Monokai Carbon Coding Theme */
-  [data-theme='monokai'] {
+  html[data-theme='monokai'] {
     --bg-canvas: #19181a;
     --bg-surface: #221f22;
     --bg-surface-elevated: #2d2a2e;

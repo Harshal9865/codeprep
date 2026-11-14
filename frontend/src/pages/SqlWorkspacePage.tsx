@@ -249,7 +249,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   return (
     <div className="h-screen flex flex-col bg-canvas overflow-hidden animate-page-enter">
       {/* Header Bar */}
-      <div className="h-12 border-b border-border-subtle bg-surface px-4 flex items-center justify-between gap-2">
+      <div className="relative z-40 h-12 border-b border-border-subtle bg-surface px-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <Button
             variant="ghost"

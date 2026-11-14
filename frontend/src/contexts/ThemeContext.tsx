@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { ThemeMode, ThemeContextType, THEME_OPTIONS } from '../types/theme';
 import { apiRequest } from '../services/api';
 
@@ -13,32 +13,47 @@ function normalizeTheme(value: unknown): ThemeMode {
   return 'dark';
 }
 
+function applyThemeToDom(mode: ThemeMode) {
+  const meta = THEME_OPTIONS.find((t) => t.id === mode) || THEME_OPTIONS[0];
+  const root = document.documentElement;
+  root.setAttribute('data-theme', mode);
+  if (meta.isDark) {
+    root.classList.add('dark');
+    root.classList.remove('light');
+  } else {
+    root.classList.remove('dark');
+    root.classList.add('light');
+  }
+  try {
+    localStorage.setItem('codeprep_theme', mode);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
     return normalizeTheme(localStorage.getItem('codeprep_theme'));
   });
+  const manualSwitchAtRef = useRef<number>(0);
 
   const themeMeta = THEME_OPTIONS.find((t) => t.id === theme) || THEME_OPTIONS[0];
   const resolvedTheme: 'dark' | 'light' = themeMeta.isDark ? 'dark' : 'light';
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.setAttribute('data-theme', theme);
-    if (themeMeta.isDark) {
-      root.classList.add('dark');
-      root.classList.remove('light');
-    } else {
-      root.classList.remove('dark');
-      root.classList.add('light');
-    }
-    localStorage.setItem('codeprep_theme', theme);
-  }, [theme, themeMeta.isDark]);
+    applyThemeToDom(theme);
+  }, [theme]);
 
   // Listen for DB preference sync events emitted when user signs in or loads profile
   useEffect(() => {
     const handleSync = (event: Event) => {
+      // Never override an explicit manual theme switch performed recently in this session
+      if (Date.now() - manualSwitchAtRef.current < 10_000) {
+        return;
+      }
       const custom = event as CustomEvent<string>;
       const nextTheme = normalizeTheme(custom.detail);
+      applyThemeToDom(nextTheme);
       setThemeState(nextTheme);
     };
     window.addEventListener('codeprep-theme-sync', handleSync);
@@ -47,6 +62,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setTheme = useCallback((mode: ThemeMode) => {
     const valid = normalizeTheme(mode);
+    manualSwitchAtRef.current = Date.now();
+    applyThemeToDom(valid);
     setThemeState(valid);
 
     // Persist selected theme directly to SQLite User profile when signed in
@@ -60,13 +77,19 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     if (hasSession) {
-      apiRequest('/user/profile', {
+      apiRequest<{ user?: { id: string } }>('/user/profile', {
         method: 'PATCH',
         body: JSON.stringify({ themePreference: valid }),
         skipAuthRefresh: true,
-      }).catch(() => {
-        // Offline / transient network errors stay locally cached in localStorage
-      });
+      })
+        .then((res) => {
+          if (res?.user) {
+            window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: res.user }));
+          }
+        })
+        .catch(() => {
+          // Offline / transient network errors stay locally cached in localStorage
+        });
     }
   }, []);
 
