@@ -131,8 +131,11 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
     }
   };
 
-  const isLruCache = problem.slug === 'lru-cache';
-  const isLinkedList = problem.topic === 'Linked List';
+  const isLruCache =
+    problem.slug === 'lru-cache' ||
+    problem.slug.endsWith('-lru-cache') ||
+    problem.title.toLowerCase().includes('lru cache');
+  const isLinkedList = problem.topic.toLowerCase().includes('linked list');
   const isUnlockedOrSolved = Boolean(problem.isSolved || problem.unlockedAiSolution || lesson);
 
   return (

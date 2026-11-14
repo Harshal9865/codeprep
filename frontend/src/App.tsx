@@ -397,10 +397,12 @@ export const App: React.FC = () => {
     activePage = (
       <SolutionGuidePage
         problemId={activeProblemId}
-        onBackToProblem={() => setCurrentView('workspace')}
+        onBackToProblem={() =>
+          setCurrentView(isSqlProblemId(activeProblemId) ? 'sql-workspace' : 'workspace')
+        }
         onSelectSimilarProblem={(id) => {
           setActiveProblemId(id);
-          setCurrentView('workspace');
+          setCurrentView(isSqlProblemId(id) ? 'sql-workspace' : 'workspace');
         }}
       />
     );

@@ -9,6 +9,8 @@ interface EditorPaneProps {
   onReset: () => void;
   problemId: number;
   saveStatus?: 'saved' | 'saving' | 'dirty' | 'error';
+  onRunShortcut?: () => void;
+  onSubmitShortcut?: () => void;
 }
 
 export const EditorPane: React.FC<EditorPaneProps> = ({
@@ -17,6 +19,8 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
   onReset,
   problemId,
   saveStatus = 'saved',
+  onRunShortcut,
+  onSubmitShortcut,
 }) => {
   const [showFullCode, setShowFullCode] = useState(false);
   const [fullCodeText, setFullCodeText] = useState('');
@@ -52,6 +56,16 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        onSubmitShortcut?.();
+      } else {
+        onRunShortcut?.();
+      }
+      return;
+    }
+
     if (e.key === 'Tab') {
       e.preventDefault();
       const target = e.currentTarget;
@@ -172,7 +186,10 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
               : 'Draft saved to database'}
           </span>
         </div>
-        <div>
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline text-[11px] text-text-muted/80">
+            Ctrl+Enter to Run • Ctrl+Shift+Enter to Submit
+          </span>
           <span>Ln {lines.length}</span>
         </div>
       </div>

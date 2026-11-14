@@ -290,7 +290,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               ref={mobileSearchInputRef}
               type="text"
               aria-label="Search problems on mobile"
-              placeholder="Search 600 problems..."
+              placeholder="Search 3,000 problems..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-transparent border-0 outline-none text-sm text-text-primary placeholder:text-text-muted"

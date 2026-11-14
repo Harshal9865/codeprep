@@ -164,7 +164,7 @@ export const LeetCodeSolvedGauge: React.FC<LeetCodeSolvedGaugeProps> = ({
       </div>
 
       <div className="mt-4 pt-2.5 border-t border-border-subtle flex items-center justify-between text-xs text-text-muted font-mono">
-        <span>DSA 500 + SQL 100</span>
+        <span>{totalProblems.toLocaleString()} Total • DSA, OOPs &amp; SQL</span>
         <span>Click difficulty to filter</span>
       </div>
     </div>

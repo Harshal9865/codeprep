@@ -315,7 +315,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         runtimeMs: res.result.runtimeMs,
         memoryKb: res.result.memoryKb,
         submittedAt: new Date().toISOString(),
-        code,
+        code: submittedCode,
       };
 
       setProblem((prev) =>
@@ -359,7 +359,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
         verdict: res.result.verdict,
         result: res.result,
-        codeOverride: activeCodeRef.current,
+        codeOverride: submittedCode,
       });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Submission failed');
@@ -491,6 +491,8 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
               onReset={() => handleCodeChange(problem.defaultCodeStub || '')}
               problemId={problem.id}
               saveStatus={saveStatus}
+              onRunShortcut={() => handleRun()}
+              onSubmitShortcut={() => handleSubmit()}
             />
           </div>
 
@@ -514,7 +516,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
           providerNote={teacherProviderNote}
           currentVerdict={evaluatedCodeRef.current === code ? executionResult?.verdict : undefined}
           isSolved={Boolean(problem.isSolved)}
-          category="DSA"
+          category={problem.category === 'OOP' ? 'OOP' : 'DSA'}
           onAnalyzeMethod={(question) =>
             requestTeacherFeedback({
               requestMode: 'analyze',

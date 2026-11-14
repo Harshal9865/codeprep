@@ -41,7 +41,7 @@ export interface HintsDrawerProps {
   providerNote?: string;
   currentVerdict?: string;
   isSolved: boolean;
-  category?: 'DSA' | 'SQL';
+  category?: 'DSA' | 'SQL' | 'OOP';
 }
 
 export const HintsDrawer: React.FC<HintsDrawerProps> = ({
@@ -82,6 +82,8 @@ export const HintsDrawer: React.FC<HintsDrawerProps> = ({
   const quickPrompts =
     category === 'SQL'
       ? ['Find query bugs', 'Why wrong rows?', 'Optimize joins']
+      : category === 'OOP'
+      ? ['Check class invariants', 'RAII & virtual destructor', 'SOLID & design pattern']
       : ['Find my bugs', 'Check complexity', 'Optimize approach'];
 
   return (

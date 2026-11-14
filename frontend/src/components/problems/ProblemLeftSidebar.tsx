@@ -140,7 +140,11 @@ export const ProblemLeftSidebar: React.FC<ProblemLeftSidebarProps> = ({
           <button
             type="button"
             onClick={() => onSelectCategory('graphs')}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-elevated hover:text-text-primary transition-colors"
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
+              activeTab === 'graphs'
+                ? 'bg-surface-elevated border border-border-subtle text-text-primary font-semibold'
+                : 'hover:bg-surface-elevated hover:text-text-primary'
+            }`}
           >
             <div className="w-4 h-4 rounded bg-purple-500/20 flex items-center justify-center text-purple-400">
               <FolderGit2 className="w-2.5 h-2.5" />
@@ -151,7 +155,11 @@ export const ProblemLeftSidebar: React.FC<ProblemLeftSidebarProps> = ({
           <button
             type="button"
             onClick={() => onSelectCategory('dp')}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-elevated hover:text-text-primary transition-colors"
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
+              activeTab === 'dp'
+                ? 'bg-surface-elevated border border-border-subtle text-text-primary font-semibold'
+                : 'hover:bg-surface-elevated hover:text-text-primary'
+            }`}
           >
             <div className="w-4 h-4 rounded bg-primary-subtle flex items-center justify-center text-primary">
               <Briefcase className="w-2.5 h-2.5" />
@@ -162,7 +170,11 @@ export const ProblemLeftSidebar: React.FC<ProblemLeftSidebarProps> = ({
           <button
             type="button"
             onClick={() => onSelectCategory('math')}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-elevated hover:text-text-primary transition-colors"
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
+              activeTab === 'math'
+                ? 'bg-surface-elevated border border-border-subtle text-text-primary font-semibold'
+                : 'hover:bg-surface-elevated hover:text-text-primary'
+            }`}
           >
             <div className="w-4 h-4 rounded bg-sky-500/20 flex items-center justify-center text-sky-400">
               <Binary className="w-2.5 h-2.5" />

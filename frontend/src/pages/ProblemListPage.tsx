@@ -119,6 +119,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
   useEffect(() => {
     if (initialFilterVersion > 0) {
+      setSelectedCategory('all');
+      setSelectedPrepSetId(null);
       setSelectedDifficulty(initialDifficultyFilter || 'All');
       setSelectedTopic(initialTopicFilter || 'All');
       setCurrentPage(1);
@@ -128,6 +130,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   useEffect(() => {
     if (initialSearchVersion > 0) {
       const nextQ = initialSearchQuery ?? '';
+      setSelectedCategory('all');
+      setSelectedPrepSetId(null);
+      setSelectedTopic('All');
+      setSelectedDifficulty('All');
       setSearchQuery(nextQ);
       setDebouncedSearch(nextQ);
       setCurrentPage(1);
@@ -272,7 +278,17 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
         <div className="flex gap-6 items-start">
           {/* Left Sidebar */}
           <ProblemLeftSidebar
-            activeTab={statusFilter === 'Bookmarked' ? 'favorites' : selectedCategory}
+            activeTab={
+              statusFilter === 'Bookmarked'
+                ? 'favorites'
+                : selectedTopic === 'Graph'
+                ? 'graphs'
+                : selectedTopic === 'Dynamic'
+                ? 'dp'
+                : selectedTopic === 'Math'
+                ? 'math'
+                : selectedCategory
+            }
             totalProblems={totalProblems}
             sqlTotal={sqlTotal}
             oopTotal={oopTotal}
