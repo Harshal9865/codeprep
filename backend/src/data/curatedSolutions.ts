@@ -1,3 +1,5 @@
+import { LOGIC_EASY_SOLUTIONS } from './logicEasySolutions';
+
 export interface CuratedSolutionEntry {
   code: string;
   complexity?: string;
@@ -706,6 +708,9 @@ public:
 export function findCuratedSolution(problemId: number, slug: string): CuratedSolutionEntry | null {
   if (SOLUTIONS_BY_ID[problemId]) {
     return SOLUTIONS_BY_ID[problemId];
+  }
+  if (LOGIC_EASY_SOLUTIONS[problemId]) {
+    return LOGIC_EASY_SOLUTIONS[problemId];
   }
   const stripped = slug.replace(/^\d+-/, '');
   if (SOLUTIONS_BY_SLUG[slug]) return SOLUTIONS_BY_SLUG[slug];

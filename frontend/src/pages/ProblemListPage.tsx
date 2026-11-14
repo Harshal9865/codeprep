@@ -14,6 +14,8 @@ import {
   Search,
   Check,
   Shuffle,
+  Dices,
+  ArrowUpDown,
   Database,
   Code2,
   Bookmark,
@@ -23,6 +25,7 @@ import {
   ArrowRight,
   X,
   Flame,
+  Sparkles,
 } from 'lucide-react';
 
 interface ProblemListPageProps {
@@ -37,7 +40,20 @@ interface ProblemListPageProps {
   initialSearchVersion?: number;
 }
 
-type CategoryTab = 'all' | 'algorithms' | 'database' | 'blind75' | 'neetcode150' | 'gfg';
+type CategoryTab = 'all' | 'algorithms' | 'logic-easy' | 'database' | 'blind75' | 'neetcode150' | 'gfg';
+
+function shuffleWithSeed<T>(items: T[], seed: number): T[] {
+  const copy = [...items];
+  let s = seed >>> 0 || 1;
+  for (let i = copy.length - 1; i > 0; i--) {
+    s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+    const j = s % (i + 1);
+    const tmp = copy[i];
+    copy[i] = copy[j];
+    copy[j] = tmp;
+  }
+  return copy;
+}
 
 export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   onSelectProblem,
@@ -64,6 +80,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   const [heatmap, setHeatmap] = useState<HeatmapDay[]>([]);
   const [potd, setPotd] = useState<PotdSummary | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isShuffled, setIsShuffled] = useState(true);
+  const [shuffleSeed, setShuffleSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000) + 1);
   const PAGE_SIZE = 30;
 
   useEffect(() => {
@@ -122,7 +140,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   const fetchProblems = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await apiRequest<{ problems: Problem[] }>('/problems?pageSize=600');
+      const res = await apiRequest<{ problems: Problem[] }>('/problems?pageSize=2000');
       setProblems(res.problems || []);
     } catch {
       setProblems([]);
@@ -174,6 +192,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
       result = result.filter((p) => p.category === 'SQL');
     } else if (selectedCategory === 'algorithms') {
       result = result.filter((p) => p.category === 'DSA');
+    } else if (selectedCategory === 'logic-easy') {
+      result = result.filter((p) => p.topic === 'Logic Building' || p.id >= 601);
     } else if (selectedCategory === 'blind75') {
       result = result.filter((p) => p.id <= 75);
     } else if (selectedCategory === 'neetcode150') {
@@ -213,6 +233,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
       );
     }
 
+    if (isShuffled) {
+      result = shuffleWithSeed(result, shuffleSeed);
+    }
+
     return result;
   }, [
     problems,
@@ -222,6 +246,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
     statusFilter,
     selectedTopic,
     searchQuery,
+    isShuffled,
+    shuffleSeed,
   ]);
 
   const filteredSolvedCount = filteredProblems.filter((p) => p.isSolved).length;
@@ -236,6 +262,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
     statusFilter,
     selectedTopic,
     searchQuery,
+    isShuffled,
+    shuffleSeed,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProblems.length / PAGE_SIZE));
@@ -245,13 +273,18 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
     return filteredProblems.slice(start, start + PAGE_SIZE);
   }, [filteredProblems, safePage]);
 
-  const handleShuffle = () => {
+  const handleShuffleList = () => {
+    setIsShuffled(true);
+    setShuffleSeed(Math.floor(Math.random() * 1_000_000_000) + 1);
+  };
+
+  const handlePickRandom = () => {
     if (filteredProblems.length === 0) return;
     const randomProblem = filteredProblems[Math.floor(Math.random() * filteredProblems.length)];
     onSelectProblem(randomProblem.id);
   };
 
-  const dsaTotal = problems.filter((p) => p.category === 'DSA').length || 500;
+  const dsaTotal = problems.filter((p) => p.category === 'DSA').length || 530;
   const sqlTotal = problems.filter((p) => p.category === 'SQL').length || 100;
 
   return (
@@ -407,7 +440,23 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                     : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
                 }`}
               >
-                <span>All {problems.length || 600}</span>
+                <span>All {problems.length || 630}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('logic-easy');
+                  setStatusFilter('All');
+                }}
+                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
+                  selectedCategory === 'logic-easy'
+                    ? 'bg-success-subtle text-success border-success/45 font-semibold'
+                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-success" />
+                <span>Logic Building (Very Easy)</span>
               </button>
 
               <button
@@ -572,11 +621,35 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
                 <button
                   type="button"
-                  onClick={handleShuffle}
-                  className="p-2 rounded-full bg-surface-elevated hover:bg-surface-high text-text-muted hover:text-primary transition-colors border border-border-subtle"
-                  title="Pick random matching problem"
+                  onClick={handleShuffleList}
+                  className="px-3 py-1.5 rounded-full bg-primary-subtle hover:bg-primary/20 text-primary transition-colors border border-primary/35 flex items-center gap-1.5 text-xs font-mono font-semibold"
+                  title="Shuffle problem list order"
                 >
-                  <Shuffle className="w-4 h-4" />
+                  <Shuffle className="w-3.5 h-3.5" />
+                  <span>Shuffle</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsShuffled((prev) => !prev)}
+                  className={`px-2.5 py-1.5 rounded-full text-xs font-mono border transition-colors flex items-center gap-1 ${
+                    !isShuffled
+                      ? 'bg-surface-high text-text-primary border-border-default font-semibold'
+                      : 'bg-surface-elevated text-text-muted hover:text-text-primary border-border-subtle'
+                  }`}
+                  title={isShuffled ? 'Switch to ordered #1..N list' : 'Switch to shuffled list'}
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{isShuffled ? '# Order' : 'Ordered'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePickRandom}
+                  className="p-2 rounded-full bg-surface-elevated hover:bg-surface-high text-text-muted hover:text-primary transition-colors border border-border-subtle"
+                  title="Open 1 random matching problem"
+                >
+                  <Dices className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -601,7 +674,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                           variant="section"
                           className="min-h-[180px]"
                           label="Loading Problem Catalog"
-                          sublabel="Indexing 600 DSA & SQL challenges..."
+                          sublabel="Indexing 630 DSA, Logic Building & SQL challenges..."
                         />
                       </td>
                     </tr>
@@ -683,7 +756,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
           {/* Right Sidebar */}
           <ProblemRightSidebar
             totalSolved={totalSolvedAll}
-            totalProblems={problems.length || 600}
+            totalProblems={problems.length || 630}
             dsaTotal={dsaTotal}
             sqlTotal={sqlTotal}
             currentStreak={currentStreak}

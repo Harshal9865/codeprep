@@ -18,6 +18,10 @@ export class ProblemService {
   private static seedingPromise: Promise<void> | null = null;
   private static catalogReady = false;
 
+  static getTargetCatalogSize(): number {
+    return DSA_500_PROBLEMS.length + SQL_100_PROBLEMS.length;
+  }
+
   static async seedInitialProblems(): Promise<void> {
     if (this.seedingPromise) {
       return this.seedingPromise;
@@ -72,11 +76,17 @@ export class ProblemService {
         }));
 
         const allRecords = [...dsaRecords, ...sqlRecords];
+        const existingRows =
+          existingCount > 0
+            ? await prisma.problem.findMany({ select: { id: true } })
+            : [];
+        const existingIdSet = new Set(existingRows.map((row) => row.id));
+        const missingRecords = allRecords.filter((rec) => !existingIdSet.has(rec.id));
 
-        // Insert in safe chunks of 25 records to strictly respect SQLite parameter limits
+        // Insert missing problems in safe chunks of 25 records to respect SQLite parameter limits
         const CHUNK_SIZE = 25;
-        for (let i = 0; i < allRecords.length; i += CHUNK_SIZE) {
-          const chunk = allRecords.slice(i, i + CHUNK_SIZE);
+        for (let i = 0; i < missingRecords.length; i += CHUNK_SIZE) {
+          const chunk = missingRecords.slice(i, i + CHUNK_SIZE);
           try {
             await prisma.problem.createMany({
               data: chunk,
@@ -192,6 +202,44 @@ export class ProblemService {
         });
       }
 
+      // Synchronize Very Easy Logic Building DSA additions (IDs 601+) without altering existing problems 1..600
+      const logicSentinel = await prisma.problem.findUnique({ where: { id: 601 }, select: { id: true } });
+      if (existingCount < totalTarget || !logicSentinel) {
+        const logicEasyProblems = DSA_500_PROBLEMS.filter((p) => p.id >= 601);
+        for (const prob of logicEasyProblems) {
+          await prisma.problem.upsert({
+            where: { id: prob.id },
+            update: {
+              slug: prob.slug,
+              title: prob.title,
+              difficulty: prob.difficulty,
+              category: prob.category,
+              topic: prob.topic,
+              pattern: prob.pattern,
+              statement: prob.statement,
+              constraints: prob.constraints,
+              examplesJson: JSON.stringify(prob.examples),
+              functionSignature: prob.functionSignature,
+              cppHarnessTemplate: prob.defaultCodeStub || null,
+            },
+            create: {
+              id: prob.id,
+              slug: prob.slug,
+              title: prob.title,
+              difficulty: prob.difficulty,
+              category: prob.category,
+              topic: prob.topic,
+              pattern: prob.pattern,
+              statement: prob.statement,
+              constraints: prob.constraints,
+              examplesJson: JSON.stringify(prob.examples),
+              functionSignature: prob.functionSignature,
+              cppHarnessTemplate: prob.defaultCodeStub || null,
+            },
+          });
+        }
+      }
+
       const updatedCount = await prisma.problem.count();
       if (updatedCount >= totalTarget) {
         ProblemService.catalogReady = true;
@@ -205,7 +253,7 @@ export class ProblemService {
   static async listProblems(userId: string, options: ProblemFilterOptions = {}) {
     if (!ProblemService.catalogReady) {
       const totalCount = await prisma.problem.count();
-      if (totalCount < 600) {
+      if (totalCount < ProblemService.getTargetCatalogSize()) {
         await ProblemService.seedInitialProblems();
       } else {
         ProblemService.catalogReady = true;

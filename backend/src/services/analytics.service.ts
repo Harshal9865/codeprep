@@ -248,7 +248,8 @@ export class AnalyticsService {
       }),
     ]);
 
-    if (allProblems.length < 600) {
+    const targetCatalogSize = ProblemService.getTargetCatalogSize();
+    if (allProblems.length < targetCatalogSize) {
       await ProblemService.seedInitialProblems();
       allProblems = await prisma.problem.findMany({
         select: {
@@ -393,8 +394,8 @@ export class AnalyticsService {
       }
     }
 
-    // Partition DSA curriculum by difficulty for weighted daily POTD (20% Easy, 60% Medium, 20% Hard)
-    const dsaProblems = allProblems.filter((p) => p.category !== 'SQL');
+    // Partition core DSA curriculum (IDs 1..500) by difficulty so new logic-building additions never shift POTD/streaks
+    const dsaProblems = allProblems.filter((p) => p.category !== 'SQL' && p.id <= 500);
     const dailyBasePool = dsaProblems.length > 0 ? dsaProblems : allProblems;
     const potdPools = {
       all: dailyBasePool,

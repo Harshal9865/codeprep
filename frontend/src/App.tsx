@@ -34,6 +34,8 @@ type AppView =
 
 type ProblemStatusFilter = 'All' | 'Solved' | 'Unsolved' | 'Bookmarked';
 
+const isSqlProblemId = (id: number) => id >= 501 && id <= 600;
+
 function parseRouteFromHash(): {
   view: AppView;
   problemId: number;
@@ -74,7 +76,7 @@ function parseRouteFromHash(): {
     const id = Number.parseInt(problemMatch[1], 10);
     if (Number.isFinite(id) && id > 0) {
       return {
-        view: id >= 501 ? 'sql-workspace' : 'workspace',
+        view: isSqlProblemId(id) ? 'sql-workspace' : 'workspace',
         problemId: id,
         statusFilter: 'All',
       };
@@ -350,7 +352,7 @@ export const App: React.FC = () => {
         onTabChange={handleTabNavigate}
         onSelectProblem={(id) => {
           setActiveProblemId(id);
-          setCurrentView(id >= 501 ? 'sql-workspace' : 'workspace');
+          setCurrentView(isSqlProblemId(id) ? 'sql-workspace' : 'workspace');
         }}
       />
     );
@@ -397,11 +399,7 @@ export const App: React.FC = () => {
       <ProblemListPage
         onSelectProblem={(id) => {
           setActiveProblemId(id);
-          if (id >= 501) {
-            setCurrentView('sql-workspace');
-          } else {
-            setCurrentView('workspace');
-          }
+          setCurrentView(isSqlProblemId(id) ? 'sql-workspace' : 'workspace');
         }}
         onTabChange={handleTabNavigate}
         initialPrepSetId={problemListPreset.prepSetId}
@@ -418,11 +416,7 @@ export const App: React.FC = () => {
       <DashboardPage
         onSelectProblem={(id) => {
           setActiveProblemId(id);
-          if (id >= 501) {
-            setCurrentView('sql-workspace');
-          } else {
-            setCurrentView('workspace');
-          }
+          setCurrentView(isSqlProblemId(id) ? 'sql-workspace' : 'workspace');
         }}
         onTabChange={handleTabNavigate}
         onOpenProblemsWithFilter={(filter) => {
