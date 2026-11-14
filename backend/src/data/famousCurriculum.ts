@@ -35,6 +35,12 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     hiddenTestCases: [
       { input: '[1,2,1]', expectedOutput: '2', isHidden: true },
       { input: '[2,3,4,5,18,17,6]', expectedOutput: '17', isHidden: true },
+      { input: '[0,2]', expectedOutput: '0', isHidden: true },
+      { input: '[2,0]', expectedOutput: '0', isHidden: true },
+      { input: '[1,8,100,2,100,4,8,3,7]', expectedOutput: '200', isHidden: true },
+      { input: '[10,9,8,7,6,5,4,3,2,1]', expectedOutput: '25', isHidden: true },
+      { input: '[5,5,5,5,5,5]', expectedOutput: '25', isHidden: true },
+      { input: '[1,2,4,3]', expectedOutput: '4', isHidden: true },
     ],
   },
   {
@@ -70,10 +76,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[-1,0,1,2,-1,-4]', expectedOutput: '[[-1,-1,2],[-1,0,1]]' },
       { input: '[0,0,0]', expectedOutput: '[[0,0,0]]' },
+      { input: '[0,1,1]', expectedOutput: '[]' },
     ],
     hiddenTestCases: [
-      { input: '[0,1,1]', expectedOutput: '[]', isHidden: true },
       { input: '[-2,0,1,1,2]', expectedOutput: '[[-2,0,2],[-2,1,1]]', isHidden: true },
+      { input: '[0,0,0,0]', expectedOutput: '[[0,0,0]]', isHidden: true },
+      { input: '[1,2,-2,-1]', expectedOutput: '[]', isHidden: true },
+      { input: '[-1,0,1,0]', expectedOutput: '[[-1,0,1]]', isHidden: true },
+      { input: '[-1,-1,-1,2]', expectedOutput: '[[-1,-1,2]]', isHidden: true },
+      { input: '[-2,0,0,2,2]', expectedOutput: '[[-2,0,2]]', isHidden: true },
+      { input: '[3,0,-2,-1,1,2]', expectedOutput: '[[-2,-1,3],[-2,0,2],[-1,0,1]]', isHidden: true },
+      { input: '[-5,1,2,3,4]', expectedOutput: '[[-5,1,4],[-5,2,3]]', isHidden: true },
     ],
   },
   {
@@ -105,10 +118,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[0,1,0,2,1,0,1,3,2,1,2,1]', expectedOutput: '6' },
       { input: '[4,2,0,3,2,5]', expectedOutput: '9' },
+      { input: '[2,0,2]', expectedOutput: '2' },
     ],
     hiddenTestCases: [
-      { input: '[2,0,2]', expectedOutput: '2', isHidden: true },
       { input: '[3,0,0,2,0,4]', expectedOutput: '10', isHidden: true },
+      { input: '[0]', expectedOutput: '0', isHidden: true },
+      { input: '[5]', expectedOutput: '0', isHidden: true },
+      { input: '[1,2,3,4,5]', expectedOutput: '0', isHidden: true },
+      { input: '[5,4,3,2,1]', expectedOutput: '0', isHidden: true },
+      { input: '[5,1,5]', expectedOutput: '4', isHidden: true },
+      { input: '[4,2,3]', expectedOutput: '1', isHidden: true },
+      { input: '[5,2,1,2,1,5]', expectedOutput: '14', isHidden: true },
     ],
   },
   {
@@ -152,6 +172,12 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
       { input: '""', expectedOutput: '0', isHidden: true },
       { input: '"dvdf"', expectedOutput: '3', isHidden: true },
       { input: '" "', expectedOutput: '1', isHidden: true },
+      { input: '"au"', expectedOutput: '2', isHidden: true },
+      { input: '"abba"', expectedOutput: '2', isHidden: true },
+      { input: '"tmmzuxt"', expectedOutput: '5', isHidden: true },
+      { input: '"aab"', expectedOutput: '2', isHidden: true },
+      { input: '"ohomm"', expectedOutput: '3', isHidden: true },
+      { input: '"abcdefghijklmnopqrstuvwxyz"', expectedOutput: '26', isHidden: true },
     ],
   },
   {
@@ -176,10 +202,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '"ABAB" | 2', expectedOutput: '4' },
       { input: '"AABABBA" | 1', expectedOutput: '4' },
+      { input: '"AAAA" | 2', expectedOutput: '4' },
     ],
     hiddenTestCases: [
-      { input: '"AAAA" | 2', expectedOutput: '4', isHidden: true },
       { input: '"ABBB" | 2', expectedOutput: '4', isHidden: true },
+      { input: '"A" | 0', expectedOutput: '1', isHidden: true },
+      { input: '"ABAA" | 0', expectedOutput: '2', isHidden: true },
+      { input: '"ABCDE" | 1', expectedOutput: '2', isHidden: true },
+      { input: '"BAAAB" | 2', expectedOutput: '5', isHidden: true },
+      { input: '"ABBBAC" | 1', expectedOutput: '4', isHidden: true },
+      { input: '"AAAB" | 0', expectedOutput: '3', isHidden: true },
+      { input: '"ABABAB" | 1', expectedOutput: '3', isHidden: true },
     ],
   },
   {
@@ -205,10 +238,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '"ADOBECODEBANC" | "ABC"', expectedOutput: '"BANC"' },
       { input: '"a" | "a"', expectedOutput: '"a"' },
+      { input: '"a" | "aa"', expectedOutput: '""' },
     ],
     hiddenTestCases: [
-      { input: '"a" | "aa"', expectedOutput: '""', isHidden: true },
       { input: '"ab" | "b"', expectedOutput: '"b"', isHidden: true },
+      { input: '"ab" | "a"', expectedOutput: '"a"', isHidden: true },
+      { input: '"ab" | "A"', expectedOutput: '""', isHidden: true },
+      { input: '"abc" | "cba"', expectedOutput: '"abc"', isHidden: true },
+      { input: '"aa" | "aa"', expectedOutput: '"aa"', isHidden: true },
+      { input: '"cabwefgewcwaefgcf" | "cae"', expectedOutput: '"cwae"', isHidden: true },
+      { input: '"bba" | "ab"', expectedOutput: '"ba"', isHidden: true },
+      { input: '"aaaaaaaaaaaabbbbbcdd" | "abcdd"', expectedOutput: '"abbbbbcdd"', isHidden: true },
     ],
   },
   {
@@ -233,10 +273,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[1,3,-1,-3,5,3,6,7] | 3', expectedOutput: '[3,3,5,5,6,7]' },
       { input: '[1] | 1', expectedOutput: '[1]' },
+      { input: '[1,-1] | 1', expectedOutput: '[1,-1]' },
     ],
     hiddenTestCases: [
-      { input: '[1,-1] | 1', expectedOutput: '[1,-1]', isHidden: true },
       { input: '[9,11] | 2', expectedOutput: '[11]', isHidden: true },
+      { input: '[4,-2] | 2', expectedOutput: '[4]', isHidden: true },
+      { input: '[7,2,4] | 2', expectedOutput: '[7,4]', isHidden: true },
+      { input: '[1,3,1,2,0,5] | 3', expectedOutput: '[3,3,2,5]', isHidden: true },
+      { input: '[5,4,3,2,1] | 3', expectedOutput: '[5,4,3]', isHidden: true },
+      { input: '[1,2,3,4,5] | 3', expectedOutput: '[3,4,5]', isHidden: true },
+      { input: '[2,2,2,2] | 2', expectedOutput: '[2,2,2]', isHidden: true },
+      { input: '[10,9,8,7,6] | 5', expectedOutput: '[10]', isHidden: true },
     ],
   },
   {
@@ -261,9 +308,10 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '3', expectedOutput: '["((()))","(()())","(())()","()(())","()()()"]' },
       { input: '1', expectedOutput: '["()"]' },
+      { input: '2', expectedOutput: '["(())","()()"]' },
     ],
     hiddenTestCases: [
-      { input: '2', expectedOutput: '["(())","()()"]', isHidden: true },
+      { input: '4', expectedOutput: '["(((())))","((()()))","((())())","((()))()","(()(()))","(()()())","(()())()","(())(())","(())()()","()((()))","()(()())","()(())()","()()(())","()()()()"]', isHidden: true },
     ],
   },
   {
@@ -289,9 +337,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[73,74,75,71,69,72,76,73]', expectedOutput: '[1,1,4,2,1,1,0,0]' },
       { input: '[30,40,50,60]', expectedOutput: '[1,1,1,0]' },
+      { input: '[30,60,90]', expectedOutput: '[1,1,0]' },
     ],
     hiddenTestCases: [
       { input: '[89,62,70,58,47,47,46,76,100,70]', expectedOutput: '[8,1,5,4,3,2,1,1,0,0]', isHidden: true },
+      { input: '[50]', expectedOutput: '[0]', isHidden: true },
+      { input: '[90,80,70,60]', expectedOutput: '[0,0,0,0]', isHidden: true },
+      { input: '[50,50,50,50]', expectedOutput: '[0,0,0,0]', isHidden: true },
+      { input: '[50,50,60]', expectedOutput: '[2,1,0]', isHidden: true },
+      { input: '[30,31,32,31,33]', expectedOutput: '[1,1,2,1,0]', isHidden: true },
+      { input: '[80,60,50,40,90]', expectedOutput: '[4,3,2,1,0]', isHidden: true },
+      { input: '[40,35,32,37,42,41]', expectedOutput: '[4,2,1,1,0,0]', isHidden: true },
     ],
   },
   {
@@ -316,10 +372,18 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[2,1,5,6,2,3]', expectedOutput: '10' },
       { input: '[2,4]', expectedOutput: '4' },
+      { input: '[2,1,2]', expectedOutput: '3' },
     ],
     hiddenTestCases: [
-      { input: '[2,1,2]', expectedOutput: '3', isHidden: true },
       { input: '[5,4,1,2]', expectedOutput: '8', isHidden: true },
+      { input: '[1]', expectedOutput: '1', isHidden: true },
+      { input: '[0]', expectedOutput: '0', isHidden: true },
+      { input: '[0,0,0]', expectedOutput: '0', isHidden: true },
+      { input: '[1,2,3,4,5]', expectedOutput: '9', isHidden: true },
+      { input: '[5,4,3,2,1]', expectedOutput: '9', isHidden: true },
+      { input: '[6,2,5,4,5,1,6]', expectedOutput: '12', isHidden: true },
+      { input: '[4,4,4,4]', expectedOutput: '16', isHidden: true },
+      { input: '[1,1,1,1,100]', expectedOutput: '100', isHidden: true },
     ],
   },
   {
@@ -345,10 +409,18 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[4,5,6,7,0,1,2] | 0', expectedOutput: '4' },
       { input: '[4,5,6,7,0,1,2] | 3', expectedOutput: '-1' },
+      { input: '[1] | 0', expectedOutput: '-1' },
     ],
     hiddenTestCases: [
       { input: '[1] | 1', expectedOutput: '0', isHidden: true },
       { input: '[5,1,3] | 5', expectedOutput: '0', isHidden: true },
+      { input: '[5,1,3] | 3', expectedOutput: '2', isHidden: true },
+      { input: '[5,1,3] | 1', expectedOutput: '1', isHidden: true },
+      { input: '[3,1] | 1', expectedOutput: '1', isHidden: true },
+      { input: '[3,1] | 3', expectedOutput: '0', isHidden: true },
+      { input: '[1,3,5] | 5', expectedOutput: '2', isHidden: true },
+      { input: '[6,7,8,1,2,3,4,5] | 8', expectedOutput: '2', isHidden: true },
+      { input: '[6,7,8,1,2,3,4,5] | 9', expectedOutput: '-1', isHidden: true },
     ],
   },
   {
@@ -374,10 +446,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[3,4,5,1,2]', expectedOutput: '1' },
       { input: '[4,5,6,7,0,1,2]', expectedOutput: '0' },
+      { input: '[11,13,15,17]', expectedOutput: '11' },
     ],
     hiddenTestCases: [
       { input: '[1]', expectedOutput: '1', isHidden: true },
       { input: '[2,1]', expectedOutput: '1', isHidden: true },
+      { input: '[1,2]', expectedOutput: '1', isHidden: true },
+      { input: '[2,3,4,5,1]', expectedOutput: '1', isHidden: true },
+      { input: '[5,1,2,3,4]', expectedOutput: '1', isHidden: true },
+      { input: '[-5,-3,-1,-10,-7]', expectedOutput: '-10', isHidden: true },
+      { input: '[7,8,9,0,1,2,3,4,5,6]', expectedOutput: '0', isHidden: true },
+      { input: '[10,20,30,40,5]', expectedOutput: '5', isHidden: true },
     ],
   },
   {
@@ -403,9 +482,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[3,6,7,11] | 8', expectedOutput: '4' },
       { input: '[30,11,23,4,20] | 5', expectedOutput: '30' },
+      { input: '[30,11,23,4,20] | 6', expectedOutput: '23' },
     ],
     hiddenTestCases: [
       { input: '[312884470] | 312884469', expectedOutput: '2', isHidden: true },
+      { input: '[1] | 1', expectedOutput: '1', isHidden: true },
+      { input: '[10] | 10', expectedOutput: '1', isHidden: true },
+      { input: '[10] | 5', expectedOutput: '2', isHidden: true },
+      { input: '[1,1,1,999999999] | 10', expectedOutput: '142857143', isHidden: true },
+      { input: '[1000000000] | 2', expectedOutput: '500000000', isHidden: true },
+      { input: '[3,6,7,11] | 10', expectedOutput: '3', isHidden: true },
+      { input: '[805306368,805306368,805306368] | 1000000000', expectedOutput: '3', isHidden: true },
     ],
   },
   {
@@ -430,10 +517,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[[1,3],[2,6],[8,10],[15,18]]', expectedOutput: '[[1,6],[8,10],[15,18]]' },
       { input: '[[1,4],[4,5]]', expectedOutput: '[[1,5]]' },
+      { input: '[[4,7],[1,4]]', expectedOutput: '[[1,7]]' },
     ],
     hiddenTestCases: [
       { input: '[[1,4],[0,4]]', expectedOutput: '[[0,4]]', isHidden: true },
       { input: '[[1,4],[2,3]]', expectedOutput: '[[1,4]]', isHidden: true },
+      { input: '[[1,3]]', expectedOutput: '[[1,3]]', isHidden: true },
+      { input: '[[1,4],[0,0]]', expectedOutput: '[[0,0],[1,4]]', isHidden: true },
+      { input: '[[2,3],[4,5],[6,7],[8,9],[1,10]]', expectedOutput: '[[1,10]]', isHidden: true },
+      { input: '[[1,2],[3,4],[5,6]]', expectedOutput: '[[1,2],[3,4],[5,6]]', isHidden: true },
+      { input: '[[1,4],[0,2],[3,5]]', expectedOutput: '[[0,5]]', isHidden: true },
+      { input: '[[2,3],[2,2],[3,3],[1,3],[5,7],[2,2],[4,6]]', expectedOutput: '[[1,3],[4,7]]', isHidden: true },
     ],
   },
   {
@@ -457,9 +551,15 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     defaultCodeStub: `class Solution {\npublic:\n    void rotate(vector<vector<int>>& matrix) {\n        // In-place transpose then reverse rows\n    }\n};`,
     sampleTestCases: [
       { input: '[[1,2,3],[4,5,6],[7,8,9]]', expectedOutput: '[[7,4,1],[8,5,2],[9,6,3]]' },
+      { input: '[[5,1,9,11],[2,4,8,10],[13,3,6,7],[15,14,12,16]]', expectedOutput: '[[15,13,2,5],[14,3,4,1],[12,6,8,9],[16,7,10,11]]' },
     ],
     hiddenTestCases: [
       { input: '[[1]]', expectedOutput: '[[1]]', isHidden: true },
+      { input: '[[1,2],[3,4]]', expectedOutput: '[[3,1],[4,2]]', isHidden: true },
+      { input: '[[1,2,3,4,5],[6,7,8,9,10],[11,12,13,14,15],[16,17,18,19,20],[21,22,23,24,25]]', expectedOutput: '[[21,16,11,6,1],[22,17,12,7,2],[23,18,13,8,3],[24,19,14,9,4],[25,20,15,10,5]]', isHidden: true },
+      { input: '[[-1,-2],[-3,-4]]', expectedOutput: '[[-3,-1],[-4,-2]]', isHidden: true },
+      { input: '[[1,1],[1,1]]', expectedOutput: '[[1,1],[1,1]]', isHidden: true },
+      { input: '[[0,1,0],[0,0,1],[1,0,0]]', expectedOutput: '[[1,0,0],[0,0,1],[0,1,0]]', isHidden: true },
     ],
   },
   {
@@ -484,10 +584,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[3,2,1,5,6,4] | 2', expectedOutput: '5' },
       { input: '[3,2,3,1,2,4,5,5,6] | 4', expectedOutput: '4' },
+      { input: '[1] | 1', expectedOutput: '1' },
     ],
     hiddenTestCases: [
-      { input: '[1] | 1', expectedOutput: '1', isHidden: true },
       { input: '[-1,2,0] | 1', expectedOutput: '2', isHidden: true },
+      { input: '[-1,2,0] | 2', expectedOutput: '0', isHidden: true },
+      { input: '[-1,2,0] | 3', expectedOutput: '-1', isHidden: true },
+      { input: '[2,1] | 1', expectedOutput: '2', isHidden: true },
+      { input: '[2,1] | 2', expectedOutput: '1', isHidden: true },
+      { input: '[-1,-1] | 2', expectedOutput: '-1', isHidden: true },
+      { input: '[7,6,5,4,3,2,1] | 5', expectedOutput: '3', isHidden: true },
+      { input: '[10,20,30,40,50] | 3', expectedOutput: '30', isHidden: true },
     ],
   },
   {
@@ -515,6 +622,10 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     ],
     hiddenTestCases: [
       { input: '[1,2]', expectedOutput: '[[],[1],[2],[1,2]]', isHidden: true },
+      { input: '[-1,0,1]', expectedOutput: '[[],[-1],[0],[-1,0],[1],[-1,1],[0,1],[-1,0,1]]', isHidden: true },
+      { input: '[5]', expectedOutput: '[[],[5]]', isHidden: true },
+      { input: '[-10,10]', expectedOutput: '[[],[-10],[10],[-10,10]]', isHidden: true },
+      { input: '[1,2,3,4]', expectedOutput: '[[],[1],[2],[1,2],[3],[1,3],[2,3],[1,2,3],[4],[1,4],[2,4],[1,2,4],[3,4],[1,3,4],[2,3,4],[1,2,3,4]]', isHidden: true },
     ],
   },
   {
@@ -540,9 +651,16 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[2,3,6,7] | 7', expectedOutput: '[[2,2,3],[7]]' },
       { input: '[2,3,5] | 8', expectedOutput: '[[2,2,2,2],[2,3,3],[3,5]]' },
+      { input: '[2] | 1', expectedOutput: '[]' },
     ],
     hiddenTestCases: [
-      { input: '[2] | 1', expectedOutput: '[]', isHidden: true },
+      { input: '[2] | 2', expectedOutput: '[[2]]', isHidden: true },
+      { input: '[2,4] | 5', expectedOutput: '[]', isHidden: true },
+      { input: '[3,5,7] | 8', expectedOutput: '[[3,5]]', isHidden: true },
+      { input: '[2,3] | 6', expectedOutput: '[[2,2,2],[3,3]]', isHidden: true },
+      { input: '[2,3,4] | 6', expectedOutput: '[[2,2,2],[2,4],[3,3]]', isHidden: true },
+      { input: '[4,8,12] | 12', expectedOutput: '[[4,4,4],[4,8],[12]]', isHidden: true },
+      { input: '[2,5,10] | 10', expectedOutput: '[[2,2,2,2,2],[5,5],[10]]', isHidden: true },
     ],
   },
   {
@@ -567,10 +685,18 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     defaultCodeStub: `class Solution {\npublic:\n    bool exist(vector<vector<char>>& board, string word) {\n        // 4-directional DFS backtracking with in-place visited marking\n    }\n};`,
     sampleTestCases: [
       { input: '[["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]] | "ABCCED"', expectedOutput: 'true' },
+      { input: '[["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]] | "SEE"', expectedOutput: 'true' },
       { input: '[["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]] | "ABCB"', expectedOutput: 'false' },
     ],
     hiddenTestCases: [
       { input: '[["a"]] | "a"', expectedOutput: 'true', isHidden: true },
+      { input: '[["a"]] | "b"', expectedOutput: 'false', isHidden: true },
+      { input: '[["a","b"],["c","d"]] | "cdba"', expectedOutput: 'true', isHidden: true },
+      { input: '[["a","b"],["c","d"]] | "abcd"', expectedOutput: 'false', isHidden: true },
+      { input: '[["a","a"]] | "aaa"', expectedOutput: 'false', isHidden: true },
+      { input: '[["A","B","C","E"],["S","F","E","S"],["A","D","E","E"]] | "ABCESEEEFS"', expectedOutput: 'true', isHidden: true },
+      { input: '[["C","A","A"],["A","A","A"],["B","C","D"]] | "AAB"', expectedOutput: 'true', isHidden: true },
+      { input: '[["a","b","c"],["a","e","d"],["a","f","g"]] | "abcdefg"', expectedOutput: 'true', isHidden: true },
     ],
   },
   {
@@ -605,6 +731,14 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     hiddenTestCases: [
       { input: '[["1"]]', expectedOutput: '1', isHidden: true },
       { input: '[["0"]]', expectedOutput: '0', isHidden: true },
+      { input: '[["1","0"],["0","1"]]', expectedOutput: '2', isHidden: true },
+      { input: '[["1","1"],["1","1"]]', expectedOutput: '1', isHidden: true },
+      { input: '[["0","0"],["0","0"]]', expectedOutput: '0', isHidden: true },
+      { input: '[["1","0","1","0","1"]]', expectedOutput: '3', isHidden: true },
+      { input: '[["1"],["0"],["1"],["0"],["1"]]', expectedOutput: '3', isHidden: true },
+      { input: '[["1","1","1"],["0","1","0"],["1","1","1"]]', expectedOutput: '1', isHidden: true },
+      { input: '[["1","0","1"],["0","1","0"],["1","0","1"]]', expectedOutput: '5', isHidden: true },
+      { input: '[["0","1","0"],["1","0","1"],["0","1","0"]]', expectedOutput: '4', isHidden: true },
     ],
   },
   {
@@ -629,10 +763,18 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     defaultCodeStub: `class Solution {\npublic:\n    int orangesRotting(vector<vector<int>>& grid) {\n        // Multi-source BFS queuing all 2s initially\n    }\n};`,
     sampleTestCases: [
       { input: '[[2,1,1],[1,1,0],[0,1,1]]', expectedOutput: '4' },
+      { input: '[[2,1,1],[0,1,1],[1,0,1]]', expectedOutput: '-1' },
       { input: '[[0,2]]', expectedOutput: '0' },
     ],
     hiddenTestCases: [
-      { input: '[[2,1,1],[0,1,1],[1,0,1]]', expectedOutput: '-1', isHidden: true },
+      { input: '[[0]]', expectedOutput: '0', isHidden: true },
+      { input: '[[1]]', expectedOutput: '-1', isHidden: true },
+      { input: '[[2]]', expectedOutput: '0', isHidden: true },
+      { input: '[[2,1,1],[1,1,1],[0,1,2]]', expectedOutput: '2', isHidden: true },
+      { input: '[[2,2],[1,1],[0,0],[2,0]]', expectedOutput: '1', isHidden: true },
+      { input: '[[0,0,0,0]]', expectedOutput: '0', isHidden: true },
+      { input: '[[2,1,1,1,1]]', expectedOutput: '4', isHidden: true },
+      { input: '[[1,2,1,1,2,1,1]]', expectedOutput: '2', isHidden: true },
     ],
   },
   {
@@ -657,10 +799,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '2 | [[1,0]]', expectedOutput: 'true' },
       { input: '2 | [[1,0],[0,1]]', expectedOutput: 'false' },
+      { input: '5 | [[1,4],[2,4],[3,1],[3,2]]', expectedOutput: 'true' },
     ],
     hiddenTestCases: [
       { input: '1 | []', expectedOutput: 'true', isHidden: true },
       { input: '3 | [[0,1],[1,2],[2,0]]', expectedOutput: 'false', isHidden: true },
+      { input: '4 | []', expectedOutput: 'true', isHidden: true },
+      { input: '4 | [[1,0],[2,1],[3,2]]', expectedOutput: 'true', isHidden: true },
+      { input: '4 | [[1,0],[2,1],[3,2],[1,3]]', expectedOutput: 'false', isHidden: true },
+      { input: '3 | [[0,1],[0,2],[1,2]]', expectedOutput: 'true', isHidden: true },
+      { input: '5 | [[0,1],[1,2],[3,4],[4,3]]', expectedOutput: 'false', isHidden: true },
+      { input: '2 | [[0,1]]', expectedOutput: 'true', isHidden: true },
     ],
   },
   {
@@ -685,9 +834,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '"hit" | "cog" | ["hot","dot","dog","lot","log","cog"]', expectedOutput: '5' },
       { input: '"hit" | "cog" | ["hot","dot","dog","lot","log"]', expectedOutput: '0' },
+      { input: '"a" | "c" | ["a","b","c"]', expectedOutput: '2' },
     ],
     hiddenTestCases: [
-      { input: '"a" | "c" | ["a","b","c"]', expectedOutput: '2', isHidden: true },
+      { input: '"hot" | "dog" | ["hot","dog"]', expectedOutput: '0', isHidden: true },
+      { input: '"hot" | "dog" | ["hot","dog","dot"]', expectedOutput: '3', isHidden: true },
+      { input: '"leet" | "code" | ["lest","leet","lose","code","lode","robe","lost"]', expectedOutput: '6', isHidden: true },
+      { input: '"red" | "tax" | ["ted","tex","red","tax","tad","den","rex","pee"]', expectedOutput: '4', isHidden: true },
+      { input: '"cat" | "dog" | ["cot","cog","dog"]', expectedOutput: '4', isHidden: true },
+      { input: '"hit" | "cog" | ["hot","cog"]', expectedOutput: '0', isHidden: true },
+      { input: '"lost" | "cost" | ["most","fist","lost","cost","fish"]', expectedOutput: '2', isHidden: true },
+      { input: '"talk" | "tail" | ["tall","tail","talk"]', expectedOutput: '3', isHidden: true },
     ],
   },
   {
@@ -718,6 +875,14 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     hiddenTestCases: [
       { input: '[1] | 1', expectedOutput: '1', isHidden: true },
       { input: '[1] | 2', expectedOutput: '2', isHidden: true },
+      { input: '[2,5,10,1] | 27', expectedOutput: '4', isHidden: true },
+      { input: '[186,419,83,408] | 6249', expectedOutput: '20', isHidden: true },
+      { input: '[2,4] | 7', expectedOutput: '-1', isHidden: true },
+      { input: '[3,7] | 11', expectedOutput: '-1', isHidden: true },
+      { input: '[1,3,5] | 8', expectedOutput: '2', isHidden: true },
+      { input: '[1,2,5] | 100', expectedOutput: '20', isHidden: true },
+      { input: '[2,5] | 3', expectedOutput: '-1', isHidden: true },
+      { input: '[7,14] | 28', expectedOutput: '2', isHidden: true },
     ],
   },
   {
@@ -747,6 +912,13 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     ],
     hiddenTestCases: [
       { input: '[4,10,4,3,8,9]', expectedOutput: '3', isHidden: true },
+      { input: '[1]', expectedOutput: '1', isHidden: true },
+      { input: '[1,2,3,4,5]', expectedOutput: '5', isHidden: true },
+      { input: '[5,4,3,2,1]', expectedOutput: '1', isHidden: true },
+      { input: '[-10,-5,-3,-8,-2,-1]', expectedOutput: '5', isHidden: true },
+      { input: '[1,3,6,7,9,4,10,5,6]', expectedOutput: '6', isHidden: true },
+      { input: '[2,2]', expectedOutput: '1', isHidden: true },
+      { input: '[3,5,6,2,5,4,19,5,6,7,12]', expectedOutput: '6', isHidden: true },
     ],
   },
   {
@@ -771,10 +943,18 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     defaultCodeStub: `class Solution {\npublic:\n    bool wordBreak(string s, vector<string>& wordDict) {\n        // dp[i] = can segment prefix s[0..i]\n    }\n};`,
     sampleTestCases: [
       { input: '"leetcode" | ["leet","code"]', expectedOutput: 'true' },
+      { input: '"applepenapple" | ["apple","pen"]', expectedOutput: 'true' },
       { input: '"catsandog" | ["cats","dog","sand","and","cat"]', expectedOutput: 'false' },
     ],
     hiddenTestCases: [
       { input: '"a" | ["a"]', expectedOutput: 'true', isHidden: true },
+      { input: '"a" | ["b"]', expectedOutput: 'false', isHidden: true },
+      { input: '"cars" | ["car","ca","rs"]', expectedOutput: 'true', isHidden: true },
+      { input: '"bb" | ["a","b","bbb","bbbb"]', expectedOutput: 'true', isHidden: true },
+      { input: '"abcd" | ["a","abc","b","cd"]', expectedOutput: 'true', isHidden: true },
+      { input: '"aaaaaaa" | ["aaaa","aaa"]', expectedOutput: 'true', isHidden: true },
+      { input: '"aaaaaaa" | ["aaaa","aa"]', expectedOutput: 'false', isHidden: true },
+      { input: '"goalspecial" | ["go","goal","goals","special"]', expectedOutput: 'true', isHidden: true },
     ],
   },
   {
@@ -799,10 +979,18 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '"horse" | "ros"', expectedOutput: '3' },
       { input: '"intention" | "execution"', expectedOutput: '5' },
+      { input: '"sea" | "eat"', expectedOutput: '2' },
     ],
     hiddenTestCases: [
       { input: '"" | "a"', expectedOutput: '1', isHidden: true },
+      { input: '"a" | ""', expectedOutput: '1', isHidden: true },
+      { input: '"" | ""', expectedOutput: '0', isHidden: true },
       { input: '"zoologico" | "zoologico"', expectedOutput: '0', isHidden: true },
+      { input: '"ab" | "bc"', expectedOutput: '2', isHidden: true },
+      { input: '"abc" | "def"', expectedOutput: '3', isHidden: true },
+      { input: '"kitten" | "sitting"', expectedOutput: '3', isHidden: true },
+      { input: '"sunday" | "saturday"', expectedOutput: '3', isHidden: true },
+      { input: '"ab" | "a"', expectedOutput: '1', isHidden: true },
     ],
   },
   {
@@ -827,9 +1015,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '4 | [1,2,3] | [10,15,40] | 3', expectedOutput: '50' },
       { input: '4 | [4,5,1] | [1,2,3] | 3', expectedOutput: '3' },
+      { input: '50 | [10,20,30] | [60,100,120] | 3', expectedOutput: '220' },
     ],
     hiddenTestCases: [
-      { input: '50 | [10,20,30] | [60,100,120] | 3', expectedOutput: '220', isHidden: true },
+      { input: '0 | [1,2,3] | [10,20,30] | 3', expectedOutput: '0', isHidden: true },
+      { input: '3 | [4,5,6] | [10,20,30] | 3', expectedOutput: '0', isHidden: true },
+      { input: '5 | [5] | [100] | 1', expectedOutput: '100', isHidden: true },
+      { input: '4 | [5] | [100] | 1', expectedOutput: '0', isHidden: true },
+      { input: '10 | [2,3,5,7] | [1,4,7,10] | 4', expectedOutput: '14', isHidden: true },
+      { input: '7 | [1,3,4,5] | [1,4,5,7] | 4', expectedOutput: '9', isHidden: true },
+      { input: '6 | [1,2,3] | [6,10,12] | 3', expectedOutput: '28', isHidden: true },
+      { input: '5 | [3,4,2] | [4,5,3] | 3', expectedOutput: '7', isHidden: true },
     ],
   },
   {
@@ -854,9 +1050,17 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '5 | [[1],[0,2,4],[1,3],[2,4],[1,3]]', expectedOutput: 'true' },
       { input: '4 | [[],[],[],[]]', expectedOutput: 'false' },
+      { input: '3 | [[1,2],[0,2],[0,1]]', expectedOutput: 'true' },
     ],
     hiddenTestCases: [
-      { input: '3 | [[1,2],[0,2],[0,1]]', expectedOutput: 'true', isHidden: true },
+      { input: '1 | [[]]', expectedOutput: 'false', isHidden: true },
+      { input: '2 | [[1],[0]]', expectedOutput: 'false', isHidden: true },
+      { input: '4 | [[1],[0,2],[1,3],[2]]', expectedOutput: 'false', isHidden: true },
+      { input: '4 | [[1,2],[0],[0,3],[2]]', expectedOutput: 'false', isHidden: true },
+      { input: '6 | [[1],[0],[3,4],[2,4],[2,3],[]]', expectedOutput: 'true', isHidden: true },
+      { input: '5 | [[1,2],[0],[0],[4],[3]]', expectedOutput: 'false', isHidden: true },
+      { input: '4 | [[1,2,3],[0,2],[0,1],[0]]', expectedOutput: 'true', isHidden: true },
+      { input: '5 | [[1,4],[0,2],[1,3],[2,4],[3,0]]', expectedOutput: 'true', isHidden: true },
     ],
   },
   {
@@ -884,6 +1088,13 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     ],
     hiddenTestCases: [
       { input: '[[0,0],[0,0]] | 2', expectedOutput: '-1', isHidden: true },
+      { input: '[[0,1],[0,0]] | 2', expectedOutput: '1', isHidden: true },
+      { input: '[[0,0],[1,0]] | 2', expectedOutput: '0', isHidden: true },
+      { input: '[[0,1,1,0],[0,0,1,0],[0,0,0,0],[1,0,1,0]] | 4', expectedOutput: '2', isHidden: true },
+      { input: '[[0,0,1],[0,0,1],[0,0,0]] | 3', expectedOutput: '2', isHidden: true },
+      { input: '[[0,1,1],[1,0,1],[1,1,0]] | 3', expectedOutput: '-1', isHidden: true },
+      { input: '[[0,1,0,0],[0,0,0,0],[0,1,0,0],[0,0,0,0]] | 4', expectedOutput: '-1', isHidden: true },
+      { input: '[[0,1,1],[0,0,0],[0,0,0]] | 3', expectedOutput: '-1', isHidden: true },
     ],
   },
   {
@@ -906,9 +1117,16 @@ export const FAMOUS_DSA_PROBLEMS: ProblemDefinition[] = [
     defaultCodeStub: `class Solution {\npublic:\n    vector<int> JobScheduling(vector<vector<int>>& Jobs, int n) {\n        // Sort jobs descending by profit, place in latest available slot\n    }\n};`,
     sampleTestCases: [
       { input: '[[1,4,20],[2,1,10],[3,1,40],[4,1,30]] | 4', expectedOutput: '[2,60]' },
+      { input: '[[1,2,100],[2,1,19],[3,2,27],[4,1,25],[5,1,15]] | 5', expectedOutput: '[2,127]' },
     ],
     hiddenTestCases: [
-      { input: '[[1,2,100],[2,1,19],[3,2,27],[4,1,25],[5,1,15]] | 5', expectedOutput: '[2,127]', isHidden: true },
+      { input: '[[1,1,50]] | 1', expectedOutput: '[1,50]', isHidden: true },
+      { input: '[[1,1,10],[2,1,20],[3,1,30]] | 3', expectedOutput: '[1,30]', isHidden: true },
+      { input: '[[1,3,50],[2,2,40],[3,1,30]] | 3', expectedOutput: '[3,120]', isHidden: true },
+      { input: '[[1,2,100],[2,2,90],[3,1,50]] | 3', expectedOutput: '[2,190]', isHidden: true },
+      { input: '[[1,3,10],[2,3,20],[3,3,30],[4,3,40]] | 4', expectedOutput: '[3,90]', isHidden: true },
+      { input: '[[1,2,60],[2,1,100],[3,3,20],[4,2,40],[5,1,20]] | 5', expectedOutput: '[3,180]', isHidden: true },
+      { input: '[[1,4,20],[2,4,30],[3,4,40],[4,4,50]] | 4', expectedOutput: '[4,140]', isHidden: true },
     ],
   },
 ];

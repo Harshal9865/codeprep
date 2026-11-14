@@ -22,9 +22,17 @@ const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
     defaultCodeStub: `class Solution {\npublic:\n    vector<vector<string>> groupAnagrams(vector<string>& strs) {\n        // Your code here\n    }\n};`,
     sampleTestCases: [
       { input: '["eat","tea","tan","ate","nat","bat"]', expectedOutput: '[["bat"],["nat","tan"],["ate","eat","tea"]]' },
+      { input: '[""]', expectedOutput: '[[""]]' },
       { input: '["a"]', expectedOutput: '[["a"]]' },
     ],
     hiddenTestCases: [
+      { input: '["",""]', expectedOutput: '[["",""]]', isHidden: true },
+      { input: '["a","a"]', expectedOutput: '[["a","a"]]', isHidden: true },
+      { input: '["abc","bca","cab","xyz","zyx"]', expectedOutput: '[["abc","bca","cab"],["xyz","zyx"]]', isHidden: true },
+      { input: '["listen","silent","enlist","hello"]', expectedOutput: '[["listen","silent","enlist"],["hello"]]', isHidden: true },
+      { input: '["rat","car","tar","arc","art"]', expectedOutput: '[["rat","tar","art"],["car","arc"]]', isHidden: true },
+      { input: '["bdddddddddd","bbbbbbbbbbc"]', expectedOutput: '[["bdddddddddd"],["bbbbbbbbbbc"]]', isHidden: true },
+      { input: '["ab","ba","abc","cba","bac","a"]', expectedOutput: '[["ab","ba"],["abc","cba","bac"],["a"]]', isHidden: true },
       { input: '["cab","tin","pew","duh","may","ill","buy","bar","max","doc"]', expectedOutput: '[["max"],["buy"],["doc"],["may"],["ill"],["duh"],["tin"],["bar"],["pew"],["cab"]]', isHidden: true },
     ],
   },
@@ -49,9 +57,17 @@ const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[1,1,1,2,2,3] | 2', expectedOutput: '[1,2]' },
       { input: '[1] | 1', expectedOutput: '[1]' },
+      { input: '[1,2,1,2,1,2,3,1,3,2] | 2', expectedOutput: '[1,2]' },
     ],
     hiddenTestCases: [
       { input: '[4,1,-1,2,-1,2,3] | 2', expectedOutput: '[-1,2]', isHidden: true },
+      { input: '[5,5,5,5] | 1', expectedOutput: '[5]', isHidden: true },
+      { input: '[10,20,20,30,30,30] | 1', expectedOutput: '[30]', isHidden: true },
+      { input: '[10,20,20,30,30,30] | 2', expectedOutput: '[30,20]', isHidden: true },
+      { input: '[1,2,3,4] | 4', expectedOutput: '[1,2,3,4]', isHidden: true },
+      { input: '[-10,-10,-10,0,0,5] | 2', expectedOutput: '[-10,0]', isHidden: true },
+      { input: '[7,7,7,1,1,2,2,2,2,3] | 2', expectedOutput: '[2,7]', isHidden: true },
+      { input: '[0,0,0,1,2] | 1', expectedOutput: '[0]', isHidden: true },
     ],
   },
   {
@@ -75,10 +91,17 @@ const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[1,2,3,4]', expectedOutput: '[24,12,8,6]' },
       { input: '[-1,1,0,-3,3]', expectedOutput: '[0,0,9,0,0]' },
+      { input: '[2,3]', expectedOutput: '[3,2]' },
     ],
     hiddenTestCases: [
       { input: '[0,0]', expectedOutput: '[0,0]', isHidden: true },
       { input: '[1,2,0,4,5]', expectedOutput: '[0,0,40,0,0]', isHidden: true },
+      { input: '[-1,-2,-3,-4]', expectedOutput: '[-24,-12,-8,-6]', isHidden: true },
+      { input: '[-1,-2,-3]', expectedOutput: '[6,3,2]', isHidden: true },
+      { input: '[1,1,1,1,1]', expectedOutput: '[1,1,1,1,1]', isHidden: true },
+      { input: '[5,0,0,2]', expectedOutput: '[0,0,0,0]', isHidden: true },
+      { input: '[2,3,4,5,6]', expectedOutput: '[360,240,180,144,120]', isHidden: true },
+      { input: '[-30,30]', expectedOutput: '[30,-30]', isHidden: true },
     ],
   },
   {
@@ -102,10 +125,17 @@ const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
     sampleTestCases: [
       { input: '[100,4,200,1,3,2]', expectedOutput: '4' },
       { input: '[0,3,7,2,5,8,4,6,0,1]', expectedOutput: '9' },
+      { input: '[1,0,1,2]', expectedOutput: '3' },
     ],
     hiddenTestCases: [
       { input: '[]', expectedOutput: '0', isHidden: true },
       { input: '[1]', expectedOutput: '1', isHidden: true },
+      { input: '[5,5,5,5]', expectedOutput: '1', isHidden: true },
+      { input: '[9,1,4,7,3,-1,0,5,8,-1,6]', expectedOutput: '7', isHidden: true },
+      { input: '[-3,-2,-1,0,5]', expectedOutput: '4', isHidden: true },
+      { input: '[10,30,20]', expectedOutput: '1', isHidden: true },
+      { input: '[5,4,3,2,1]', expectedOutput: '5', isHidden: true },
+      { input: '[1,2,0,1]', expectedOutput: '3', isHidden: true },
     ],
   },
   {
@@ -127,9 +157,15 @@ const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
     defaultCodeStub: `class Solution {\npublic:\n    bool isValidSudoku(vector<vector<char>>& board) {\n        // Your code here\n    }\n};`,
     sampleTestCases: [
       { input: '[["5","3",".",".","7",".",".",".","."],["6",".",".","1","9","5",".",".","."],[".","9","8",".",".",".",".","6","."],["8",".",".",".","6",".",".",".","3"],["4",".",".","8",".","3",".",".","1"],["7",".",".",".","2",".",".",".","6"],[".","6",".",".",".",".","2","8","."],[".",".",".","4","1","9",".",".","5"],[".",".",".",".","8",".",".","7","9"]]', expectedOutput: 'true' },
+      { input: '[["8","3",".",".","7",".",".",".","."],["6",".",".","1","9","5",".",".","."],[".","9","8",".",".",".",".","6","."],["8",".",".",".","6",".",".",".","3"],["4",".",".","8",".","3",".",".","1"],["7",".",".",".","2",".",".",".","6"],[".","6",".",".",".",".","2","8","."],[".",".",".","4","1","9",".",".","5"],[".",".",".",".","8",".",".","7","9"]]', expectedOutput: 'false' },
     ],
     hiddenTestCases: [
-      { input: '[["8","3",".",".","7",".",".",".","."],["6",".",".","1","9","5",".",".","."],[".","9","8",".",".",".",".","6","."],["8",".",".",".","6",".",".",".","3"],["4",".",".","8",".","3",".",".","1"],["7",".",".",".","2",".",".",".","6"],[".","6",".",".",".",".","2","8","."],[".",".",".","4","1","9",".",".","5"],[".",".",".",".","8",".",".","7","9"]]', expectedOutput: 'false', isHidden: true },
+      { input: '[[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."]]', expectedOutput: 'true', isHidden: true },
+      { input: '[["5","5",".",".","7",".",".",".","."],["6",".",".","1","9","5",".",".","."],[".","9","8",".",".",".",".","6","."],["8",".",".",".","6",".",".",".","3"],["4",".",".","8",".","3",".",".","1"],["7",".",".",".","2",".",".",".","6"],[".","6",".",".",".",".","2","8","."],[".",".",".","4","1","9",".",".","5"],[".",".",".",".","8",".",".","7","9"]]', expectedOutput: 'false', isHidden: true },
+      { input: '[["5","3",".",".","7",".",".",".","."],["6",".",".","1","9","5",".",".","."],[".","9","5",".",".",".",".","6","."],["8",".",".",".","6",".",".",".","3"],["4",".",".","8",".","3",".",".","1"],["7",".",".",".","2",".",".",".","6"],[".","6",".",".",".",".","2","8","."],[".",".",".","4","1","9",".",".","5"],[".",".",".",".","8",".",".","7","9"]]', expectedOutput: 'false', isHidden: true },
+      { input: '[["5","3","4","6","7","8","9","1","2"],["6","7","2","1","9","5","3","4","8"],["1","9","8","3","4","2","5","6","7"],["8","5","9","7","6","1","4","2","3"],["4","2","6","8","5","3","7","9","1"],["7","1","3","9","2","4","8","5","6"],["9","6","1","5","3","7","2","8","4"],["2","8","7","4","1","9","6","3","5"],["3","4","5","2","8","6","1","7","9"]]', expectedOutput: 'true', isHidden: true },
+      { input: '[["5","3",".",".","7",".",".",".","."],["6",".",".","1","9","5",".",".","."],[".","9","8",".",".",".",".","6","."],["8",".",".",".","6",".",".",".","3"],["4",".",".","8",".","3",".",".","1"],["7",".",".",".","2",".",".",".","6"],[".","6",".",".",".",".","2","8","."],[".",".",".","4","1","9",".",".","5"],[".",".",".",".","8",".",".","7","7"]]', expectedOutput: 'false', isHidden: true },
+      { input: '[["1",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","."],[".",".",".",".",".",".",".",".","9"]]', expectedOutput: 'true', isHidden: true },
     ],
   },
   ...Array.from({ length: 25 }, (_, idx) => {

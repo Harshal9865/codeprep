@@ -4,6 +4,7 @@ import { DeterministicVisualizer, VisualTraceData } from '../components/workspac
 import { Button } from '../components/ui/Button';
 import { apiRequest } from '../services/api';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
+import { HighlightedCode } from '../components/ui/CodeHighlight';
 import {
   ArrowLeft,
   BookOpen,
@@ -287,9 +288,11 @@ export const AiSolutionPage: React.FC<AiSolutionPageProps> = ({
               <span className="text-[10px] uppercase tracking-wider text-text-muted/80">Verified Reference</span>
             </div>
             <div className="p-5 font-mono text-[13px] overflow-x-auto bg-canvas/55">
-              <pre className="text-text-primary leading-relaxed select-text">
-                {lesson?.verifiedSolution}
-              </pre>
+              <HighlightedCode
+                code={lesson?.verifiedSolution || ''}
+                language={problemId >= 501 ? 'sql' : 'cpp'}
+                className="leading-relaxed"
+              />
             </div>
           </div>
         </section>

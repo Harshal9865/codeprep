@@ -4,6 +4,14 @@ import { Button } from '../components/ui/Button';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 import { apiRequest } from '../services/api';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  getLocalBackupMeta,
+  importBackupSnapshot,
+  LocalBackupMeta,
+  PortableBackupSnapshot,
+  readLocalBackupSnapshot,
+  saveLocalBackupSnapshot,
+} from '../utils/backupSync';
 import { THEME_OPTIONS, ThemeMode } from '../types/theme';
 import {
   PIXEL_AVATAR_PRESETS,
@@ -100,8 +108,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
   const [avatarJustUpdated, setAvatarJustUpdated] = useState(false);
   const [passwordJustUpdated, setPasswordJustUpdated] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null);
+  const [isImportingBackup, setIsImportingBackup] = useState(false);
+  const [localSnapshotMeta, setLocalSnapshotMeta] = useState<LocalBackupMeta | null>(() => getLocalBackupMeta());
   const toastTimerRef = React.useRef<number | null>(null);
   const avatarFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const backupFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const showToast = React.useCallback((type: 'success' | 'error', title: string, message: string) => {
     setToast({ type, title, message });
@@ -369,14 +380,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
 
   const handleExportData = async () => {
     try {
-      const token = localStorage.getItem('codeprep_access_token');
-      const response = await fetch('/api/user/export', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const dump = await apiRequest<PortableBackupSnapshot>('/user/export');
+      saveLocalBackupSnapshot(dump);
+      setLocalSnapshotMeta(getLocalBackupMeta());
 
-      if (!response.ok) throw new Error('Data export failed.');
-
-      const blob = await response.blob();
+      const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -385,12 +393,59 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      showToast('success', 'Backup Exported', 'Your complete JSON snapshot has been downloaded.');
+      showToast('success', 'Backup Exported', 'Your complete JSON snapshot has been downloaded and synced locally.');
     } catch {
       const msg = 'Failed to trigger JSON data export.';
       setErrorMsg(msg);
       showToast('error', 'Export Failed', msg);
     }
+  };
+
+  const applyImportedSnapshot = async (snapshot: PortableBackupSnapshot, sourceLabel: string) => {
+    setIsImportingBackup(true);
+    setErrorMsg(null);
+    try {
+      const res = await importBackupSnapshot(snapshot);
+      saveLocalBackupSnapshot(snapshot);
+      setLocalSnapshotMeta(getLocalBackupMeta());
+      await fetchAllProfileData();
+      const { submissionsRestored, draftsRestored, savedProblemsRestored } = res.restored;
+      showToast(
+        'success',
+        `Restored from ${sourceLabel}`,
+        `Synced ${submissionsRestored} submissions, ${draftsRestored} drafts, and ${savedProblemsRestored} saved notes/bookmarks.`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to import backup JSON.';
+      setErrorMsg(msg);
+      showToast('error', 'Restore Failed', msg);
+    } finally {
+      setIsImportingBackup(false);
+    }
+  };
+
+  const handleImportBackupFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as PortableBackupSnapshot;
+      await applyImportedSnapshot(parsed, 'Backup File');
+    } catch {
+      const msg = 'Invalid JSON backup file.';
+      setErrorMsg(msg);
+      showToast('error', 'Invalid Backup File', msg);
+    }
+  };
+
+  const handleRestoreBrowserSnapshot = async () => {
+    const snap = readLocalBackupSnapshot();
+    if (!snap) {
+      showToast('error', 'No Local Snapshot', 'No browser auto-backup snapshot found.');
+      return;
+    }
+    await applyImportedSnapshot(snap, 'Browser Auto-Snapshot');
   };
 
   if (isInitialLoading) {
@@ -981,22 +1036,59 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
             </form>
           </section>
 
-          {/* Data Export & Backup Card */}
+          {/* Data Export, Import & Auto-Sync Card */}
           <section className="lg:col-span-2 bg-surface border border-border-subtle rounded-2xl p-6 flex flex-col justify-between space-y-4 shadow-sm">
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-3 border-b border-border-subtle">
                 <Download className="w-4 h-4 text-primary" />
-                <h2 className="text-sm font-semibold text-text-primary">SQLite Data Portability</h2>
+                <h2 className="text-sm font-semibold text-text-primary">SQLite Backup &amp; Restore</h2>
               </div>
               <p className="text-xs text-text-secondary leading-relaxed">
-                Download a complete, portable JSON snapshot containing your profile settings, submission history, saved code drafts, bookmarks, notes, and active streak logs.
+                Export or restore your full progress (submissions, streaks, code drafts, bookmarks, and notes). Your browser also keeps an automatic snapshot to recover after stateless container restarts.
               </p>
+              {localSnapshotMeta && (
+                <div className="p-2.5 rounded-xl bg-surface-subtle border border-border-subtle text-[11px] font-mono text-text-muted space-y-0.5">
+                  <div className="text-text-secondary font-semibold">Auto-Snapshot Ready</div>
+                  <div>
+                    {localSnapshotMeta.acceptedSubmissions} solved • {localSnapshotMeta.totalSubmissions} submissions • {localSnapshotMeta.draftsCount} drafts
+                  </div>
+                </div>
+              )}
             </div>
 
-            <Button variant="secondary" onClick={handleExportData} className="w-full gap-2 text-xs">
-              <Download className="w-4 h-4" />
-              <span>Export Complete Backup (JSON)</span>
-            </Button>
+            <div className="space-y-2">
+              <input
+                ref={backupFileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={handleImportBackupFile}
+                className="hidden"
+              />
+              <Button variant="secondary" onClick={handleExportData} className="w-full gap-2 text-xs">
+                <Download className="w-4 h-4" />
+                <span>Export Backup (JSON)</span>
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => backupFileInputRef.current?.click()}
+                disabled={isImportingBackup}
+                className="w-full gap-2 text-xs"
+              >
+                <Upload className="w-4 h-4" />
+                <span>{isImportingBackup ? 'Restoring...' : 'Import Backup (JSON)'}</span>
+              </Button>
+              {localSnapshotMeta && (
+                <Button
+                  variant="ghost"
+                  onClick={handleRestoreBrowserSnapshot}
+                  disabled={isImportingBackup}
+                  className="w-full gap-2 text-xs text-primary hover:text-primary"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore Browser Snapshot</span>
+                </Button>
+              )}
+            </div>
           </section>
         </div>
       </div>

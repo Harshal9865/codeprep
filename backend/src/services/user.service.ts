@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { hashPassword, verifyPassword } from '../utils/password';
-import { prisma } from './prisma.service';
+import { prisma, checkpointWal } from './prisma.service';
 import { Logger } from '../utils/logger';
 
 export interface AvatarValidationResult {
@@ -238,6 +238,7 @@ export class UserService {
           id: true,
           email: true,
           displayName: true,
+          avatarUrl: true,
           themePreference: true,
           timezone: true,
           createdAt: true,
@@ -305,6 +306,194 @@ export class UserService {
       drafts,
       timers,
       savedProblems: bookmarksAndNotes,
+    };
+  }
+
+  /**
+   * Restores user profile settings, submissions, drafts, timers, bookmarks, and notes from an exported JSON snapshot
+   */
+  static async importUserData(userId: string, rawDump: unknown) {
+    if (!rawDump || typeof rawDump !== 'object') {
+      throw new Error('Invalid backup file format. Expected JSON backup object.');
+    }
+
+    const dump = rawDump as {
+      user?: {
+        displayName?: string;
+        avatarUrl?: string | null;
+        themePreference?: string;
+        timezone?: string;
+      } | null;
+      submissions?: Array<{
+        problemId: number;
+        language?: string;
+        code: string;
+        verdict: string;
+        runtimeMs?: number | null;
+        memoryKb?: number | null;
+        submittedAt?: string;
+      }>;
+      drafts?: Array<{
+        problemId: number;
+        code: string;
+      }>;
+      timers?: Array<{
+        problemId: number;
+        activeSeconds?: number;
+      }>;
+      savedProblems?: Array<{
+        id: number;
+        isBookmark?: boolean;
+        userNotes?: string | null;
+        solvedWithAiHelp?: boolean;
+      }>;
+    };
+
+    const existingProblems = await prisma.problem.findMany({ select: { id: true } });
+    const validProblemIds = new Set(existingProblems.map((p) => p.id));
+
+    const existingSubmissions = await prisma.submission.findMany({
+      where: { userId },
+      select: { problemId: true, verdict: true, submittedAt: true, code: true },
+    });
+    const submissionSignatures = new Set(
+      existingSubmissions.map(
+        (s) => `${s.problemId}|${s.verdict}|${s.submittedAt.toISOString()}|${s.code}`
+      )
+    );
+
+    let submissionsRestored = 0;
+    let draftsRestored = 0;
+    let timersRestored = 0;
+    let savedProblemsRestored = 0;
+
+    await prisma.$transaction(async (tx) => {
+      if (dump.user) {
+        const updateUser: Record<string, string | null> = {};
+        if (typeof dump.user.displayName === 'string' && dump.user.displayName.trim()) {
+          updateUser.displayName = dump.user.displayName.trim().slice(0, 50);
+        }
+        if (
+          typeof dump.user.themePreference === 'string' &&
+          ['dark', 'light', 'leetcode', 'vscode', 'tokyo', 'monokai'].includes(dump.user.themePreference)
+        ) {
+          updateUser.themePreference = dump.user.themePreference;
+        }
+        if (typeof dump.user.timezone === 'string' && dump.user.timezone.trim()) {
+          updateUser.timezone = dump.user.timezone.trim();
+        }
+        if (typeof dump.user.avatarUrl === 'string' && ALLOWED_PIXEL_AVATARS.has(dump.user.avatarUrl)) {
+          updateUser.avatarUrl = dump.user.avatarUrl;
+        }
+        if (Object.keys(updateUser).length > 0) {
+          await tx.user.update({ where: { id: userId }, data: updateUser });
+        }
+      }
+
+      if (Array.isArray(dump.submissions)) {
+        for (const sub of dump.submissions) {
+          const pid = Number(sub?.problemId);
+          if (!validProblemIds.has(pid) || typeof sub.code !== 'string' || typeof sub.verdict !== 'string') {
+            continue;
+          }
+          const submittedAtDate = sub.submittedAt ? new Date(sub.submittedAt) : new Date();
+          const safeDate = Number.isNaN(submittedAtDate.getTime()) ? new Date() : submittedAtDate;
+          const sig = `${pid}|${sub.verdict}|${safeDate.toISOString()}|${sub.code}`;
+          if (submissionSignatures.has(sig)) continue;
+          submissionSignatures.add(sig);
+
+          await tx.submission.create({
+            data: {
+              problemId: pid,
+              userId,
+              language: sub.language === 'sql' ? 'sql' : 'cpp17',
+              code: sub.code,
+              verdict: sub.verdict,
+              runtimeMs: typeof sub.runtimeMs === 'number' ? sub.runtimeMs : null,
+              memoryKb: typeof sub.memoryKb === 'number' ? sub.memoryKb : null,
+              submittedAt: safeDate,
+            },
+          });
+          submissionsRestored++;
+        }
+      }
+
+      if (Array.isArray(dump.drafts)) {
+        for (const draft of dump.drafts) {
+          const pid = Number(draft?.problemId);
+          if (!validProblemIds.has(pid) || typeof draft.code !== 'string') continue;
+          await tx.problemDraft.upsert({
+            where: { problemId_userId: { problemId: pid, userId } },
+            update: { code: draft.code },
+            create: { problemId: pid, userId, code: draft.code },
+          });
+          draftsRestored++;
+        }
+      }
+
+      if (Array.isArray(dump.timers)) {
+        for (const timer of dump.timers) {
+          const pid = Number(timer?.problemId);
+          const secs = Math.max(0, Math.floor(Number(timer?.activeSeconds) || 0));
+          if (!validProblemIds.has(pid)) continue;
+          const existing = await tx.problemActiveTimer.findUnique({
+            where: { problemId_userId: { problemId: pid, userId } },
+          });
+          await tx.problemActiveTimer.upsert({
+            where: { problemId_userId: { problemId: pid, userId } },
+            update: { activeSeconds: Math.max(existing?.activeSeconds || 0, secs) },
+            create: { problemId: pid, userId, activeSeconds: secs },
+          });
+          timersRestored++;
+        }
+      }
+
+      if (Array.isArray(dump.savedProblems)) {
+        for (const sp of dump.savedProblems) {
+          const pid = Number(sp?.id);
+          if (!validProblemIds.has(pid)) continue;
+          const updateProb: Record<string, boolean | string | null> = {};
+          if (typeof sp.isBookmark === 'boolean') updateProb.isBookmark = sp.isBookmark;
+          if (sp.userNotes !== undefined) updateProb.userNotes = sp.userNotes;
+          if (typeof sp.solvedWithAiHelp === 'boolean') updateProb.solvedWithAiHelp = sp.solvedWithAiHelp;
+          if (Object.keys(updateProb).length > 0) {
+            await tx.problem.update({ where: { id: pid }, data: updateProb });
+            savedProblemsRestored++;
+          }
+        }
+      }
+    });
+
+    await checkpointWal();
+
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        themePreference: true,
+        timezone: true,
+        createdAt: true,
+      },
+    });
+
+    Logger.info('UserService', `Imported backup for user ${userId}`, {
+      submissionsRestored,
+      draftsRestored,
+      timersRestored,
+      savedProblemsRestored,
+    });
+
+    return {
+      user: updatedUser,
+      restored: {
+        submissionsRestored,
+        draftsRestored,
+        timersRestored,
+        savedProblemsRestored,
+      },
     };
   }
 }

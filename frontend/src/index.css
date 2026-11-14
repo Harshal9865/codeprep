@@ -263,6 +263,85 @@
     --heatmap-empty: #262626;
   }
 
+  /* Theme-aware syntax highlighting palette */
+  :root {
+    --syntax-keyword: #0550ae;
+    --syntax-control: #8250df;
+    --syntax-type: #0f766e;
+    --syntax-function: #953800;
+    --syntax-number: #116329;
+    --syntax-string: #0a3069;
+    --syntax-comment: #6e7781;
+    --syntax-macro: #6639ba;
+    --syntax-variable: #1f2328;
+    --syntax-punctuation: #57606a;
+  }
+
+  .dark {
+    --syntax-keyword: #60a5fa;
+    --syntax-control: #c084fc;
+    --syntax-type: #34d399;
+    --syntax-function: #fbbf24;
+    --syntax-number: #4ade80;
+    --syntax-string: #fb923c;
+    --syntax-comment: #6b7280;
+    --syntax-macro: #a78bfa;
+    --syntax-variable: #f3f4f6;
+    --syntax-punctuation: #71717a;
+  }
+
+  html[data-theme='leetcode'] {
+    --syntax-keyword: #569cd6;
+    --syntax-control: #c586c0;
+    --syntax-type: #4ec9b0;
+    --syntax-function: #dcdcaa;
+    --syntax-number: #b5cea8;
+    --syntax-string: #ce9178;
+    --syntax-comment: #6a9955;
+    --syntax-macro: #c586c0;
+    --syntax-variable: #eff1f6;
+    --syntax-punctuation: #9ca3af;
+  }
+
+  html[data-theme='vscode'] {
+    --syntax-keyword: #569cd6;
+    --syntax-control: #c586c0;
+    --syntax-type: #4ec9b0;
+    --syntax-function: #dcdcaa;
+    --syntax-number: #b5cea8;
+    --syntax-string: #ce9178;
+    --syntax-comment: #6a9955;
+    --syntax-macro: #c586c0;
+    --syntax-variable: #9cdcfe;
+    --syntax-punctuation: #d4d4d4;
+  }
+
+  html[data-theme='tokyo'] {
+    --syntax-keyword: #7aa2f7;
+    --syntax-control: #bb9af7;
+    --syntax-type: #2ac3de;
+    --syntax-function: #7dcfff;
+    --syntax-number: #ff9e64;
+    --syntax-string: #9ece6a;
+    --syntax-comment: #565f89;
+    --syntax-macro: #bb9af7;
+    --syntax-variable: #c0caf5;
+    --syntax-punctuation: #89ddff;
+  }
+
+  html[data-theme='monokai'] {
+    --syntax-keyword: #78dce8;
+    --syntax-control: #ff6188;
+    --syntax-type: #78dce8;
+    --syntax-function: #a9dc76;
+    --syntax-number: #ab9df2;
+    --syntax-string: #ffd866;
+    --syntax-comment: #727072;
+    --syntax-macro: #fc9867;
+    --syntax-variable: #fcfcfa;
+    --syntax-punctuation: #939293;
+  }
+
   *:focus-visible {
     outline: 1.5px solid var(--border-active);
     outline-offset: 2px;

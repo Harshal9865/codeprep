@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 import { SqlSchemaTables } from '../components/workspace/SqlSchemaTables';
+import { HighlightedCode, HighlightedCodeEditor } from '../components/ui/CodeHighlight';
 import {
   Database,
   Table as TableIcon,
@@ -412,9 +413,13 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <pre className="p-3 rounded-lg bg-surface border border-border-subtle font-mono text-xs text-text-primary overflow-x-auto select-text">
-                    {solutionSql}
-                  </pre>
+                  <div className="p-3 rounded-lg bg-surface border border-border-subtle overflow-x-auto">
+                    <HighlightedCode
+                      code={solutionSql}
+                      language="sql"
+                      className="text-xs leading-relaxed"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -471,9 +476,9 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
               </div>
             )}
 
-            <textarea
+            <HighlightedCodeEditor
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={setQuery}
               onKeyDown={(e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                   e.preventDefault();
@@ -484,8 +489,9 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                   }
                 }
               }}
-              spellCheck={false}
-              className="flex-1 w-full p-4 bg-canvas font-mono text-[13px] text-text-primary resize-none focus:outline-none focus:ring-0 leading-6"
+              language="sql"
+              showLineNumbers
+              paddingClass="p-4"
             />
           </div>
 

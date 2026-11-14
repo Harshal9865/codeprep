@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { RotateCcw, Copy, Check, Eye, EyeOff, Code, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../../services/api';
+import { HighlightedCode, HighlightedCodeEditor } from '../ui/CodeHighlight';
 
 interface EditorPaneProps {
   code: string;
@@ -123,32 +124,30 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
 
       {/* Editor Main Canvas with Line Numbers */}
       <div className="flex-1 relative flex overflow-hidden font-mono text-[13px] bg-canvas">
-        {/* Line Numbers Column */}
-        <div className="w-12 select-none py-3 text-right pr-3 bg-surface-subtle border-r border-border-subtle text-text-muted font-mono text-xs leading-6 shrink-0">
-          {lines.map((_, i) => (
-            <div key={i}>{i + 1}</div>
-          ))}
-        </div>
-
-        {/* Text Editing Area */}
-        <div className="flex-1 relative overflow-auto">
-          {showFullCode ? (
-            <pre className="p-3 text-text-primary font-mono text-[13px] leading-6 whitespace-pre selection:bg-primary/20 select-text">
-              {fullCodeText}
-            </pre>
-          ) : (
-            <textarea
-              ref={textareaRef}
-              value={code}
-              onChange={(e) => onChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoComplete="off"
-              className="w-full h-full p-3 bg-transparent text-text-primary font-mono text-[13px] leading-6 resize-none focus:outline-none selection:bg-primary/20"
+        {showFullCode ? (
+          <div className="flex-1 flex overflow-auto">
+            <div className="w-12 select-none py-3 text-right pr-3 bg-surface-subtle border-r border-border-subtle text-text-muted font-mono text-xs leading-6 shrink-0">
+              {fullCodeText.split('\n').map((_, i) => (
+                <div key={i}>{i + 1}</div>
+              ))}
+            </div>
+            <HighlightedCode
+              code={fullCodeText}
+              language="cpp"
+              className="p-3 text-[13px] leading-6 flex-1"
             />
-          )}
-        </div>
+          </div>
+        ) : (
+          <HighlightedCodeEditor
+            value={code}
+            onChange={onChange}
+            onKeyDown={handleKeyDown}
+            language="cpp"
+            textareaRef={textareaRef}
+            showLineNumbers
+            paddingClass="p-3"
+          />
+        )}
       </div>
 
       {/* Status Bar */}

@@ -2,6 +2,7 @@ services:
   - type: web
     name: codeprep
     runtime: docker
+    branch: main
     plan: starter
     healthCheckPath: /health
     envVars:

@@ -124,5 +124,29 @@ export class UserController {
       res.status(500).json({ error: 'Failed to export user data.' });
     }
   }
+
+  /**
+   * Restores user progress, submissions, drafts, bookmarks & notes from JSON snapshot
+   */
+  static async importData(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const result = await UserService.importUserData(userId, req.body);
+      res.json({
+        message: 'Backup restored successfully.',
+        ...result,
+      });
+    } catch (error) {
+      Logger.error('UserController', 'Failed to import backup data', error);
+      res.status(400).json({
+        error: error instanceof Error ? error.message : 'Failed to restore backup data.',
+      });
+    }
+  }
 }
 

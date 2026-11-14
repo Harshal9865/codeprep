@@ -13,6 +13,7 @@ import { SqlWorkspacePage } from './pages/SqlWorkspacePage';
 import { AptitudePage } from './pages/AptitudePage';
 import { InterviewPrepPage } from './pages/InterviewPrepPage';
 import { CodePrepLoader } from './components/ui/CodePrepLoader';
+import { ensureBackupOrAutoRestore, syncAutoBackup } from './utils/backupSync';
 
 type AppView =
   | 'dashboard'
@@ -149,11 +150,13 @@ export const App: React.FC = () => {
     searchVersion: 0,
   });
   const wasLoggedOutRef = useRef<boolean>(false);
+  const backupSyncedUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
       wasLoggedOutRef.current = true;
+      backupSyncedUserRef.current = null;
       setShowStreakSplash(false);
     } else if (wasLoggedOutRef.current) {
       wasLoggedOutRef.current = false;
@@ -161,6 +164,23 @@ export const App: React.FC = () => {
       window.history.replaceState(null, '', '#dashboard');
       setShowStreakSplash(true);
     }
+  }, [user, isLoading]);
+
+  // Keep a local browser mirror of SQLite progress and restore seamlessly if a stateless deploy rebooted the DB
+  useEffect(() => {
+    if (isLoading || !user) return;
+    if (backupSyncedUserRef.current !== user.id) {
+      backupSyncedUserRef.current = user.id;
+      void ensureBackupOrAutoRestore(user.email);
+    }
+
+    const handleProgressSnapshot = () => {
+      void syncAutoBackup();
+    };
+    window.addEventListener('codeprep:progress-updated', handleProgressSnapshot);
+    return () => {
+      window.removeEventListener('codeprep:progress-updated', handleProgressSnapshot);
+    };
   }, [user, isLoading]);
 
   // Listen to browser Back / Forward hash changes

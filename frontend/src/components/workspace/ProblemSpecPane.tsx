@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { CodePrepLoader } from '../ui/CodePrepLoader';
+import { HighlightedCode } from '../ui/CodeHighlight';
 
 interface LessonData {
   problemId: number;
@@ -444,7 +445,11 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                     <span className="text-[10px] uppercase tracking-wider text-text-muted/80">C++17 Optimal</span>
                   </div>
                   <div className="p-4 font-mono text-[13px] overflow-x-auto bg-canvas/55">
-                    <pre className="text-text-primary leading-relaxed select-text">{lesson.verifiedSolution}</pre>
+                    <HighlightedCode
+                      code={lesson.verifiedSolution}
+                      language={problem.category === 'SQL' ? 'sql' : 'cpp'}
+                      className="leading-relaxed"
+                    />
                   </div>
                 </div>
 
