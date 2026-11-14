@@ -303,17 +303,19 @@ export class UserService {
         isBookmark: boolean;
         userNotes: string | null;
         solvedWithAiHelp: boolean;
+        unlockedAiSolution?: boolean;
       }
     >();
 
     for (const row of userProblemStates) {
-      if (row.isBookmark || row.userNotes || row.solvedWithAiHelp) {
+      if (row.isBookmark || row.userNotes || row.solvedWithAiHelp || row.unlockedAiSolution) {
         savedMap.set(row.problemId, {
           id: row.problemId,
           title: row.problem?.title || `Problem #${row.problemId}`,
           isBookmark: row.isBookmark,
           userNotes: row.userNotes,
           solvedWithAiHelp: row.solvedWithAiHelp,
+          unlockedAiSolution: row.unlockedAiSolution,
         });
       }
     }
@@ -321,7 +323,12 @@ export class UserService {
     if (allowLegacy) {
       const legacyProblems = await prisma.problem.findMany({
         where: {
-          OR: [{ isBookmark: true }, { userNotes: { not: null } }, { solvedWithAiHelp: true }],
+          OR: [
+            { isBookmark: true },
+            { userNotes: { not: null } },
+            { solvedWithAiHelp: true },
+            { unlockedAiSolution: true },
+          ],
         },
         select: {
           id: true,
@@ -329,6 +336,7 @@ export class UserService {
           isBookmark: true,
           userNotes: true,
           solvedWithAiHelp: true,
+          unlockedAiSolution: true,
         },
       });
       for (const lp of legacyProblems) {
@@ -397,6 +405,7 @@ export class UserService {
         isBookmark?: boolean;
         userNotes?: string | null;
         solvedWithAiHelp?: boolean;
+        unlockedAiSolution?: boolean;
       }>;
     };
 
@@ -507,6 +516,7 @@ export class UserService {
           if (typeof sp.isBookmark === 'boolean') updateState.isBookmark = sp.isBookmark;
           if (sp.userNotes !== undefined) updateState.userNotes = sp.userNotes;
           if (typeof sp.solvedWithAiHelp === 'boolean') updateState.solvedWithAiHelp = sp.solvedWithAiHelp;
+          if (typeof sp.unlockedAiSolution === 'boolean') updateState.unlockedAiSolution = sp.unlockedAiSolution;
           if (Object.keys(updateState).length > 0) {
             await tx.userProblemState.upsert({
               where: { problemId_userId: { problemId: pid, userId } },
@@ -517,6 +527,7 @@ export class UserService {
                 isBookmark: Boolean(sp.isBookmark),
                 userNotes: sp.userNotes ?? null,
                 solvedWithAiHelp: Boolean(sp.solvedWithAiHelp),
+                unlockedAiSolution: Boolean(sp.unlockedAiSolution),
               },
             });
             savedProblemsRestored++;

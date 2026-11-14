@@ -68,7 +68,7 @@ export class AuthController {
         authenticated: Boolean(currentUser),
         user: currentUser,
         ...(refreshedAccessToken ? { accessToken: refreshedAccessToken } : {}),
-        instanceType: 'multi-user-private',
+        instanceType: 'multi-user-workspace',
       });
     } catch (error) {
       Logger.error('AuthController', 'Failed to check registration status', error);
@@ -80,7 +80,7 @@ export class AuthController {
         remainingSlots: env.MAX_USERS,
         authenticated: false,
         user: null,
-        instanceType: 'multi-user-private',
+        instanceType: 'multi-user-workspace',
         statusNotice: 'Instance in setup mode',
       });
     }

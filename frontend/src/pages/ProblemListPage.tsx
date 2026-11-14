@@ -131,8 +131,15 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
     }
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     fetchProblems();
+    const handleProgressUpdated = () => {
+      void fetchProblems();
+    };
+    window.addEventListener('codeprep:progress-updated', handleProgressUpdated);
+    return () => {
+      window.removeEventListener('codeprep:progress-updated', handleProgressUpdated);
+    };
   }, [fetchProblems]);
 
   const { topicCounts, uniqueTopics } = useMemo(() => {

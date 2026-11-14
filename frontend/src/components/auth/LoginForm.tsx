@@ -55,8 +55,8 @@ export const LoginForm: React.FC = () => {
   } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('admin@codeprep.dev');
-  const [password, setPassword] = useState('Password123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -65,6 +65,9 @@ export const LoginForm: React.FC = () => {
   const [quickLoginTarget, setQuickLoginTarget] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isQuickLoggingIn = quickLoginTarget !== null;
+  const isLocalHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   useEffect(() => {
     if (!isRegistrationAllowed && mode === 'register') {
@@ -198,42 +201,44 @@ export const LoginForm: React.FC = () => {
           </ul>
         </div>
 
-        {/* 1-Click Instant Local Login */}
+        {/* 1-Click Live Demo (Guest / Interviewer) + Local Owner Shortcut */}
         <div className="space-y-2 pt-1">
           <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
-              onClick={() => handleQuickLogin('admin@codeprep.dev')}
+              onClick={() => handleQuickLogin('demo@codeprep.dev')}
               disabled={isQuickLoggingIn || isLoading}
               className="w-full py-2.5 px-3 rounded-xl bg-primary hover:bg-primary-hover text-black font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              {quickLoginTarget === 'admin@codeprep.dev' ? (
-                <CodePrepLoader variant="inline" tone="contrast" label="Entering Harshal..." />
+              {quickLoginTarget === 'demo@codeprep.dev' ? (
+                <CodePrepLoader variant="inline" tone="contrast" label="Launching Live Demo..." />
               ) : (
                 <>
                   <Zap className="w-4 h-4 fill-black" />
-                  <span>Quick Enter • Harshal</span>
+                  <span>Try Live Demo • Guest / Interviewer</span>
                 </>
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('priti@codeprep.dev')}
-              disabled={isQuickLoggingIn || isLoading}
-              className="w-full py-2 px-3 rounded-xl bg-surface-high hover:bg-surface-elevated text-text-primary border border-border-default hover:border-primary/60 font-semibold text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {quickLoginTarget === 'priti@codeprep.dev' ? (
-                <CodePrepLoader variant="inline" label="Entering Priti..." />
-              ) : (
-                <>
-                  <Zap className="w-3.5 h-3.5 text-primary" />
-                  <span>Quick Enter • Priti</span>
-                </>
-              )}
-            </button>
+            {isLocalHost && (
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('admin@codeprep.dev')}
+                disabled={isQuickLoggingIn || isLoading}
+                className="w-full py-2 px-3 rounded-xl bg-surface-high hover:bg-surface-elevated text-text-primary border border-border-default hover:border-primary/60 font-semibold text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {quickLoginTarget === 'admin@codeprep.dev' ? (
+                  <CodePrepLoader variant="inline" label="Entering Owner Workspace..." />
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-primary" />
+                    <span>Quick Enter • Harshal (Local)</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
           <p className="text-xs text-center text-text-muted">
-            Separate drafts, submissions &amp; saved bookmarks per user
+            Instant isolated guest sandbox or private personal account
           </p>
         </div>
       </div>
@@ -246,8 +251,6 @@ export const LoginForm: React.FC = () => {
             type="button"
             onClick={() => {
               setMode('login');
-              if (!email) setEmail('admin@codeprep.dev');
-              if (!password) setPassword('Password123!');
               setErrorMessage(null);
             }}
             className={`py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
@@ -270,8 +273,6 @@ export const LoginForm: React.FC = () => {
             onClick={() => {
               if (!isRegistrationAllowed) return;
               setMode('register');
-              if (email === 'admin@codeprep.dev') setEmail('');
-              if (password === 'Password123!') setPassword('');
               setErrorMessage(null);
             }}
             className={`py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
@@ -310,7 +311,7 @@ export const LoginForm: React.FC = () => {
               label="DISPLAY NAME"
               type="text"
               required
-              placeholder="e.g. Priti"
+              placeholder="e.g. Alex Rivera"
               value={displayName}
               onChange={(e) => {
                 setDisplayName(e.target.value);
@@ -325,7 +326,7 @@ export const LoginForm: React.FC = () => {
             type="email"
             required
             autoComplete="email"
-            placeholder="admin@codeprep.dev"
+            placeholder="developer@codeprep.dev"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);

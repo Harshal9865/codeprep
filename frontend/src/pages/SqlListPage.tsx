@@ -39,6 +39,13 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({
 
   useEffect(() => {
     fetchProblems();
+    const handleProgressUpdated = () => {
+      void fetchProblems();
+    };
+    window.addEventListener('codeprep:progress-updated', handleProgressUpdated);
+    return () => {
+      window.removeEventListener('codeprep:progress-updated', handleProgressUpdated);
+    };
   }, [selectedDifficulty, selectedTopic]);
 
   const fetchProblems = async () => {

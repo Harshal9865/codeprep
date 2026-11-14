@@ -59,10 +59,18 @@ export const DSA_BATCH_4: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     sampleTestCases: [
       { input: '[1,3,4,2,2]', expectedOutput: '2' },
       { input: '[3,1,3,4,2]', expectedOutput: '3' },
+      { input: '[1,1]', expectedOutput: '1' },
     ],
     hiddenTestCases: [
-      { input: '[1,1]', expectedOutput: '1', isHidden: true },
       { input: '[2,2,2,2,2]', expectedOutput: '2', isHidden: true },
+      { input: '[]', expectedOutput: '0', isHidden: true },
+      { input: '[1,2,2]', expectedOutput: '2', isHidden: true },
+      { input: '[1,2,1]', expectedOutput: '1', isHidden: true },
+      { input: '[5,4,3,2,1,5]', expectedOutput: '5', isHidden: true },
+      { input: '[1,3,4,2,1]', expectedOutput: '1', isHidden: true },
+      { input: '[4,3,1,4,2]', expectedOutput: '4', isHidden: true },
+      { input: '[2,5,9,6,9,3,8,9,7,1]', expectedOutput: '9', isHidden: true },
+      { input: '[6,1,2,3,4,5,6]', expectedOutput: '6', isHidden: true },
     ],
   };
 });

@@ -204,10 +204,18 @@ const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
       sampleTestCases: [
         { input: '[1,1,1] | 2', expectedOutput: '2' },
         { input: '[1,2,3] | 3', expectedOutput: '2' },
+        { input: '[1,-1,0] | 0', expectedOutput: '3' },
       ],
       hiddenTestCases: [
-        { input: '[1,-1,0] | 0', expectedOutput: '3', isHidden: true },
         { input: '[10,2,-2,-20,10] | -10', expectedOutput: '3', isHidden: true },
+        { input: '[] | 0', expectedOutput: '0', isHidden: true },
+        { input: '[5] | 5', expectedOutput: '1', isHidden: true },
+        { input: '[5] | 0', expectedOutput: '0', isHidden: true },
+        { input: '[0,0,0,0] | 0', expectedOutput: '10', isHidden: true },
+        { input: '[-1,-1,1] | 0', expectedOutput: '1', isHidden: true },
+        { input: '[3,4,7,2,-3,1,4,2] | 7', expectedOutput: '4', isHidden: true },
+        { input: '[-2,-1,-3] | -3', expectedOutput: '2', isHidden: true },
+        { input: '[1,2,3,4,5] | 15', expectedOutput: '1', isHidden: true },
       ],
     };
   }),

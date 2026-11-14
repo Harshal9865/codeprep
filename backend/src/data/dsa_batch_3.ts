@@ -50,12 +50,20 @@ export const DSA_BATCH_3: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
       ? `class Solution {\npublic:\n    string solve(string s) {\n        // Your code here\n    }\n};`
       : `class Solution {\npublic:\n    ListNode* solve(ListNode* head) {\n        // Your code here\n    }\n};`,
     sampleTestCases: [
-      { input: isString ? '"babad"' : '[1,2,3,4,5] | 2', expectedOutput: isString ? '"bab"' : '[1,2,3,5]' },
-      { input: isString ? '"cbbd"' : '[1] | 1', expectedOutput: isString ? '"bb"' : '[]' },
+      { input: isString ? '"babad"' : '[1,2,3,4,5]', expectedOutput: isString ? '"bab"' : '[1,2,3,5]' },
+      { input: isString ? '"cbbd"' : '[1]', expectedOutput: isString ? '"bb"' : '[]' },
+      { input: isString ? '"racecar"' : '[1,2]', expectedOutput: isString ? '"racecar"' : '[2]' },
     ],
     hiddenTestCases: [
-      { input: isString ? '"a"' : '[1,2] | 1', expectedOutput: isString ? '"a"' : '[1]', isHidden: true },
-      { input: isString ? '"racecar"' : '[1,2] | 2', expectedOutput: isString ? '"racecar"' : '[2]', isHidden: true },
+      { input: isString ? '"a"' : '[]', expectedOutput: isString ? '"a"' : '[]', isHidden: true },
+      { input: isString ? '""' : '[1,2,3]', expectedOutput: isString ? '""' : '[1,3]', isHidden: true },
+      { input: isString ? '"aa"' : '[10,20,30,40]', expectedOutput: isString ? '"aa"' : '[10,20,40]', isHidden: true },
+      { input: isString ? '"ab"' : '[5,5,5,5]', expectedOutput: isString ? '"a"' : '[5,5,5]', isHidden: true },
+      { input: isString ? '"abcde"' : '[-1,-2,-3]', expectedOutput: isString ? '"a"' : '[-1,-3]', isHidden: true },
+      { input: isString ? '"aaaa"' : '[1,2,3,4,5,6]', expectedOutput: isString ? '"aaaa"' : '[1,2,3,4,6]', isHidden: true },
+      { input: isString ? '"bananas"' : '[9,8]', expectedOutput: isString ? '"anana"' : '[8]', isHidden: true },
+      { input: isString ? '"forgeeksskeegfor"' : '[0,0,1]', expectedOutput: isString ? '"geeksskeeg"' : '[0,1]', isHidden: true },
+      { input: isString ? '"abacdfgdcaba"' : '[100,200,300,400,500,600,700]', expectedOutput: isString ? '"aba"' : '[100,200,300,400,500,700]', isHidden: true },
     ],
   };
 });

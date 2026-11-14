@@ -122,6 +122,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     };
 
     fetchAnalytics();
+    const handleProgressUpdated = () => {
+      void fetchAnalytics();
+    };
+    window.addEventListener('codeprep:progress-updated', handleProgressUpdated);
+    return () => {
+      window.removeEventListener('codeprep:progress-updated', handleProgressUpdated);
+    };
   }, []);
 
   const handlePickRandom = () => {

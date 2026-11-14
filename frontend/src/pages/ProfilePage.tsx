@@ -132,6 +132,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
 
   useEffect(() => {
     fetchAllProfileData();
+    const handleProgressUpdated = () => {
+      void fetchAllProfileData();
+    };
+    window.addEventListener('codeprep:progress-updated', handleProgressUpdated);
+    return () => {
+      window.removeEventListener('codeprep:progress-updated', handleProgressUpdated);
+    };
   }, []);
 
   useEffect(() => {
@@ -149,6 +156,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       ]);
 
       setProfile(profileRes.user);
+      setLocalSnapshotMeta(getLocalBackupMeta(profileRes.user.email));
       setDisplayName(profileRes.user.displayName || '');
       setTimezone(profileRes.user.timezone || 'Asia/Kolkata');
       const dbTheme = (profileRes.user.themePreference || 'dark') as ThemeMode;

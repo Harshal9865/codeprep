@@ -20,8 +20,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRegistrationAllowed, setIsRegistrationAllowed] = useState<boolean>(false);
   const [userCount, setUserCount] = useState<number>(0);
-  const [maxUsers, setMaxUsers] = useState<number>(3);
-  const [remainingSlots, setRemainingSlots] = useState<number>(1);
+  const [maxUsers, setMaxUsers] = useState<number>(100);
+  const [remainingSlots, setRemainingSlots] = useState<number>(99);
 
   const applyUserSession = useCallback((nextUser: User | null, forceThemeSync = false) => {
     setUser(nextUser);
@@ -41,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchAuthStatus = useCallback(async () => {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 15000) : null;
+    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 50000) : null;
 
     try {
       const statusRes = await apiRequest<{
@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleUserUpdated = (event: Event) => {
       const custom = event as CustomEvent<User>;
       if (custom.detail && custom.detail.id) {
-        setUser(custom.detail);
+        applyUserSession(custom.detail, true);
       }
     };
 
@@ -129,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       window.removeEventListener('codeprep:auth:logout', handleCustomLogout);
       window.removeEventListener('codeprep:user-updated', handleUserUpdated);
     };
-  }, [fetchAuthStatus]);
+  }, [fetchAuthStatus, applyUserSession]);
 
   const login = async (email: string, password: string, rememberMe = true) => {
     const res = await apiRequest<{ user: User; accessToken?: string }>('/auth/login', {

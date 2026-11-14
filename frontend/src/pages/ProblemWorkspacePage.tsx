@@ -258,7 +258,14 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       const res = await apiRequest<{
         result: ExecutionResult;
         submissionId: string;
-        potdStatus?: { isPotd: boolean; solvedToday: boolean; currentStreak: number };
+        potdStatus?: {
+          isPotd: boolean;
+          solvedToday: boolean;
+          justCompletedToday?: boolean;
+          currentStreak: number;
+          longestStreak?: number;
+          recentDays?: Array<{ date: string; solved: boolean; isToday: boolean }>;
+        };
       }>('/submissions/submit', {
         method: 'POST',
         body: JSON.stringify({
@@ -291,12 +298,26 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         window.dispatchEvent(new CustomEvent('codeprep:progress-updated'));
         if (res.potdStatus?.isPotd) {
           setPotdInfo(res.potdStatus);
-          setPotdBannerMsg(
-            `Daily POTD Solved! Streak maintained at ${res.potdStatus.currentStreak} day${
-              res.potdStatus.currentStreak === 1 ? '' : 's'
-            }.`
-          );
-          window.setTimeout(() => setPotdBannerMsg(null), 6000);
+          if (res.potdStatus.justCompletedToday) {
+            window.dispatchEvent(
+              new CustomEvent('codeprep:streak-completed', {
+                detail: {
+                  problemId: problem.id,
+                  problemTitle: problem.title,
+                  currentStreak: res.potdStatus.currentStreak,
+                  longestStreak: res.potdStatus.longestStreak,
+                  recentDays: res.potdStatus.recentDays,
+                },
+              })
+            );
+          } else {
+            setPotdBannerMsg(
+              `Daily POTD Solved! Streak maintained at ${res.potdStatus.currentStreak} day${
+                res.potdStatus.currentStreak === 1 ? '' : 's'
+              }.`
+            );
+            window.setTimeout(() => setPotdBannerMsg(null), 6000);
+          }
         }
       }
 

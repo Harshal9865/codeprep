@@ -30,6 +30,9 @@ export interface RegistrationStatus {
 
 export class AuthService {
   private static readonly MAX_USERS = env.MAX_USERS;
+  private static readonly OWNER_USER_ID = 'owner-admin-codeprep';
+  private static readonly DEMO_USER_ID = 'guest-demo-codeprep';
+  static readonly DEMO_EMAIL = 'demo@codeprep.dev';
 
   private static hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
@@ -53,11 +56,12 @@ export class AuthService {
 
   static async seedDefaultUser(): Promise<void> {
     try {
-      let userCount = await prisma.user.count();
+      const userCount = await prisma.user.count();
       if (userCount === 0) {
         const passwordHash = await hashPassword('Password123!');
         await prisma.user.create({
           data: {
+            id: this.OWNER_USER_ID,
             email: 'admin@codeprep.dev',
             passwordHash,
             displayName: 'Harshal Patel',
@@ -65,7 +69,6 @@ export class AuthService {
             timezone: env.DEFAULT_TIMEZONE,
           },
         });
-        userCount = 1;
         Logger.info('AuthService', 'Default owner account initialized: admin@codeprep.dev');
       } else {
         const legacyDefault = await prisma.user.findUnique({
@@ -79,49 +82,109 @@ export class AuthService {
           });
         }
       }
-
-      // Ensure secondary collaborator account (Priti) is provisioned within capacity
-      const pritiExisting = await prisma.user.findUnique({
-        where: { email: 'priti@codeprep.dev' },
-        select: { id: true },
-      });
-      if (!pritiExisting && userCount < this.MAX_USERS) {
-        const passwordHash = await hashPassword('Password123!');
-        await prisma.user.create({
-          data: {
-            email: 'priti@codeprep.dev',
-            passwordHash,
-            displayName: 'Priti',
-            themePreference: 'dark',
-            timezone: env.DEFAULT_TIMEZONE,
-          },
-        });
-        Logger.info('AuthService', 'Second user account initialized: priti@codeprep.dev');
-      }
     } catch (err) {
       Logger.warn('AuthService', 'Notice during default user check', err);
     }
+  }
+
+  private static async ensureDemoUserWithSampleActivity() {
+    let demoUser = await prisma.user.findUnique({ where: { email: this.DEMO_EMAIL } });
+    if (!demoUser) {
+      const passwordHash = await hashPassword('DemoGuest123!');
+      demoUser = await prisma.user.create({
+        data: {
+          id: this.DEMO_USER_ID,
+          email: this.DEMO_EMAIL,
+          passwordHash,
+          displayName: 'Guest Reviewer',
+          themePreference: 'dark',
+          timezone: env.DEFAULT_TIMEZONE,
+        },
+      });
+    }
+
+    try {
+      const existingSubCount = await prisma.submission.count({ where: { userId: demoUser.id } });
+      if (existingSubCount === 0) {
+        const seedEntries = [
+          {
+            problemId: 1,
+            language: 'cpp17',
+            runtimeMs: 4.2,
+            memoryKb: 10240,
+            daysAgo: 4,
+            code: `class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        unordered_map<int, int> seen;\n        for (int i = 0; i < (int)nums.size(); ++i) {\n            int need = target - nums[i];\n            if (seen.count(need)) return {seen[need], i};\n            seen[nums[i]] = i;\n        }\n        return {};\n    }\n};`,
+          },
+          {
+            problemId: 3,
+            language: 'cpp17',
+            runtimeMs: 6.1,
+            memoryKb: 9800,
+            daysAgo: 3,
+            code: `class Solution {\npublic:\n    int maxSubArray(vector<int>& nums) {\n        int best = nums[0], cur = nums[0];\n        for (size_t i = 1; i < nums.size(); ++i) {\n            cur = max(nums[i], cur + nums[i]);\n            best = max(best, cur);\n        }\n        return best;\n    }\n};`,
+          },
+          {
+            problemId: 2,
+            language: 'cpp17',
+            runtimeMs: 5.4,
+            memoryKb: 10100,
+            daysAgo: 2,
+            code: `class Solution {\npublic:\n    bool isValid(string s) {\n        string st;\n        for (char c : s) {\n            if (c == '(' || c == '{' || c == '[') st.push_back(c);\n            else {\n                if (st.empty()) return false;\n                char top = st.back();\n                if ((c == ')' && top != '(') || (c == '}' && top != '{') || (c == ']' && top != '[')) return false;\n                st.pop_back();\n            }\n        }\n        return st.empty();\n    }\n};`,
+          },
+          {
+            problemId: 501,
+            language: 'sql',
+            runtimeMs: 1.8,
+            memoryKb: 2048,
+            daysAgo: 1,
+            code: 'SELECT * FROM employees ORDER BY id;',
+          },
+        ];
+
+        const existingProblems = await prisma.problem.findMany({
+          where: { id: { in: seedEntries.map((s) => s.problemId) } },
+          select: { id: true },
+        });
+        const existingSet = new Set(existingProblems.map((p) => p.id));
+
+        for (const item of seedEntries) {
+          if (!existingSet.has(item.problemId)) continue;
+          const submittedAt = new Date(Date.now() - item.daysAgo * 86_400_000);
+          await prisma.submission.create({
+            data: {
+              problemId: item.problemId,
+              userId: demoUser.id,
+              language: item.language,
+              code: item.code,
+              verdict: 'Accepted',
+              runtimeMs: item.runtimeMs,
+              memoryKb: item.memoryKb,
+              submittedAt,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      Logger.warn('AuthService', 'Optional demo activity seed skipped', err);
+    }
+
+    return demoUser;
   }
 
   static async quickLogin(requestedEmail?: string): Promise<TokenPair> {
     const normalizedRequested = requestedEmail?.toLowerCase().trim();
     let user = null;
 
-    if (normalizedRequested === 'priti@codeprep.dev') {
-      user = await prisma.user.findUnique({ where: { email: 'priti@codeprep.dev' } });
-      if (!user) {
-        await this.seedDefaultUser();
-        user = await prisma.user.findUnique({ where: { email: 'priti@codeprep.dev' } });
-      }
-    } else if (normalizedRequested && normalizedRequested !== 'admin@codeprep.dev') {
+    if (normalizedRequested === this.DEMO_EMAIL) {
+      user = await this.ensureDemoUserWithSampleActivity();
+      return this.generateTokenPair(user.id, true);
+    }
+
+    if (normalizedRequested && normalizedRequested !== 'admin@codeprep.dev') {
       user = await prisma.user.findUnique({ where: { email: normalizedRequested } });
     }
 
-    if (!user && !normalizedRequested) {
-      user =
-        (await prisma.user.findUnique({ where: { email: 'admin@codeprep.dev' } })) ||
-        (await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } }));
-    } else if (!user && normalizedRequested === 'admin@codeprep.dev') {
+    if (!user && (!normalizedRequested || normalizedRequested === 'admin@codeprep.dev')) {
       user =
         (await prisma.user.findUnique({ where: { email: 'admin@codeprep.dev' } })) ||
         (await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } }));
@@ -139,6 +202,7 @@ export class AuthService {
       const passwordHash = await hashPassword('Password123!');
       user = await prisma.user.create({
         data: {
+          id: this.OWNER_USER_ID,
           email: 'admin@codeprep.dev',
           passwordHash,
           displayName: 'Harshal Patel',
@@ -199,11 +263,13 @@ export class AuthService {
       where: { email: normalizedEmail },
     });
 
-    if (!user && (normalizedEmail === 'admin@codeprep.dev' || normalizedEmail === 'priti@codeprep.dev')) {
+    if (!user && normalizedEmail === 'admin@codeprep.dev') {
       await this.seedDefaultUser();
       user = await prisma.user.findUnique({
         where: { email: normalizedEmail },
       });
+    } else if (!user && normalizedEmail === this.DEMO_EMAIL) {
+      user = await this.ensureDemoUserWithSampleActivity();
     }
 
     if (!user) {

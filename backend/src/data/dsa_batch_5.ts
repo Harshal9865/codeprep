@@ -53,10 +53,18 @@ export const DSA_BATCH_5: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     sampleTestCases: [
       { input: isBinarySearch ? '[1,3,5,6] | 5' : '[3,9,20,null,null,15,7]', expectedOutput: isBinarySearch ? '2' : '3' },
       { input: isBinarySearch ? '[1,3,5,6] | 2' : '[1,null,2]', expectedOutput: isBinarySearch ? '1' : '2' },
+      { input: isBinarySearch ? '[1,3,5,6] | 7' : '[1,2,3,4,5,6,7]', expectedOutput: isBinarySearch ? '4' : '3' },
     ],
     hiddenTestCases: [
       { input: isBinarySearch ? '[1] | 0' : '[]', expectedOutput: '0', isHidden: true },
       { input: isBinarySearch ? '[1,3] | 2' : '[1]', expectedOutput: '1', isHidden: true },
+      { input: isBinarySearch ? '[] | 5' : '[1,2]', expectedOutput: isBinarySearch ? '0' : '2', isHidden: true },
+      { input: isBinarySearch ? '[1] | 1' : '[1,2,null,3]', expectedOutput: isBinarySearch ? '0' : '3', isHidden: true },
+      { input: isBinarySearch ? '[1] | 2' : '[1,null,2,null,3]', expectedOutput: isBinarySearch ? '1' : '3', isHidden: true },
+      { input: isBinarySearch ? '[1,3,5,6] | 0' : '[1,2,3,4,null,null,5]', expectedOutput: isBinarySearch ? '0' : '3', isHidden: true },
+      { input: isBinarySearch ? '[-10,-3,0,5,9] | -5' : '[1,2,null,3,null,4]', expectedOutput: isBinarySearch ? '1' : '4', isHidden: true },
+      { input: isBinarySearch ? '[-10,-3,0,5,9] | 9' : '[1,2,3,4,5,6,7,8]', expectedOutput: '4', isHidden: true },
+      { input: isBinarySearch ? '[2,4,6,8,10,12] | 11' : '[1,null,2,null,3,null,4,null,5]', expectedOutput: '5', isHidden: true },
     ],
   };
 });

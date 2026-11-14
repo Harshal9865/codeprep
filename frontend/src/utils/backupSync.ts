@@ -49,7 +49,14 @@ export interface PortableBackupSnapshot {
     isBookmark?: boolean;
     userNotes?: string | null;
     solvedWithAiHelp?: boolean;
+    unlockedAiSolution?: boolean;
   }>;
+}
+
+const DEMO_EMAIL = 'demo@codeprep.dev';
+
+function isDemoAccount(email?: string | null): boolean {
+  return email?.toLowerCase().trim() === DEMO_EMAIL;
 }
 
 export interface LocalBackupMeta {
@@ -66,7 +73,8 @@ function hasMeaningfulData(snap: PortableBackupSnapshot | null | undefined): boo
   return (
     (snap.submissions?.length || 0) > 0 ||
     (snap.drafts?.length || 0) > 0 ||
-    (snap.savedProblems?.length || 0) > 0
+    (snap.savedProblems?.length || 0) > 0 ||
+    (snap.timers?.length || 0) > 0
   );
 }
 
@@ -116,7 +124,7 @@ export function getLocalBackupMeta(userEmail?: string | null): LocalBackupMeta |
 }
 
 export function saveLocalBackupSnapshot(snap: PortableBackupSnapshot): void {
-  if (!hasMeaningfulData(snap)) return;
+  if (!hasMeaningfulData(snap) || isDemoAccount(snap.user?.email)) return;
   try {
     const targetKey = getBackupStorageKey(snap.user?.email);
     localStorage.setItem(targetKey, JSON.stringify(snap));
@@ -147,21 +155,46 @@ export async function importBackupSnapshot(snap: PortableBackupSnapshot) {
   return res;
 }
 
-let lastSyncTs = 0;
+let pendingSyncTimer: number | null = null;
+let syncInFlight: Promise<void> | null = null;
 
 export async function syncAutoBackup(): Promise<void> {
-  const now = Date.now();
-  if (now - lastSyncTs < 4000) return;
-  lastSyncTs = now;
-
-  try {
-    const serverSnap = await apiRequest<PortableBackupSnapshot>('/user/export');
-    if (hasMeaningfulData(serverSnap)) {
-      saveLocalBackupSnapshot(serverSnap);
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = (async () => {
+    try {
+      const serverSnap = await apiRequest<PortableBackupSnapshot>('/user/export');
+      if (hasMeaningfulData(serverSnap) && !isDemoAccount(serverSnap.user?.email)) {
+        saveLocalBackupSnapshot(serverSnap);
+      }
+    } catch {
+      // Silent background snapshot
+    } finally {
+      syncInFlight = null;
     }
-  } catch {
-    // Silent background snapshot
+  })();
+  return syncInFlight;
+}
+
+/**
+ * Debounced trailing-edge scheduler so rapid draft, bookmark, note, and submit mutations
+ * are always reflected in the local backup without dropping trailing updates.
+ */
+export function scheduleAutoBackupSync(delayMs = 900): void {
+  if (pendingSyncTimer !== null) {
+    window.clearTimeout(pendingSyncTimer);
   }
+  pendingSyncTimer = window.setTimeout(() => {
+    pendingSyncTimer = null;
+    void syncAutoBackup();
+  }, delayMs);
+}
+
+export function flushAutoBackup(): void {
+  if (pendingSyncTimer !== null) {
+    window.clearTimeout(pendingSyncTimer);
+    pendingSyncTimer = null;
+  }
+  void syncAutoBackup();
 }
 
 /**
@@ -169,6 +202,7 @@ export async function syncAutoBackup(): Promise<void> {
  * If empty and browser holds a snapshot for this user, restores it seamlessly.
  */
 export async function ensureBackupOrAutoRestore(userEmail?: string): Promise<boolean> {
+  if (isDemoAccount(userEmail)) return false;
   try {
     const serverSnap = await apiRequest<PortableBackupSnapshot>('/user/export');
     if (hasMeaningfulData(serverSnap)) {

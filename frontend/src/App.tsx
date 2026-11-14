@@ -13,7 +13,12 @@ import { SqlWorkspacePage } from './pages/SqlWorkspacePage';
 import { AptitudePage } from './pages/AptitudePage';
 import { InterviewPrepPage } from './pages/InterviewPrepPage';
 import { CodePrepLoader } from './components/ui/CodePrepLoader';
-import { ensureBackupOrAutoRestore, syncAutoBackup } from './utils/backupSync';
+import { StreakCelebrationOverlay } from './components/workspace/StreakCelebrationOverlay';
+import {
+  ensureBackupOrAutoRestore,
+  flushAutoBackup,
+  scheduleAutoBackupSync,
+} from './utils/backupSync';
 
 type AppView =
   | 'dashboard'
@@ -126,8 +131,9 @@ function buildHashForRoute(
 }
 
 export const App: React.FC = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, quickLogin } = useAuth();
   const initialRoute = useRef(parseRouteFromHash()).current;
+  const demoAutoTriedRef = useRef<boolean>(false);
 
   const [currentView, setCurrentView] = useState<AppView>(initialRoute.view);
   const [activeProblemId, setActiveProblemId] = useState<number>(initialRoute.problemId);
@@ -166,6 +172,23 @@ export const App: React.FC = () => {
     }
   }, [user, isLoading]);
 
+  // Support direct portfolio/interviewer share links ending with ?demo=1 or #demo
+  useEffect(() => {
+    if (isLoading || user || demoAutoTriedRef.current) return;
+    const isDemoLink =
+      window.location.search.includes('demo=1') || window.location.hash === '#demo';
+    if (isDemoLink) {
+      demoAutoTriedRef.current = true;
+      void quickLogin('demo@codeprep.dev')
+        .then(() => {
+          window.history.replaceState(null, '', '#dashboard');
+        })
+        .catch(() => {
+          // Fall back to standard login card cleanly if demo login fails
+        });
+    }
+  }, [isLoading, user, quickLogin]);
+
   // Keep a local browser mirror of SQLite progress and restore seamlessly if a stateless deploy rebooted the DB
   useEffect(() => {
     if (isLoading || !user) return;
@@ -175,11 +198,18 @@ export const App: React.FC = () => {
     }
 
     const handleProgressSnapshot = () => {
-      void syncAutoBackup();
+      scheduleAutoBackupSync();
+    };
+    const handlePageHide = () => {
+      flushAutoBackup();
     };
     window.addEventListener('codeprep:progress-updated', handleProgressSnapshot);
+    window.addEventListener('codeprep:backup-dirty', handleProgressSnapshot);
+    window.addEventListener('pagehide', handlePageHide);
     return () => {
       window.removeEventListener('codeprep:progress-updated', handleProgressSnapshot);
+      window.removeEventListener('codeprep:backup-dirty', handleProgressSnapshot);
+      window.removeEventListener('pagehide', handlePageHide);
     };
   }, [user, isLoading]);
 
@@ -306,20 +336,16 @@ export const App: React.FC = () => {
     );
   }
 
+  let activePage: React.ReactNode;
+
   if (currentView === 'profile') {
-    return <ProfilePage onTabChange={handleTabNavigate} />;
-  }
-
-  if (currentView === 'about') {
-    return <AboutPage onNavigate={handleTabNavigate} />;
-  }
-
-  if (currentView === 'aptitude') {
-    return <AptitudePage onTabChange={handleTabNavigate} />;
-  }
-
-  if (currentView === 'prep') {
-    return (
+    activePage = <ProfilePage onTabChange={handleTabNavigate} />;
+  } else if (currentView === 'about') {
+    activePage = <AboutPage onNavigate={handleTabNavigate} />;
+  } else if (currentView === 'aptitude') {
+    activePage = <AptitudePage onTabChange={handleTabNavigate} />;
+  } else if (currentView === 'prep') {
+    activePage = (
       <InterviewPrepPage
         onTabChange={handleTabNavigate}
         onSelectProblem={(id) => {
@@ -328,10 +354,8 @@ export const App: React.FC = () => {
         }}
       />
     );
-  }
-
-  if (currentView === 'sql') {
-    return (
+  } else if (currentView === 'sql') {
+    activePage = (
       <SqlListPage
         onSelectProblem={(id) => {
           setActiveProblemId(id);
@@ -340,20 +364,16 @@ export const App: React.FC = () => {
         onTabChange={handleTabNavigate}
       />
     );
-  }
-
-  if (currentView === 'sql-workspace') {
-    return (
+  } else if (currentView === 'sql-workspace') {
+    activePage = (
       <SqlWorkspacePage
         problemId={activeProblemId}
         onBackToList={() => setCurrentView('sql')}
         onNavigateProblem={(newId) => setActiveProblemId(newId)}
       />
     );
-  }
-
-  if (currentView === 'ai-solution') {
-    return (
+  } else if (currentView === 'ai-solution') {
+    activePage = (
       <SolutionGuidePage
         problemId={activeProblemId}
         onBackToProblem={() => setCurrentView('workspace')}
@@ -363,10 +383,8 @@ export const App: React.FC = () => {
         }}
       />
     );
-  }
-
-  if (currentView === 'workspace') {
-    return (
+  } else if (currentView === 'workspace') {
+    activePage = (
       <ProblemWorkspacePage
         problemId={activeProblemId}
         onNavigateProblem={(newId) => setActiveProblemId(newId)}
@@ -374,10 +392,8 @@ export const App: React.FC = () => {
         onOpenAiSolution={() => setCurrentView('ai-solution')}
       />
     );
-  }
-
-  if (currentView === 'dsa') {
-    return (
+  } else if (currentView === 'dsa') {
+    activePage = (
       <ProblemListPage
         onSelectProblem={(id) => {
           setActiveProblemId(id);
@@ -397,31 +413,38 @@ export const App: React.FC = () => {
         initialSearchVersion={problemListPreset.searchVersion}
       />
     );
+  } else {
+    activePage = (
+      <DashboardPage
+        onSelectProblem={(id) => {
+          setActiveProblemId(id);
+          if (id >= 501) {
+            setCurrentView('sql-workspace');
+          } else {
+            setCurrentView('workspace');
+          }
+        }}
+        onTabChange={handleTabNavigate}
+        onOpenProblemsWithFilter={(filter) => {
+          setProblemListPreset((prev) => ({
+            prepSetId: null,
+            statusFilter: 'All',
+            difficultyFilter: filter.difficulty || 'All',
+            topicFilter: filter.topic || 'All Topics',
+            filterVersion: (prev.filterVersion ?? 0) + 1,
+            searchQuery: '',
+            searchVersion: (prev.searchVersion ?? 0) + 1,
+          }));
+          setCurrentView('dsa');
+        }}
+      />
+    );
   }
 
   return (
-    <DashboardPage
-      onSelectProblem={(id) => {
-        setActiveProblemId(id);
-        if (id >= 501) {
-          setCurrentView('sql-workspace');
-        } else {
-          setCurrentView('workspace');
-        }
-      }}
-      onTabChange={handleTabNavigate}
-      onOpenProblemsWithFilter={(filter) => {
-        setProblemListPreset((prev) => ({
-          prepSetId: null,
-          statusFilter: 'All',
-          difficultyFilter: filter.difficulty || 'All',
-          topicFilter: filter.topic || 'All Topics',
-          filterVersion: (prev.filterVersion ?? 0) + 1,
-          searchQuery: '',
-          searchVersion: (prev.searchVersion ?? 0) + 1,
-        }));
-        setCurrentView('dsa');
-      }}
-    />
+    <>
+      {activePage}
+      <StreakCelebrationOverlay />
+    </>
   );
 };

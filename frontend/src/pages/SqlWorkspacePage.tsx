@@ -232,7 +232,18 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     void persistDraftNow(problem.id, query);
     setIsRunning(true);
     try {
-      const res = await apiRequest<{ result: SqlQueryResult; submissionId: string }>('/submissions/submit', {
+      const res = await apiRequest<{
+        result: SqlQueryResult;
+        submissionId: string;
+        potdStatus?: {
+          isPotd: boolean;
+          solvedToday: boolean;
+          justCompletedToday?: boolean;
+          currentStreak: number;
+          longestStreak?: number;
+          recentDays?: Array<{ date: string; solved: boolean; isToday: boolean }>;
+        };
+      }>('/submissions/submit', {
         method: 'POST',
         body: JSON.stringify({
           problemId,
@@ -243,6 +254,19 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       if (res.result.verdict === 'Accepted' && problem) {
         setProblem({ ...problem, isSolved: true });
         window.dispatchEvent(new CustomEvent('codeprep:progress-updated'));
+        if (res.potdStatus?.isPotd && res.potdStatus.justCompletedToday) {
+          window.dispatchEvent(
+            new CustomEvent('codeprep:streak-completed', {
+              detail: {
+                problemId: problem.id,
+                problemTitle: problem.title,
+                currentStreak: res.potdStatus.currentStreak,
+                longestStreak: res.potdStatus.longestStreak,
+                recentDays: res.potdStatus.recentDays,
+              },
+            })
+          );
+        }
       }
       void requestSqlCoach({ verdict: res.result.verdict, queryResult: res.result });
     } catch (err: unknown) {

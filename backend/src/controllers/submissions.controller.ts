@@ -47,6 +47,23 @@ export class SubmissionsController {
     return def;
   }
 
+  private static async buildPotdStatus(
+    userId: string,
+    problemId: number,
+    solvedTodayBefore: boolean
+  ) {
+    const analytics = await AnalyticsService.getDashboardAnalytics(userId);
+    const isPotd = analytics.potd.id === problemId;
+    return {
+      isPotd,
+      solvedToday: analytics.potd.solvedToday,
+      justCompletedToday: isPotd && !solvedTodayBefore && analytics.potd.solvedToday,
+      currentStreak: analytics.currentStreak,
+      longestStreak: analytics.longestStreak,
+      recentDays: analytics.potd.recentDays,
+    };
+  }
+
   static async runCode(req: Request, res: Response): Promise<void> {
     try {
       const { problemId, code, customTestCases } = req.body;
@@ -160,6 +177,11 @@ export class SubmissionsController {
           sqlDef.expectedResultJson
         );
 
+        const priorPotd =
+          sqlResult.verdict === 'Accepted'
+            ? await AnalyticsService.checkPotdStatusForProblem(userId, def.id)
+            : null;
+
         const submission = await prisma.submission.create({
           data: {
             problemId: def.id,
@@ -173,15 +195,14 @@ export class SubmissionsController {
           },
         });
 
-        let potdStatus: { isPotd: boolean; solvedToday: boolean; currentStreak: number } | undefined;
-        if (sqlResult.verdict === 'Accepted') {
-          const analytics = await AnalyticsService.getDashboardAnalytics(userId);
-          potdStatus = {
-            isPotd: analytics.potd.id === def.id,
-            solvedToday: analytics.potd.solvedToday,
-            currentStreak: analytics.currentStreak,
-          };
-        }
+        const potdStatus =
+          sqlResult.verdict === 'Accepted'
+            ? await SubmissionsController.buildPotdStatus(
+                userId,
+                def.id,
+                Boolean(priorPotd?.solvedToday)
+              )
+            : undefined;
 
         const sqlRuntimePercentile =
           sqlResult.verdict === 'Accepted'
@@ -234,6 +255,11 @@ export class SubmissionsController {
         }
       );
 
+      const priorPotd =
+        result.verdict === 'Accepted'
+          ? await AnalyticsService.checkPotdStatusForProblem(userId, def.id)
+          : null;
+
       // Record submission in database
       const submission = await prisma.submission.create({
         data: {
@@ -250,15 +276,14 @@ export class SubmissionsController {
         },
       });
 
-      let potdStatus: { isPotd: boolean; solvedToday: boolean; currentStreak: number } | undefined;
-      if (result.verdict === 'Accepted') {
-        const analytics = await AnalyticsService.getDashboardAnalytics(userId);
-        potdStatus = {
-          isPotd: analytics.potd.id === def.id,
-          solvedToday: analytics.potd.solvedToday,
-          currentStreak: analytics.currentStreak,
-        };
-      }
+      const potdStatus =
+        result.verdict === 'Accepted'
+          ? await SubmissionsController.buildPotdStatus(
+              userId,
+              def.id,
+              Boolean(priorPotd?.solvedToday)
+            )
+          : undefined;
 
       // Calculate percentile benchmarks against execution latency/memory bounds
       const benchmarkPercentileRuntime =

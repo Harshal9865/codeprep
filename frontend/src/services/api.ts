@@ -124,6 +124,18 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     throw new ApiError(errorMessage, response.status, data);
   }
 
+  const method = (options.method || 'GET').toUpperCase();
+  if (
+    method !== 'GET' &&
+    method !== 'HEAD' &&
+    (endpoint.includes('/submissions/submit') ||
+      endpoint.includes('/problems/') ||
+      endpoint.includes('/study/timer/unlock') ||
+      endpoint.includes('/user/profile'))
+  ) {
+    window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
+  }
+
   return data as T;
 }
 
