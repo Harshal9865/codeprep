@@ -738,7 +738,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
         : 100;
 
     return (
-      <AppLayout activeTab="mock-interview" onTabChange={onTabChange}>
+      <AppLayout currentTab="mock-interview" onTabChange={onTabChange}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 space-y-6">
           {/* Top Session Header */}
           <div className="bg-surface border border-border-subtle rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
@@ -925,7 +925,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                       {currentAptitudeQ.category}
                     </span>
                     <span className="text-xs font-mono text-text-muted">
-                      {currentAptitudeQ.topic} · {currentAptitudeQ.difficulty}
+                      {currentAptitudeQ.subtopic} · {currentAptitudeQ.difficulty}
                     </span>
                   </div>
 
@@ -1272,7 +1272,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
     config.easyDsa + config.mediumDsa + config.hardDsa + config.sqlCount + config.oopCount;
 
   return (
-    <AppLayout activeTab="mock-interview" onTabChange={onTabChange}>
+    <AppLayout currentTab="mock-interview" onTabChange={onTabChange}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         {/* Hero Header */}
         <div className="bg-surface border border-border-subtle rounded-2xl p-6 sm:p-7 flex flex-col lg:flex-row lg:items-center justify-between gap-6 shadow-sm">
