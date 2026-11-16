@@ -21,6 +21,7 @@ import {
   Dices,
   AlertTriangle,
   X,
+  ListFilter,
 } from 'lucide-react';
 
 interface SqlProblemItem {
@@ -44,58 +45,40 @@ type SqlSubsetFilter = 'all' | 'core-sql-100' | 'sql-interview-50' | 'sql-extend
 interface SqlTopicMeta {
   topic: string;
   shortTitle: string;
-  subtitle: string;
   patterns: string;
   accentText: string;
-  accentBg: string;
-  accentBorder: string;
 }
 
-const SQL_TOPIC_CARDS: SqlTopicMeta[] = [
+const SQL_TOPIC_ITEMS: SqlTopicMeta[] = [
   {
     topic: 'Aggregations & Joins',
     shortTitle: 'Joins & Grouping',
-    subtitle: 'LEFT/Self joins, HAVING filters & NULL-safe sums',
-    patterns: 'LEFT JOIN · COALESCE · COUNT',
+    patterns: 'LEFT JOIN · HAVING · COALESCE',
     accentText: 'text-emerald-400',
-    accentBg: 'bg-emerald-500/10',
-    accentBorder: 'border-emerald-500/35',
   },
   {
     topic: 'Window Functions',
     shortTitle: 'Window Functions',
-    subtitle: 'Top-K ranking, running totals & peer deltas',
     patterns: 'DENSE_RANK · LAG/LEAD · OVER',
     accentText: 'text-sky-400',
-    accentBg: 'bg-sky-500/10',
-    accentBorder: 'border-sky-500/35',
   },
   {
     topic: 'Common Table Expressions',
     shortTitle: 'CTEs & Recursion',
-    subtitle: 'Multi-stage pipelines & hierarchical tree traversal',
     patterns: 'WITH · WITH RECURSIVE',
     accentText: 'text-purple-400',
-    accentBg: 'bg-purple-500/10',
-    accentBorder: 'border-purple-500/35',
   },
   {
     topic: 'Gaps and Islands',
     shortTitle: 'Gaps & Islands',
-    subtitle: 'Contiguous streaks, missing IDs & active ranges',
-    patterns: 'id - ROW_NUMBER() · LAG Gap',
+    patterns: 'id - ROW_NUMBER() · Streaks',
     accentText: 'text-amber-400',
-    accentBg: 'bg-amber-500/10',
-    accentBorder: 'border-amber-500/35',
   },
   {
     topic: 'Advanced Analytics & Retention',
     shortTitle: 'Cohorts & Retention',
-    subtitle: 'Funnel conversion, rolling 7-day & churn analysis',
-    patterns: 'Cohort Join · Rolling AVG',
+    patterns: 'Retention · Rolling Window',
     accentText: 'text-rose-400',
-    accentBg: 'bg-rose-500/10',
-    accentBorder: 'border-rose-500/35',
   },
 ];
 
@@ -111,50 +94,50 @@ const SQL_EXECUTION_PIPELINE: ExecutionStage[] = [
   {
     step: '01',
     clause: 'FROM & JOIN',
-    rule: 'Builds the Cartesian join grain and evaluates ON predicates before filtering.',
-    trap: 'Putting a right-table filter like `b.status = "paid"` in WHERE silently converts a LEFT JOIN into an INNER JOIN.',
-    snippet: 'FROM Customers c\nLEFT JOIN Orders o ON c.id = o.customer_id AND o.status = \'paid\'',
+    rule: 'Builds the base relational grain and evaluates join ON predicates before WHERE.',
+    trap: 'Filtering a nullable right-table column in WHERE silently turns a LEFT JOIN into an INNER JOIN.',
+    snippet: "FROM Customers c\nLEFT JOIN Orders o ON c.id = o.customer_id AND o.status = 'paid'",
   },
   {
     step: '02',
     clause: 'WHERE',
     rule: 'Filters individual raw rows before grouping or aggregates execute.',
-    trap: 'Aggregate functions (`COUNT`, `SUM`, `AVG`) and SELECT aliases cannot be referenced in WHERE.',
-    snippet: 'WHERE created_at >= \'2026-01-01\' AND amount IS NOT NULL',
+    trap: 'Aggregates (`COUNT`, `SUM`, `AVG`) and SELECT aliases cannot be used inside WHERE.',
+    snippet: "WHERE created_at >= '2026-01-01' AND amount IS NOT NULL",
   },
   {
     step: '03',
     clause: 'GROUP BY',
-    rule: 'Collapses matching key combinations into one summary row per group.',
-    trap: 'Every non-aggregated column in SELECT should appear in GROUP BY so results remain deterministic.',
+    rule: 'Collapses matching group keys into one summary row per bucket.',
+    trap: 'Every non-aggregated column in SELECT should appear in GROUP BY for deterministic results.',
     snippet: 'GROUP BY department_id, tier',
   },
   {
     step: '04',
     clause: 'HAVING',
-    rule: 'Filters aggregated groups after GROUP BY has run.',
-    trap: 'Avoid putting simple row filters in HAVING — filter raw rows earlier in WHERE for smaller groups.',
+    rule: 'Filters aggregated buckets after GROUP BY completes.',
+    trap: 'Keep per-row filters in WHERE so fewer rows enter aggregation.',
     snippet: 'HAVING COUNT(DISTINCT user_id) >= 5 AND SUM(amount) > 1000',
   },
   {
     step: '05',
     clause: 'Window OVER()',
-    rule: 'Computes ranking, LEAD/LAG, and rolling frames across partitions without collapsing rows.',
-    trap: 'Default `RANGE BETWEEN` frame handles peer ties differently than `ROWS BETWEEN 6 PRECEDING AND CURRENT ROW`.',
+    rule: 'Computes ranking, LAG/LEAD, and rolling frames across partitions without collapsing rows.',
+    trap: 'Explicitly check `ROWS BETWEEN` vs default `RANGE` when rows share equal ORDER BY values.',
     snippet: 'DENSE_RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk',
   },
   {
     step: '06',
     clause: 'SELECT & DISTINCT',
-    rule: 'Projects final expressions, aliases (`AS ...`), and deduplicates rows if DISTINCT is set.',
-    trap: 'SQLite integer division (`COUNT(*) / total`) truncates decimals — multiply by `1.0` first.',
+    rule: 'Evaluates expressions, projections (`AS alias`), and deduplicates rows if DISTINCT is set.',
+    trap: 'SQLite integer division (`a / b`) truncates decimals — multiply by `1.0` first.',
     snippet: 'SELECT dept, ROUND(100.0 * paid_cnt / COUNT(*), 2) AS paid_pct',
   },
   {
     step: '07',
     clause: 'ORDER BY & LIMIT',
-    rule: 'Sorts the final projected output (SELECT aliases work here) and caps row count.',
-    trap: 'Always include deterministic tie-breakers (e.g. `ORDER BY score DESC, id ASC`) when using LIMIT.',
+    rule: 'Sorts final projected rows (aliases allowed) and caps output length.',
+    trap: 'Include deterministic tie-breakers (e.g. `ORDER BY score DESC, id ASC`) whenever using LIMIT.',
     snippet: 'ORDER BY total_spent DESC, customer_id ASC\nLIMIT 5;',
   },
 ];
@@ -174,8 +157,8 @@ const SQL_COOKBOOK_PATTERNS: SqlCookbookPattern[] = [
     id: 'left-join-zero',
     title: 'Zero-Row Preservation with LEFT JOIN + COALESCE',
     topic: 'Aggregations & Joins',
-    useCase: 'Include entities that have 0 matching child records (e.g. inactive users or zero-sale products).',
-    pitfall: 'Count a non-null right-table primary key (`COUNT(o.id)`), NOT `COUNT(*)`, otherwise empty left rows count as 1!',
+    useCase: 'Keep entities that have 0 matching child records (inactive users or zero-sale SKUs).',
+    pitfall: 'Count a non-null child column (`COUNT(p.id)`), NOT `COUNT(*)`, or unmatched rows return 1.',
     schemaDdl: `CREATE TABLE Users (id INT PRIMARY KEY, name TEXT);
 CREATE TABLE Purchases (id INT PRIMARY KEY, user_id INT, amount INT, status TEXT);
 INSERT INTO Users VALUES (1, 'Aarav'), (2, 'Diya'), (3, 'Kabir');
@@ -193,10 +176,10 @@ ORDER BY paid_total DESC, u.id ASC;`,
   },
   {
     id: 'top-k-window',
-    title: 'Top-K Per Group with Ties (`DENSE_RANK`)',
+    title: 'Top-K Per Group Keeping Ties (DENSE_RANK)',
     topic: 'Window Functions',
-    useCase: 'Find the top 2 highest-earning employees per department without dropping salary ties.',
-    pitfall: '`ROW_NUMBER()` breaks ties arbitrarily, `RANK()` skips ranks after ties; use `DENSE_RANK()` for top-N distinct values.',
+    useCase: 'Return the top 2 highest-paid staff per department without dropping salary ties.',
+    pitfall: '`ROW_NUMBER()` splits ties arbitrarily; `DENSE_RANK()` preserves distinct salary tiers.',
     schemaDdl: `CREATE TABLE Staff (id INT PRIMARY KEY, name TEXT, dept TEXT, salary INT);
 INSERT INTO Staff VALUES
   (1, 'Maya', 'Eng', 140), (2, 'Rohan', 'Eng', 140), (3, 'Neha', 'Eng', 120), (4, 'Isha', 'Eng', 100),
@@ -218,8 +201,8 @@ ORDER BY dept, dr, name;`,
     id: 'gaps-islands',
     title: 'Consecutive Activity Streaks (Gaps & Islands)',
     topic: 'Gaps and Islands',
-    useCase: 'Group consecutive login days per user into contiguous islands to measure max streak length.',
-    pitfall: 'Deduplicate multiple events on the same day (`SELECT DISTINCT user_id, day_num`) before subtracting `ROW_NUMBER()`.',
+    useCase: 'Group consecutive login days per user into contiguous streaks.',
+    pitfall: 'Deduplicate multiple events on the same day before subtracting `ROW_NUMBER()`.',
     schemaDdl: `CREATE TABLE Logins (user_id INT, login_day INT);
 INSERT INTO Logins VALUES
   (1, 10), (1, 11), (1, 12), (1, 15), (1, 16),
@@ -245,10 +228,10 @@ ORDER BY user_id, streak_start;`,
   },
   {
     id: 'lag-session-delta',
-    title: 'Row-to-Row Comparison (`LAG` & Percentage Growth)',
+    title: 'Period-Over-Period Growth (LAG + NULLIF)',
     topic: 'Advanced Analytics & Retention',
-    useCase: 'Compute day-over-day metric deltas or filter days exceeding previous revenue.',
-    pitfall: 'Protect division with `NULLIF(prev_rev, 0)` and multiply by `100.0` before dividing so percentages keep decimals.',
+    useCase: 'Compare current metrics against the prior period with safe float division.',
+    pitfall: 'Wrap denominators with `NULLIF(prev_rev, 0)` and multiply by `100.0` before dividing.',
     schemaDdl: `CREATE TABLE DailyRev (day_idx INT PRIMARY KEY, revenue INT);
 INSERT INTO DailyRev VALUES (1, 100), (2, 125), (3, 100), (4, 160);`,
     query: `WITH Prev AS (
@@ -415,7 +398,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
   return (
     <AppLayout currentTab="sql" onTabChange={onTabChange}>
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 py-6 space-y-5">
-        {/* Compact Workspace Header */}
+        {/* Clean Header + Section Switcher */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-subtle pb-5">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -423,362 +406,423 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
                 SQL Query Lab
               </h1>
               <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-xs font-mono text-text-secondary">
-                {sqlSolvedTotal}/{sqlTotal} Solved ({sqlPct}%)
+                {sqlSolvedTotal}/{sqlTotal} Solved
               </span>
-              {hasActiveFilters && (
-                <span className="px-2.5 py-0.5 rounded-full bg-primary-subtle border border-primary/30 text-xs font-mono text-primary">
-                  Showing {filteredSolvedCount}/{filteredTotal}
-                </span>
-              )}
             </div>
-            <p className="text-xs sm:text-sm text-text-secondary max-w-3xl leading-relaxed">
-              Isolated SQLite relational sandboxes covering joins, window functions, recursive CTEs, gaps &amp; islands, and cohort retention.
+            <p className="text-xs sm:text-sm text-text-secondary max-w-2xl">
+              Isolated SQLite relational sandboxes across joins, window functions, CTEs, gaps &amp; islands, and retention analytics.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface border border-border-subtle">
+              <button
+                type="button"
+                onClick={() => setActiveSection('problems')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                  activeSection === 'problems'
+                    ? 'bg-primary text-black'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>Query Bank</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('patterns')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                  activeSection === 'patterns'
+                    ? 'bg-primary text-black'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Patterns &amp; Pipeline</span>
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={handleLaunchRandomSql}
               className="px-3.5 py-2 rounded-xl bg-primary text-black text-xs font-semibold hover:opacity-95 transition-opacity inline-flex items-center gap-1.5"
             >
               <Dices className="w-3.5 h-3.5" />
-              <span>Practice Unsolved SQL</span>
+              <span>Practice Next</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setScratchPreset(null);
-                setIsScratchpadOpen(true);
-              }}
-              className="px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-high border border-border-default text-xs font-semibold text-text-primary flex items-center gap-2 transition-colors"
-            >
-              <Terminal className="w-3.5 h-3.5 text-primary" />
-              <span>SQL Scratchpad</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Section Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface border border-border-subtle">
-            <button
-              type="button"
-              onClick={() => setActiveSection('problems')}
-              className={`px-3.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition-colors ${
-                activeSection === 'problems'
-                  ? 'bg-primary text-black shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>Query Problems ({sqlTotal})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection('patterns')}
-              className={`px-3.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition-colors ${
-                activeSection === 'patterns'
-                  ? 'bg-primary text-black shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>SQL Patterns &amp; Execution Guide</span>
-            </button>
-          </div>
-
-          <div className="text-[11px] font-mono text-text-muted hidden md:flex items-center gap-3">
-            <span className="text-success">Easy {difficultyTotals.Easy}</span>
-            <span className="text-warning">Medium {difficultyTotals.Medium}</span>
-            <span className="text-danger">Hard {difficultyTotals.Hard}</span>
           </div>
         </div>
 
         {activeSection === 'problems' ? (
-          <div className="space-y-4">
-            {/* 5 Interactive SQL Topic Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-              {SQL_TOPIC_CARDS.map((card) => {
-                const isSelected = selectedTopic === card.topic;
-                return (
+          /* 2-COLUMN STUDIO LAYOUT */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* LEFT CURRICULUM RAIL */}
+            <aside className="lg:col-span-3 space-y-4 lg:sticky lg:top-16">
+              {/* Progress & Breakdown */}
+              <div className="bg-surface border border-border-subtle rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-text-muted uppercase tracking-wider font-semibold">
+                    Lab Progress
+                  </span>
+                  <span className="text-text-primary font-bold">
+                    {sqlSolvedTotal}/{sqlTotal} ({sqlPct}%)
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-surface-elevated overflow-hidden">
+                  <div
+                    className="h-full bg-sky-500 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.max(sqlPct, sqlSolvedTotal > 0 ? 3 : 0)}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 pt-1 text-center text-[11px] font-mono">
+                  <div className="py-1.5 rounded-lg bg-surface-subtle border border-border-subtle">
+                    <div className="text-success font-semibold">{difficultyTotals.Easy}</div>
+                    <div className="text-[10px] text-text-muted">Easy</div>
+                  </div>
+                  <div className="py-1.5 rounded-lg bg-surface-subtle border border-border-subtle">
+                    <div className="text-warning font-semibold">{difficultyTotals.Medium}</div>
+                    <div className="text-[10px] text-text-muted">Med</div>
+                  </div>
+                  <div className="py-1.5 rounded-lg bg-surface-subtle border border-border-subtle">
+                    <div className="text-danger font-semibold">{difficultyTotals.Hard}</div>
+                    <div className="text-[10px] text-text-muted">Hard</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Curated Tracks */}
+              <div className="bg-surface border border-border-subtle rounded-2xl p-3 space-y-1.5">
+                <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-text-muted font-semibold flex items-center gap-1.5">
+                  <ListFilter className="w-3 h-3" />
+                  <span>Curated Tracks</span>
+                </div>
+                {(
+                  [
+                    { id: 'all', label: 'All SQL Queries', badge: `${sqlTotal}` },
+                    { id: 'core-sql-100', label: 'Core 100 Essential', badge: '#501–600' },
+                    { id: 'sql-interview-50', label: 'Interview Top 50', badge: '#501–550' },
+                    { id: 'sql-extended-300', label: 'Extended Analytics', badge: '#731+' },
+                  ] as const
+                ).map((track) => {
+                  const active = sqlSubset === track.id;
+                  return (
+                    <button
+                      key={track.id}
+                      type="button"
+                      onClick={() => {
+                        setSqlSubset(track.id);
+                        setCurrentPage(1);
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                        active
+                          ? 'bg-primary-subtle text-primary font-semibold border border-primary/35'
+                          : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated border border-transparent'
+                      }`}
+                    >
+                      <span>{track.label}</span>
+                      <span className="text-[10px] font-mono opacity-80">{track.badge}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Relational Domains */}
+              <div className="bg-surface border border-border-subtle rounded-2xl p-3 space-y-1">
+                <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-text-muted font-semibold">
+                  Relational Domains
+                </div>
+                {SQL_TOPIC_ITEMS.map((item) => {
+                  const active = selectedTopic === item.topic;
+                  return (
+                    <button
+                      key={item.topic}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTopic((prev) => (prev === item.topic ? 'all' : item.topic));
+                        setCurrentPage(1);
+                      }}
+                      className={`w-full px-2.5 py-2 rounded-xl text-left transition-colors flex items-start gap-2.5 border ${
+                        active
+                          ? 'bg-surface-elevated border-primary/40'
+                          : 'border-transparent hover:bg-surface-elevated/60'
+                      }`}
+                    >
+                      <span className="mt-0.5 shrink-0">{getTopicIcon(item.topic)}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold text-text-primary truncate">
+                          {item.shortTitle}
+                        </div>
+                        <div className={`text-[10px] font-mono truncate ${item.accentText}`}>
+                          {item.patterns}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Scratchpad Launcher */}
+              <button
+                type="button"
+                onClick={() => {
+                  setScratchPreset(null);
+                  setIsScratchpadOpen(true);
+                }}
+                className="w-full p-3.5 rounded-2xl bg-surface-elevated hover:bg-surface-high border border-border-default text-left transition-colors flex items-center justify-between gap-3 group"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary-subtle text-primary flex items-center justify-center shrink-0">
+                    <Terminal className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-text-primary">SQLite Scratchpad</div>
+                    <div className="text-[11px] text-text-muted truncate">
+                      Test custom tables &amp; plans
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors shrink-0" />
+              </button>
+            </aside>
+
+            {/* RIGHT PROBLEM TABLE WORKSPACE */}
+            <main className="lg:col-span-9 space-y-4 min-w-0">
+              {/* Compact Filter Bar */}
+              <div className="bg-surface border border-border-subtle rounded-2xl p-3 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search SQL problems by #id, title, or clause pattern..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-9 py-2 bg-canvas border border-border-subtle rounded-xl text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/60 transition-colors"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setDebouncedSearch('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-0.5 bg-canvas border border-border-subtle rounded-xl p-0.5 text-xs">
+                    {(['all', 'solved', 'unsolved'] as const).map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(status);
+                          setCurrentPage(1);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg capitalize transition-colors ${
+                          statusFilter === status
+                            ? 'bg-primary text-black font-semibold'
+                            : 'text-text-secondary hover:text-text-primary'
+                        }`}
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-0.5 bg-canvas border border-border-subtle rounded-xl p-0.5 text-xs">
+                    {(['all', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
+                      <button
+                        key={diff}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDifficulty(diff);
+                          setCurrentPage(1);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg transition-colors ${
+                          selectedDifficulty === diff
+                            ? 'bg-primary text-black font-semibold'
+                            : diff === 'Easy'
+                              ? 'text-success hover:bg-surface-elevated'
+                              : diff === 'Medium'
+                                ? 'text-warning hover:bg-surface-elevated'
+                                : diff === 'Hard'
+                                  ? 'text-danger hover:bg-surface-elevated'
+                                  : 'text-text-secondary hover:text-text-primary'
+                        }`}
+                      >
+                        {diff === 'all' ? 'All' : diff === 'Medium' ? 'Med' : diff}
+                      </button>
+                    ))}
+                  </div>
+
                   <button
-                    key={card.topic}
                     type="button"
                     onClick={() => {
-                      setSelectedTopic((prev) => (prev === card.topic ? 'all' : card.topic));
+                      if (isShuffled) {
+                        setIsShuffled(false);
+                        setCurrentPage(1);
+                        return;
+                      }
+                      setIsShuffled(true);
+                      setShuffleSeed(Math.floor(Math.random() * 1_000_000) + 1);
                       setCurrentPage(1);
                     }}
-                    className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
-                      isSelected
-                        ? `${card.accentBg} ${card.accentBorder} ring-1 ring-primary/35`
-                        : 'bg-surface border-border-subtle hover:border-border-hover hover:bg-surface-elevated/60'
+                    aria-pressed={isShuffled}
+                    className={`px-3 py-1.5 border rounded-xl text-xs flex items-center gap-1.5 transition-colors ${
+                      isShuffled
+                        ? 'bg-primary-subtle border-primary/45 text-primary font-semibold'
+                        : 'bg-canvas border-border-subtle text-text-secondary hover:text-text-primary'
                     }`}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-text-primary">
-                          {getTopicIcon(card.topic)}
-                          <span>{card.shortTitle}</span>
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-text-muted leading-snug line-clamp-2">
-                        {card.subtitle}
-                      </p>
-                    </div>
-                    <div className="pt-1 border-t border-border-subtle/70 flex items-center justify-between text-[10px] font-mono">
-                      <span className={card.accentText}>{card.patterns}</span>
-                      {isSelected && <span className="text-primary font-semibold">Active</span>}
-                    </div>
+                    <Shuffle className="w-3.5 h-3.5 text-primary" />
+                    <span>{isShuffled ? 'Shuffled' : 'Shuffle'}</span>
                   </button>
-                );
-              })}
-            </div>
 
-            {/* Filter Controls Bar */}
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-              <div className="relative flex-1 max-w-md">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search SQL problems by #id, title, pattern, or topic..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-9 py-2 bg-surface-elevated border border-border-default rounded-full text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/50 transition-colors"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setDebouncedSearch('');
-                      setCurrentPage(1);
-                    }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={resetAllFilters}
+                      className="px-2.5 py-1.5 bg-danger-subtle border border-danger/30 rounded-xl text-xs text-danger font-mono flex items-center gap-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Reset ({filteredTotal})</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-full p-0.5 text-xs">
-                  {(
-                    [
-                      { id: 'all', label: `All (${sqlTotal})` },
-                      { id: 'core-sql-100', label: 'Core 100' },
-                      { id: 'sql-interview-50', label: 'Top 50' },
-                      { id: 'sql-extended-300', label: 'Extended 300' },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => {
-                        setSqlSubset(opt.id);
-                        setCurrentPage(1);
-                      }}
-                      className={`px-2.5 py-1 rounded-full transition-colors ${
-                        sqlSubset === opt.id
-                          ? 'bg-sky-500 text-black font-semibold'
-                          : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+              {/* Active Filter Summary */}
+              {hasActiveFilters && (
+                <div className="flex items-center justify-between px-1 text-xs font-mono text-text-muted">
+                  <span>
+                    Showing <strong className="text-text-primary">{filteredTotal}</strong> matching queries ({filteredSolvedCount} solved)
+                  </span>
+                  {selectedTopic !== 'all' && (
+                    <span className="text-primary">Domain: {selectedTopic}</span>
+                  )}
                 </div>
+              )}
 
-                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-full p-0.5 text-xs">
-                  {(['all', 'solved', 'unsolved'] as const).map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(status);
-                        setCurrentPage(1);
-                      }}
-                      className={`px-2.5 py-1 rounded-full capitalize transition-colors ${
-                        statusFilter === status
-                          ? 'bg-primary text-black font-semibold'
-                          : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
-                </div>
-
-                <select
-                  value={selectedDifficulty}
-                  onChange={(e) => {
-                    setSelectedDifficulty(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="px-3 py-1.5 bg-surface-elevated border border-border-default rounded-full text-xs text-text-secondary hover:text-text-primary focus:outline-none cursor-pointer"
-                >
-                  <option value="all">All Difficulties</option>
-                  <option value="Easy">Easy ({difficultyTotals.Easy})</option>
-                  <option value="Medium">Medium ({difficultyTotals.Medium})</option>
-                  <option value="Hard">Hard ({difficultyTotals.Hard})</option>
-                </select>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isShuffled) {
-                      setIsShuffled(false);
-                      setCurrentPage(1);
-                      return;
-                    }
-                    setIsShuffled(true);
-                    setShuffleSeed(Math.floor(Math.random() * 1_000_000) + 1);
-                    setCurrentPage(1);
-                  }}
-                  aria-pressed={isShuffled}
-                  className={`px-3 py-1.5 border rounded-full text-xs flex items-center gap-1.5 transition-colors ${
-                    isShuffled
-                      ? 'bg-primary-subtle border-primary/45 text-primary font-semibold'
-                      : 'bg-surface-elevated border-border-default text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  <Shuffle className="w-3.5 h-3.5 text-primary" />
-                  <span>{isShuffled ? 'Shuffle ON' : 'Shuffle'}</span>
-                </button>
-
-                {hasActiveFilters && (
-                  <button
-                    type="button"
-                    onClick={resetAllFilters}
-                    className="px-3 py-1.5 bg-danger-subtle border border-danger/30 rounded-full text-xs text-danger font-mono flex items-center gap-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    <span>Reset</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* SQL Problem Table */}
-            <div className="bg-surface border border-border-subtle rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-surface-subtle text-text-muted font-mono text-[11px] uppercase tracking-wider border-b border-border-subtle">
-                    <tr>
-                      <th className="py-3 px-4 w-12 text-center">Status</th>
-                      <th className="py-3 px-4 w-16">ID</th>
-                      <th className="py-3 px-4">Query Problem &amp; Pattern</th>
-                      <th className="py-3 px-4 w-56 hidden sm:table-cell">Section / Topic</th>
-                      <th className="py-3 px-4 w-24">Difficulty</th>
-                      <th className="py-3 px-4 w-20 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-subtle">
-                    {isLoading ? (
+              {/* SQL Problem Table */}
+              <div className="bg-surface border border-border-subtle rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface-subtle text-text-muted font-mono text-[11px] uppercase tracking-wider border-b border-border-subtle">
                       <tr>
-                        <td colSpan={6} className="py-8">
-                          <CodePrepLoader
-                            variant="section"
-                            className="min-h-[160px]"
-                            label="Loading SQL Query Lab"
-                            sublabel={`Preparing page ${currentPage} of ${sqlTotal} relational schema problems...`}
-                          />
-                        </td>
+                        <th className="py-3 px-4 w-12 text-center">Done</th>
+                        <th className="py-3 px-4 w-16">ID</th>
+                        <th className="py-3 px-4">Challenge &amp; Pattern</th>
+                        <th className="py-3 px-4 w-52 hidden md:table-cell">Domain</th>
+                        <th className="py-3 px-4 w-24">Level</th>
+                        <th className="py-3 px-4 w-20 text-right">Open</th>
                       </tr>
-                    ) : problems.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-16 text-center space-y-3">
-                          <div className="text-sm text-text-secondary font-medium">
-                            No SQL problems match your current filters.
-                          </div>
-                          <button
-                            type="button"
-                            onClick={resetAllFilters}
-                            className="px-3.5 py-1.5 rounded-lg bg-primary text-black text-xs font-semibold"
-                          >
-                            Reset Filters
-                          </button>
-                        </td>
-                      </tr>
-                    ) : (
-                      problems.map((prob, idx) => (
-                        <tr
-                          key={prob.id}
-                          onClick={() => onSelectProblem(prob.id)}
-                          className={`hover:bg-surface-high/60 transition-colors cursor-pointer group ${
-                            idx % 2 === 0 ? 'bg-surface' : 'bg-surface-subtle/50'
-                          }`}
-                        >
-                          <td className="py-3 px-4 text-center">
-                            {prob.isSolved ? (
-                              <Check className="w-4 h-4 text-success mx-auto stroke-[2.5]" />
-                            ) : (
-                              <div className="w-1.5 h-1.5 rounded-full bg-text-muted/30 mx-auto group-hover:bg-text-muted/60 transition-colors" />
-                            )}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-text-muted font-semibold">
-                            #{prob.id}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium text-text-primary group-hover:text-primary transition-colors">
-                                {prob.title}
-                              </span>
-                              {prob.pattern && (
-                                <span className="px-2 py-0.5 rounded-md bg-surface-elevated border border-border-subtle text-[10px] font-mono text-text-muted">
-                                  {prob.pattern}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 hidden sm:table-cell">
-                            <span className="inline-flex items-center gap-1.5 text-text-secondary">
-                              {getTopicIcon(prob.topic)}
-                              <span>{prob.topic}</span>
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-medium">
-                            {prob.difficulty === 'Easy' && <span className="text-success">Easy</span>}
-                            {prob.difficulty === 'Medium' && <span className="text-warning">Med.</span>}
-                            {prob.difficulty === 'Hard' && <span className="text-danger">Hard</span>}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <span className="inline-flex items-center gap-1 text-primary opacity-75 group-hover:opacity-100 font-mono text-[11px] transition-opacity">
-                              <span>Solve</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </span>
+                    </thead>
+                    <tbody className="divide-y divide-border-subtle">
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={6} className="py-10">
+                            <CodePrepLoader
+                              variant="section"
+                              className="min-h-[160px]"
+                              label="Loading SQL Query Bank"
+                              sublabel={`Preparing page ${currentPage} of ${sqlTotal} relational schema challenges...`}
+                            />
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ) : problems.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-16 text-center space-y-3">
+                            <div className="text-sm text-text-secondary font-medium">
+                              No SQL queries match your current filters.
+                            </div>
+                            <button
+                              type="button"
+                              onClick={resetAllFilters}
+                              className="px-3.5 py-1.5 rounded-lg bg-primary text-black text-xs font-semibold"
+                            >
+                              Clear Filters
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        problems.map((prob, idx) => (
+                          <tr
+                            key={prob.id}
+                            onClick={() => onSelectProblem(prob.id)}
+                            className={`hover:bg-surface-high/60 transition-colors cursor-pointer group ${
+                              idx % 2 === 0 ? 'bg-surface' : 'bg-surface-subtle/40'
+                            }`}
+                          >
+                            <td className="py-3 px-4 text-center">
+                              {prob.isSolved ? (
+                                <Check className="w-4 h-4 text-success mx-auto stroke-[2.5]" />
+                              ) : (
+                                <div className="w-1.5 h-1.5 rounded-full bg-text-muted/30 mx-auto group-hover:bg-primary/60 transition-colors" />
+                              )}
+                            </td>
+                            <td className="py-3 px-4 font-mono text-text-muted font-semibold">
+                              #{prob.id}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-xs sm:text-[13px] text-text-primary group-hover:text-primary transition-colors">
+                                  {prob.title}
+                                </span>
+                                {prob.pattern && (
+                                  <span className="px-2 py-0.5 rounded-md bg-surface-elevated border border-border-subtle text-[10px] font-mono text-text-muted">
+                                    {prob.pattern}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 hidden md:table-cell">
+                              <span className="inline-flex items-center gap-1.5 text-text-secondary">
+                                {getTopicIcon(prob.topic)}
+                                <span className="truncate">{prob.topic}</span>
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px] font-semibold">
+                              {prob.difficulty === 'Easy' && <span className="text-success">Easy</span>}
+                              {prob.difficulty === 'Medium' && <span className="text-warning">Med</span>}
+                              {prob.difficulty === 'Hard' && <span className="text-danger">Hard</span>}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <ChevronRight className="w-4 h-4 text-primary opacity-55 group-hover:opacity-100 inline-block transition-opacity" />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-              <PaginationBar
-                currentPage={currentPage}
-                totalItems={filteredTotal}
-                pageSize={PAGE_SIZE}
-                onPageChange={setCurrentPage}
-                itemLabel="SQL queries"
-              />
-            </div>
+                <PaginationBar
+                  currentPage={currentPage}
+                  totalItems={filteredTotal}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setCurrentPage}
+                  itemLabel="SQL queries"
+                />
+              </div>
+            </main>
           </div>
         ) : (
-          /* SECTION 2: SQL PATTERNS & INTERACTIVE EXECUTION ORDER GUIDE */
+          /* SECTION 2: EXECUTION PIPELINE & RUNNABLE PATTERNS COOKBOOK */
           <div className="space-y-6">
-            {/* Interactive Logical Clause Execution Pipeline */}
             <div className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-sm font-bold text-text-primary">
-                    Interactive SQL Logical Execution Order
+                    SQL Logical Execution Order
                   </h2>
                   <p className="text-xs text-text-muted">
-                    Click any clause to see when SQLite evaluates it and which bugs happen if clauses are mixed up.
+                    Select any evaluation stage to inspect scope rules and common query traps.
                   </p>
                 </div>
                 <span className="text-[11px] font-mono text-primary">
@@ -786,21 +830,25 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {SQL_EXECUTION_PIPELINE.map((stage, idx) => (
-                  <button
-                    key={stage.step}
-                    type="button"
-                    onClick={() => setSelectedStageIdx(idx)}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-mono transition-colors flex items-center gap-1.5 ${
-                      selectedStageIdx === idx
-                        ? 'bg-primary text-black border-primary font-bold'
-                        : 'bg-surface-elevated border-border-subtle text-text-secondary hover:text-text-primary'
-                    }`}
-                  >
-                    <span className="opacity-70">{stage.step}.</span>
-                    <span>{stage.clause}</span>
-                  </button>
+                  <React.Fragment key={stage.step}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStageIdx(idx)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-mono transition-colors inline-flex items-center gap-1.5 ${
+                        selectedStageIdx === idx
+                          ? 'bg-primary text-black border-primary font-bold'
+                          : 'bg-surface-elevated border-border-subtle text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      <span className="opacity-70">{stage.step}</span>
+                      <span>{stage.clause}</span>
+                    </button>
+                    {idx < SQL_EXECUTION_PIPELINE.length - 1 && (
+                      <ChevronRight className="w-3.5 h-3.5 text-text-muted hidden sm:inline" />
+                    )}
+                  </React.Fragment>
                 ))}
               </div>
 
@@ -808,7 +856,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
                 <div className="lg:col-span-6 space-y-2.5">
                   <div className="p-3.5 rounded-xl bg-surface-elevated border border-border-subtle space-y-1">
                     <div className="text-[10px] font-mono uppercase tracking-wider text-primary font-semibold">
-                      Execution Semantics
+                      Evaluation Semantics
                     </div>
                     <p className="text-xs sm:text-sm text-text-primary leading-relaxed">
                       {activeStage.rule}
@@ -818,7 +866,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
                     <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
                     <div className="text-xs text-text-secondary leading-relaxed">
                       <strong className="text-warning font-mono uppercase text-[10px] mr-1.5">
-                        Common Bug:
+                        Watch out:
                       </strong>
                       {activeStage.trap}
                     </div>
@@ -840,24 +888,21 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
               </div>
             </div>
 
-            {/* Runnable SQL Patterns Cookbook */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-text-primary">
-                    Interview SQL Pattern Cookbook
-                  </h2>
-                  <p className="text-xs text-text-muted">
-                    Inspect canonical patterns and test or modify them live in the SQLite Scratchpad.
-                  </p>
-                </div>
+              <div>
+                <h2 className="text-base font-bold text-text-primary">
+                  Runnable SQL Pattern Cookbook
+                </h2>
+                <p className="text-xs text-text-muted">
+                  Open any canonical SQL pattern directly inside the live SQLite Scratchpad to edit and run.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {SQL_COOKBOOK_PATTERNS.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-surface border border-border-subtle rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-4"
+                    className="bg-surface border border-border-subtle rounded-2xl p-5 flex flex-col justify-between gap-4"
                   >
                     <div className="space-y-3">
                       <div className="flex items-start justify-between gap-3">
@@ -881,7 +926,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
                           className="px-3 py-1.5 rounded-lg bg-primary text-black text-[11px] font-semibold inline-flex items-center gap-1.5 shrink-0 hover:opacity-95"
                         >
                           <Play className="w-3 h-3 fill-current" />
-                          <span>Try in Scratchpad</span>
+                          <span>Run Live</span>
                         </button>
                       </div>
 
@@ -902,7 +947,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
 
                     <div className="p-3 rounded-xl bg-surface-elevated border border-border-subtle flex items-start justify-between gap-3 text-[11px]">
                       <div className="text-text-secondary leading-relaxed">
-                        <strong className="text-warning font-mono mr-1">Watch out:</strong>
+                        <strong className="text-warning font-mono mr-1">Edge case:</strong>
                         {item.pitfall}
                       </div>
                       <button

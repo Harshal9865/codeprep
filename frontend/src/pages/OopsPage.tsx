@@ -56,22 +56,18 @@ interface OopPillarMeta {
   count: number;
   desc: string;
   accentText: string;
-  accentBg: string;
-  accentBorder: string;
   moduleId: string;
   sampleProblems: Array<{ id: number; title: string; difficulty: 'Easy' | 'Medium' | 'Hard' }>;
 }
 
-const OOP_PILLAR_CARDS: OopPillarMeta[] = [
+const OOP_PILLAR_ITEMS: OopPillarMeta[] = [
   {
     topic: 'Encapsulation & Class Invariants',
     shortTitle: 'Encapsulation & Invariants',
     idRange: '#631–#650',
     count: 20,
-    desc: 'Private state guards, atomic mutators, fee/quota clamping & const observer contracts.',
+    desc: 'Private state guards & const observers',
     accentText: 'text-emerald-400',
-    accentBg: 'bg-emerald-500/10',
-    accentBorder: 'border-emerald-500/35',
     moduleId: 'encapsulation',
     sampleProblems: [
       { id: 631, title: 'BankAccount Guarded State', difficulty: 'Easy' },
@@ -84,10 +80,8 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
     shortTitle: 'RAII, Rule of 5 & Lifecycles',
     idRange: '#651–#670',
     count: 20,
-    desc: 'Stack unwinding, deep vs move semantics, refcounted leases & scope guards.',
+    desc: 'Stack unwinding & move semantics',
     accentText: 'text-sky-400',
-    accentBg: 'bg-sky-500/10',
-    accentBorder: 'border-sky-500/35',
     moduleId: 'raii',
     sampleProblems: [
       { id: 651, title: 'ScopedLock Lifecycle Tracker', difficulty: 'Easy' },
@@ -97,13 +91,11 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
   },
   {
     topic: 'Inheritance & Virtual Polymorphism',
-    shortTitle: 'Inheritance & VTable Dispatch',
+    shortTitle: 'Inheritance & VTables',
     idRange: '#671–#690',
     count: 20,
-    desc: 'Dynamic vptr/vtable dispatch, pure interfaces, object slicing & diamond resolution.',
+    desc: 'VPtr dispatch, slicing & virtual bases',
     accentText: 'text-purple-400',
-    accentBg: 'bg-purple-500/10',
-    accentBorder: 'border-purple-500/35',
     moduleId: 'polymorphism',
     sampleProblems: [
       { id: 671, title: 'Polymorphic TaxCalculator', difficulty: 'Easy' },
@@ -113,13 +105,11 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
   },
   {
     topic: 'Operator Overloading & Value Types',
-    shortTitle: 'Operators & Value Semantics',
+    shortTitle: 'Operators & Value Types',
     idRange: '#691–#710',
     count: 20,
-    desc: 'Algebraic value types, strict weak ordering (operator<), custom functors & vector math.',
+    desc: 'Strict weak ordering & algebraic types',
     accentText: 'text-amber-400',
-    accentBg: 'bg-amber-500/10',
-    accentBorder: 'border-amber-500/35',
     moduleId: 'operators',
     sampleProblems: [
       { id: 691, title: 'RationalNumber Value Algebra', difficulty: 'Easy' },
@@ -132,10 +122,8 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
     shortTitle: 'GoF Patterns & SOLID LLD',
     idRange: '#711–#730',
     count: 20,
-    desc: 'Strategy, Observer, Command Undo/Redo, State Machine & O(1) LRU Cache LLD.',
+    desc: 'Strategy, Command, State & LRU LLD',
     accentText: 'text-rose-400',
-    accentBg: 'bg-rose-500/10',
-    accentBorder: 'border-rose-500/35',
     moduleId: 'patterns',
     sampleProblems: [
       { id: 711, title: 'PricingStrategy Runtime Switch', difficulty: 'Easy' },
@@ -238,9 +226,6 @@ function renderQuestionContent(question: string): React.ReactNode {
   );
 }
 
-/**
- * Interactive Memory Layout & Runtime Dispatch Simulator per OOP Study Module.
- */
 const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }) => {
   const [simToggle, setSimToggle] = useState<'primary' | 'secondary' | 'tertiary'>('primary');
 
@@ -255,10 +240,10 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-[11px] font-mono uppercase tracking-wider text-primary font-semibold">
-              Interactive 64-Bit Object &amp; VTable Simulator
+              Interactive 64-Bit VTable &amp; Object Slicing Simulator
             </div>
             <div className="text-xs text-text-muted">
-              Compare polymorphic binding vs pass-by-value object slicing in memory
+              Switch binding semantics to inspect vptr layout and dispatch target
             </div>
           </div>
           <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-lg p-0.5 text-[11px] font-mono">
@@ -285,47 +270,47 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs font-mono">
           <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1">
-            <div className="text-[10px] text-text-muted uppercase">Object Bytes (Stack)</div>
+            <div className="text-[10px] text-text-muted uppercase">Object Bytes</div>
             {isDynamic ? (
               <div className="space-y-1">
                 <div className="px-2 py-1 rounded bg-primary/15 border border-primary/30 text-primary">
                   [0..7] vptr → Triangle::vtable
                 </div>
                 <div className="px-2 py-1 rounded bg-surface-elevated text-text-secondary">
-                  [8..15] Shape + Triangle fields
+                  [8..15] Base + Derived fields
                 </div>
               </div>
             ) : (
               <div className="space-y-1">
                 <div className="px-2 py-1 rounded bg-danger-subtle border border-danger/30 text-danger">
-                  [0..7] vptr → Shape::vtable (reset)
+                  [0..7] vptr → Shape::vtable
                 </div>
                 <div className="px-2 py-1 rounded bg-surface-elevated text-text-muted line-through">
-                  Triangle::extra_ (SLICED OFF)
+                  Triangle::extra_ (SLICED)
                 </div>
               </div>
             )}
           </div>
 
           <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1">
-            <div className="text-[10px] text-text-muted uppercase">VTable Slot [0] Lookup</div>
+            <div className="text-[10px] text-text-muted uppercase">VTable Lookup</div>
             <div className={isDynamic ? 'text-success font-semibold' : 'text-danger font-semibold'}>
               {isDynamic ? 'Triangle::sides()' : 'Shape::sides()'}
             </div>
             <p className="text-[11px] font-sans text-text-secondary leading-relaxed">
               {isDynamic
-                ? 'Reference binds without copying; runtime vptr follows Triangle’s vtable slot.'
-                : 'Copy constructor constructs a brand-new Base subobject with Shape’s vptr.'}
+                ? 'Reference avoids copying; runtime vptr calls Triangle::sides().'
+                : 'Copy constructor builds a Base-only value and resets vptr.'}
             </p>
           </div>
 
           <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1">
-            <div className="text-[10px] text-text-muted uppercase">Simulated Output</div>
+            <div className="text-[10px] text-text-muted uppercase">Output</div>
             <div className={`text-base font-bold ${isDynamic ? 'text-success' : 'text-danger'}`}>
               sides() == {isDynamic ? '3' : '0 (Bug!)'}
             </div>
             <p className="text-[11px] font-sans text-text-muted">
-              {isDynamic ? 'Dynamic dispatch preserved.' : 'Derived behavior silently lost.'}
+              {isDynamic ? 'Dynamic dispatch preserved.' : 'Derived override lost.'}
             </p>
           </div>
         </div>
@@ -340,10 +325,10 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-[11px] font-mono uppercase tracking-wider text-sky-400 font-semibold">
-              Interactive Diamond Subobject Inspector
+              Diamond Subobject Memory Layout
             </div>
             <div className="text-xs text-text-muted">
-              Toggle virtual base inheritance to inspect subobject layout inside AllInOne
+              Compare `virtual public Device` vs standard multiple inheritance
             </div>
           </div>
           <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-lg p-0.5 text-[11px] font-mono">
@@ -374,22 +359,16 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
             {isVirtual ? (
               <div className="space-y-1 text-[11px]">
                 <div className="px-2 py-1 rounded bg-surface-elevated text-text-secondary">
-                  Printer (vbptr → Device)
-                </div>
-                <div className="px-2 py-1 rounded bg-surface-elevated text-text-secondary">
-                  Scanner (vbptr → Device)
+                  Printer (vbptr → Device) + Scanner (vbptr → Device)
                 </div>
                 <div className="px-2 py-1 rounded bg-success-subtle border border-success/30 text-success">
-                  1x Shared Device subobject (constructed once by AllInOne)
+                  1x Shared Device subobject (constructed by AllInOne)
                 </div>
               </div>
             ) : (
               <div className="space-y-1 text-[11px]">
                 <div className="px-2 py-1 rounded bg-danger-subtle border border-danger/30 text-danger">
-                  Printer::Device copy #1 (id)
-                </div>
-                <div className="px-2 py-1 rounded bg-danger-subtle border border-danger/30 text-danger">
-                  Scanner::Device copy #2 (id)
+                  Printer::Device (#1) + Scanner::Device (#2)
                 </div>
               </div>
             )}
@@ -397,12 +376,12 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
           <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1.5">
             <div className="text-[10px] text-text-muted uppercase">Compile Result on `aio.id`</div>
             <div className={isVirtual ? 'text-success font-semibold' : 'text-danger font-semibold'}>
-              {isVirtual ? 'Compiles cleanly → accesses single Device::id' : 'error: request for member "id" is ambiguous'}
+              {isVirtual ? 'Compiles cleanly → accesses single Device::id' : 'error: member "id" is ambiguous'}
             </div>
             <p className="text-[11px] font-sans text-text-secondary leading-relaxed">
               {isVirtual
-                ? 'Most-derived class AllInOne invokes Device() directly; intermediate Printer/Scanner virtual base calls are skipped.'
-                : 'Must disambiguate with aio.Printer::id, doubling Device state unnecessarily.'}
+                ? 'Most-derived class constructs Device once; intermediate calls are skipped.'
+                : 'Must disambiguate `aio.Printer::id`; wastes space with duplicate base state.'}
             </p>
           </div>
         </div>
@@ -417,33 +396,33 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
         ? {
             badge: 'Rule of Zero',
             color: 'text-success',
-            summary: 'Compose std::vector, std::string, or std::unique_ptr; write 0 custom destructors/copy/move methods.',
+            summary: 'Compose std::vector, std::string, or unique_ptr; write 0 custom special members.',
             vectorBehavior: 'O(1) automatic noexcept moves when standard containers reallocate.',
           }
         : mode === 'secondary'
           ? {
               badge: 'Rule of Five (noexcept move)',
               color: 'text-sky-400',
-              summary: 'Defines ~T(), Copy Ctor/Assign, plus noexcept Move Ctor/Assign stealing pointer in O(1).',
-              vectorBehavior: 'std::vector moves elements on growth — zero heap re-cloning!',
+              summary: 'Defines ~T(), Copy Ctor/Assign, plus noexcept Move Ctor/Assign stealing ownership in O(1).',
+              vectorBehavior: 'std::vector moves elements on growth — zero heap cloning.',
             }
           : {
               badge: 'Missing noexcept Trap',
               color: 'text-danger',
-              summary: 'Move constructor lacks `noexcept`: std::vector refuses to move to guarantee strong exception safety.',
-              vectorBehavior: 'Silently degrades to O(N) deep copies on every vector resize!',
+              summary: 'Move constructor lacks `noexcept`: std::vector avoids moving to preserve strong exception safety.',
+              vectorBehavior: 'Silently degrades to O(N) deep copies on every vector resize.',
             };
     return (
       <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-[11px] font-mono uppercase tracking-wider text-sky-400 font-semibold">
-            Interactive Rule of 0 / 3 / 5 Ownership Lab
+            Rule of 0 / 3 / 5 Ownership Lab
           </div>
           <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-lg p-0.5 text-[11px] font-mono">
             {[
               { id: 'primary' as const, label: 'Rule of Zero' },
               { id: 'secondary' as const, label: 'Rule of 5 (noexcept)' },
-              { id: 'tertiary' as const, label: 'Non-noexcept Trap' },
+              { id: 'tertiary' as const, label: 'Missing noexcept' },
             ].map((item) => (
               <button
                 key={item.id}
@@ -464,7 +443,7 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
           <div className={`text-xs font-mono font-bold ${ruleData.color}`}>{ruleData.badge}</div>
           <p className="text-xs text-text-secondary leading-relaxed">{ruleData.summary}</p>
           <div className="text-[11px] font-mono text-text-muted pt-1">
-            Container Reallocation: <span className={ruleData.color}>{ruleData.vectorBehavior}</span>
+            Reallocation Behavior: <span className={ruleData.color}>{ruleData.vectorBehavior}</span>
           </div>
         </div>
       </div>
@@ -477,7 +456,7 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
       <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">
-            Interactive Invariant Guard Trace (`balance = 1000`)
+            Invariant Guard Trace (`balance = 1000`)
           </div>
           <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-lg p-0.5 text-[11px] font-mono">
             <button
@@ -508,15 +487,15 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
             </div>
           </div>
           <div className="p-2.5 rounded-lg bg-canvas border border-border-subtle">
-            <div className="text-[10px] text-text-muted">2. Mutation</div>
+            <div className="text-[10px] text-text-muted">2. State Write</div>
             <div className="text-text-primary">
-              {valid ? 'balanceCents_ -= 400' : 'Aborted before write'}
+              {valid ? 'balanceCents_ -= 400' : 'Aborted atomically'}
             </div>
           </div>
           <div className="p-2.5 rounded-lg bg-canvas border border-border-subtle">
-            <div className="text-[10px] text-text-muted">3. Post-State</div>
+            <div className="text-[10px] text-text-muted">3. Return</div>
             <div className="text-text-primary font-semibold">
-              {valid ? 'returns true · bal = 600' : 'returns false · bal = 1000'}
+              {valid ? 'true · bal = 600' : 'false · bal = 1000'}
             </div>
           </div>
         </div>
@@ -526,14 +505,12 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
 
   return (
     <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-2.5">
-      <div className="flex items-center justify-between text-[11px] font-mono">
-        <span className="text-primary font-semibold uppercase tracking-wider">
-          {moduleId === 'operators'
-            ? 'Strict Weak Ordering Axioms (std::sort / std::set)'
-            : moduleId === 'solid'
-              ? 'Dependency Inversion & Liskov Flow'
-              : 'Low-Level Design Pattern Quick Matrix'}
-        </span>
+      <div className="text-[11px] font-mono text-primary font-semibold uppercase tracking-wider">
+        {moduleId === 'operators'
+          ? 'Strict Weak Ordering Axioms (std::sort / std::set)'
+          : moduleId === 'solid'
+            ? 'Dependency Inversion & Liskov Flow'
+            : 'Low-Level Design Pattern Quick Matrix'}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
         {moduleId === 'operators' ? (
@@ -541,40 +518,40 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
             <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
               <div className="font-mono font-bold text-success mb-1">1. Irreflexive</div>
               <div className="text-text-secondary text-[11px]">
-                <code className="font-mono">comp(a, a) == false</code>. Using <code className="font-mono">&lt;=</code> crashes <code className="font-mono">std::sort</code>!
+                <code className="font-mono">comp(a, a) == false</code>; <code className="font-mono">&lt;=</code> triggers UB.
               </div>
             </div>
             <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
               <div className="font-mono font-bold text-warning mb-1">2. Asymmetric</div>
               <div className="text-text-secondary text-[11px]">
-                If <code className="font-mono">a &lt; b</code> is true, <code className="font-mono">b &lt; a</code> must be false.
+                If <code className="font-mono">a &lt; b</code> holds, <code className="font-mono">b &lt; a</code> is false.
               </div>
             </div>
             <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
               <div className="font-mono font-bold text-sky-400 mb-1">3. std::tie Idiom</div>
               <div className="text-text-secondary text-[11px]">
-                Use <code className="font-mono">std::tie(a.p, a.id) &lt; std::tie(b.p, b.id)</code> cleanly.
+                <code className="font-mono">std::tie(a.p, a.id) &lt; std::tie(b.p, b.id)</code>
               </div>
             </div>
           </>
         ) : moduleId === 'solid' ? (
           <>
             <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
-              <div className="font-mono font-bold text-text-primary mb-1">High-Level Policy</div>
+              <div className="font-mono font-bold text-text-primary mb-1">High-Level Service</div>
               <div className="text-text-secondary text-[11px]">
-                <code className="font-mono">OrderService</code> accepts <code className="font-mono text-primary">INotifier&amp;</code> via DI.
+                Depends on <code className="font-mono text-primary">INotifier&amp;</code> abstraction.
               </div>
             </div>
             <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
               <div className="font-mono font-bold text-primary mb-1">Pure Interface</div>
               <div className="text-text-secondary text-[11px]">
-                Minimal role-segregated contract (<code className="font-mono">send(...) = 0</code>).
+                Narrow role contract (<code className="font-mono">= 0</code>).
               </div>
             </div>
             <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
-              <div className="font-mono font-bold text-success mb-1">Swappable Adapters</div>
+              <div className="font-mono font-bold text-success mb-1">Adapters</div>
               <div className="text-text-secondary text-[11px]">
-                Email, SMS, or Mock spy injected without editing callers.
+                Swappable Email / SMS / Mock classes.
               </div>
             </div>
           </>
@@ -582,15 +559,15 @@ const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }
           <>
             <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
               <div className="font-mono font-bold text-success mb-1">Strategy / State</div>
-              <div className="text-text-secondary text-[11px]">Swap runtime behavior cleanly via composition.</div>
+              <div className="text-text-secondary text-[11px]">Swap behavior dynamically via composition.</div>
             </div>
             <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
               <div className="font-mono font-bold text-sky-400 mb-1">Observer / Command</div>
-              <div className="text-text-secondary text-[11px]">Event pub-sub &amp; undo/redo command stacks.</div>
+              <div className="text-text-secondary text-[11px]">Pub-sub listeners &amp; undo stacks.</div>
             </div>
             <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
               <div className="font-mono font-bold text-purple-400 mb-1">Meyers Singleton</div>
-              <div className="text-text-secondary text-[11px]">Thread-safe local <code className="font-mono">static</code> init since C++11.</div>
+              <div className="text-text-secondary text-[11px]">Thread-safe local <code className="font-mono">static</code> init.</div>
             </div>
           </>
         )}
@@ -837,41 +814,60 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
   return (
     <AppLayout currentTab="oops" onTabChange={onTabChange}>
       <div className="max-w-[1536px] mx-auto px-4 sm:px-6 py-6 space-y-5">
-        {/* Compact Workspace Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-subtle pb-5">
+        {/* Clean Header + Section Switcher */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-border-subtle pb-5">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="font-bold text-2xl text-text-primary tracking-tight">
-                C++17 OOPs &amp; Low-Level Design Lab
+                C++17 OOPs &amp; Design Lab
               </h1>
               <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-xs font-mono text-text-secondary">
-                {oopSolved}/{oopTotal} Solved ({oopPct}%)
+                {oopSolved}/{oopTotal} Solved
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-text-secondary max-w-3xl">
-              Master 100 executable C++17 class challenges (#631–#730), inspect live 64-bit VTable &amp; RAII memory layouts, and drill placement MCQs.
+            <p className="text-xs sm:text-sm text-text-secondary max-w-2xl">
+              Master 100 executable C++17 class challenges (#631–#730), interactive VTable &amp; RAII memory simulators, and placement output quizzes.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <div className="hidden sm:flex items-center gap-3 px-3.5 py-2 rounded-xl bg-surface border border-border-subtle text-xs font-mono">
-              <span className="text-text-muted">
-                Blueprints{' '}
-                <strong className="text-text-primary">
-                  {completedModules.length}/{OOPS_STUDY_MODULES.length}
-                </strong>
-              </span>
-              <span className="text-border-default">|</span>
-              <span className="text-text-muted inline-flex items-center gap-1">
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                Quiz <strong className="text-text-primary">{mcqAccuracy}%</strong>
-              </span>
-              {mcqScore.streak > 0 && (
-                <span className="text-amber-400 inline-flex items-center gap-0.5 font-semibold">
-                  <Flame className="w-3.5 h-3.5" />
-                  {mcqScore.streak}
-                </span>
-              )}
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface border border-border-subtle">
+              <button
+                type="button"
+                onClick={() => setActiveTab('practice')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                  activeTab === 'practice'
+                    ? 'bg-primary text-black'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Coding Lab</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('study')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                  activeTab === 'study'
+                    ? 'bg-primary text-black'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Memory Blueprints</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('mcq')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                  activeTab === 'mcq'
+                    ? 'bg-primary text-black'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5" />
+                <span>Quiz Arena</span>
+              </button>
             </div>
 
             <button
@@ -880,356 +876,359 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               className="px-3.5 py-2 rounded-xl bg-primary text-black text-xs font-semibold hover:opacity-95 transition-opacity inline-flex items-center gap-1.5"
             >
               <Dices className="w-3.5 h-3.5" />
-              <span>Launch Challenge</span>
+              <span>Practice Next</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => onTabChange('aptitude')}
-              className="px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-high border border-border-default text-xs font-medium text-text-primary transition-colors inline-flex items-center gap-1.5"
-            >
-              <span>Aptitude + OOPs Test</span>
-              <ArrowRight className="w-3.5 h-3.5 text-primary" />
-            </button>
-          </div>
-        </div>
-
-        {/* Clean Single-Row Section Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface border border-border-subtle">
-            <button
-              type="button"
-              onClick={() => setActiveTab('practice')}
-              className={`px-3.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition-colors ${
-                activeTab === 'practice'
-                  ? 'bg-primary text-black shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
-              }`}
-            >
-              <Code2 className="w-3.5 h-3.5" />
-              <span>Coding Lab ({oopTotal})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('study')}
-              className={`px-3.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition-colors ${
-                activeTab === 'study'
-                  ? 'bg-primary text-black shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Memory &amp; LLD Blueprints ({OOPS_STUDY_MODULES.length})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('mcq')}
-              className={`px-3.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition-colors ${
-                activeTab === 'mcq'
-                  ? 'bg-primary text-black shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
-              }`}
-            >
-              <Target className="w-3.5 h-3.5" />
-              <span>VTable &amp; Output Arena</span>
-            </button>
-          </div>
-
-          <div className="text-[11px] font-mono text-text-muted hidden md:flex items-center gap-3">
-            <span className="text-success">Easy {difficultyTotals.Easy}</span>
-            <span className="text-warning">Medium {difficultyTotals.Medium}</span>
-            <span className="text-danger">Hard {difficultyTotals.Hard}</span>
           </div>
         </div>
 
         {/* ===================================================================== */}
-        {/* TAB 1: OOPs CODING LAB (#631-#730)                                    */}
+        {/* TAB 1: 2-COLUMN OOPs CODING STUDIO (#631-#730)                        */}
         {/* ===================================================================== */}
         {activeTab === 'practice' && (
-          <div className="space-y-4">
-            {/* Compact 5-Pillar Track Strip */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-              {OOP_PILLAR_CARDS.map((pillar) => {
-                const isSelected = selectedTopic === pillar.topic;
-                return (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* LEFT CURRICULUM RAIL */}
+            <aside className="lg:col-span-3 space-y-4 lg:sticky lg:top-16">
+              {/* Lab Mastery Telemetry */}
+              <div className="bg-surface border border-border-subtle rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-text-muted uppercase tracking-wider font-semibold">
+                    Lab Progress
+                  </span>
+                  <span className="text-text-primary font-bold">
+                    {oopSolved}/{oopTotal} ({oopPct}%)
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-surface-elevated overflow-hidden">
                   <div
-                    key={pillar.topic}
-                    onClick={() => {
-                      setSelectedTopic((prev) =>
-                        prev === pillar.topic ? 'All Pillars' : pillar.topic
-                      );
-                      setCurrentPage(1);
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
+                    className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.max(oopPct, oopSolved > 0 ? 3 : 0)}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 pt-1 text-center text-[11px] font-mono">
+                  <div className="py-1.5 rounded-lg bg-surface-subtle border border-border-subtle">
+                    <div className="text-success font-semibold">{difficultyTotals.Easy}</div>
+                    <div className="text-[10px] text-text-muted">Easy</div>
+                  </div>
+                  <div className="py-1.5 rounded-lg bg-surface-subtle border border-border-subtle">
+                    <div className="text-warning font-semibold">{difficultyTotals.Medium}</div>
+                    <div className="text-[10px] text-text-muted">Med</div>
+                  </div>
+                  <div className="py-1.5 rounded-lg bg-surface-subtle border border-border-subtle">
+                    <div className="text-danger font-semibold">{difficultyTotals.Hard}</div>
+                    <div className="text-[10px] text-text-muted">Hard</div>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
+                  <span>
+                    Guides <strong className="text-text-primary">{completedModules.length}/{OOPS_STUDY_MODULES.length}</strong>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Trophy className="w-3 h-3 text-amber-400" />
+                    Quiz <strong className="text-text-primary">{mcqAccuracy}%</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* 5 OOP Pillars Filter Rail */}
+              <div className="bg-surface border border-border-subtle rounded-2xl p-3 space-y-1">
+                <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-text-muted font-semibold flex items-center justify-between">
+                  <span>OOP Pillars</span>
+                  {selectedTopic !== 'All Pillars' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTopic('All Pillars');
+                        setCurrentPage(1);
+                      }}
+                      className="text-primary hover:underline"
+                    >
+                      All
+                    </button>
+                  )}
+                </div>
+
+                {OOP_PILLAR_ITEMS.map((pillar) => {
+                  const isSelected = selectedTopic === pillar.topic;
+                  return (
+                    <div
+                      key={pillar.topic}
+                      onClick={() => {
                         setSelectedTopic((prev) =>
                           prev === pillar.topic ? 'All Pillars' : pillar.topic
                         );
                         setCurrentPage(1);
-                      }
-                    }}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
-                      isSelected
-                        ? `${pillar.accentBg} ${pillar.accentBorder} ring-1 ring-primary/35`
-                        : 'bg-surface border-border-subtle hover:border-border-hover hover:bg-surface-elevated/60'
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedTopic((prev) =>
+                            prev === pillar.topic ? 'All Pillars' : pillar.topic
+                          );
+                          setCurrentPage(1);
+                        }
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-colors cursor-pointer space-y-1 ${
+                        isSelected
+                          ? 'bg-surface-elevated border-primary/45'
+                          : 'border-transparent hover:bg-surface-elevated/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
                         <span className="inline-flex items-center gap-1.5 font-semibold">
                           {getPillarIcon(pillar.topic)}
                           <span className={pillar.accentText}>{pillar.idRange}</span>
                         </span>
-                        <span className="text-text-muted">{pillar.count} Qs</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedModuleId(pillar.moduleId);
+                            setActiveTab('study');
+                          }}
+                          className="text-sky-400 hover:underline"
+                        >
+                          Guide →
+                        </button>
                       </div>
-                      <div className="text-xs font-bold text-text-primary leading-snug">
+                      <div className="text-xs font-semibold text-text-primary leading-snug">
                         {pillar.shortTitle}
                       </div>
-                      <p className="text-[11px] text-text-muted line-clamp-2 leading-snug">
-                        {pillar.desc}
-                      </p>
+                      <div className="text-[10px] text-text-muted truncate">{pillar.desc}</div>
                     </div>
+                  );
+                })}
+              </div>
 
-                    <div className="flex items-center justify-between text-[10px] font-mono pt-1 border-t border-border-subtle/70">
-                      <span className={isSelected ? 'text-primary font-semibold' : 'text-text-muted'}>
-                        {isSelected ? 'Filtered' : 'Filter track'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedModuleId(pillar.moduleId);
-                          setActiveTab('study');
-                        }}
-                        className="text-sky-400 hover:underline"
-                      >
-                        Blueprint →
-                      </button>
-                    </div>
+              {/* Timed Mock Shortcut */}
+              <button
+                type="button"
+                onClick={() => onTabChange('aptitude')}
+                className="w-full p-3.5 rounded-2xl bg-surface-elevated hover:bg-surface-high border border-border-default text-left transition-colors flex items-center justify-between gap-3 group"
+              >
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-text-primary">Aptitude + OOPs Mock</div>
+                  <div className="text-[11px] text-text-muted truncate">
+                    Timed C++ output &amp; CS drills
                   </div>
-                );
-              })}
-            </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-primary shrink-0" />
+              </button>
+            </aside>
 
-            {/* Filter & Search Bar */}
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-              <div className="relative flex-1 max-w-md">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search OOP challenges by #id, class name, or pattern..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-9 py-2 bg-surface-elevated border border-border-default rounded-full text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/60 transition-colors"
-                />
-                {searchQuery && (
+            {/* RIGHT CLASS CHALLENGE CATALOG */}
+            <main className="lg:col-span-9 space-y-4 min-w-0">
+              <div className="bg-surface border border-border-subtle rounded-2xl p-3 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search OOP challenges by #id (631-730), class name, or pattern..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-9 py-2 bg-canvas border border-border-subtle rounded-xl text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/60 transition-colors"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setDebouncedSearch('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-0.5 bg-canvas border border-border-subtle rounded-xl p-0.5 text-xs">
+                    {(['all', 'solved', 'unsolved'] as const).map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(status);
+                          setCurrentPage(1);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg capitalize transition-colors ${
+                          statusFilter === status
+                            ? 'bg-primary text-black font-semibold'
+                            : 'text-text-secondary hover:text-text-primary'
+                        }`}
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-0.5 bg-canvas border border-border-subtle rounded-xl p-0.5 text-xs">
+                    {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
+                      <button
+                        key={diff}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDifficulty(diff);
+                          setCurrentPage(1);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg transition-colors ${
+                          selectedDifficulty === diff
+                            ? 'bg-primary text-black font-semibold'
+                            : diff === 'Easy'
+                              ? 'text-success hover:bg-surface-elevated'
+                              : diff === 'Medium'
+                                ? 'text-warning hover:bg-surface-elevated'
+                                : diff === 'Hard'
+                                  ? 'text-danger hover:bg-surface-elevated'
+                                  : 'text-text-secondary hover:text-text-primary'
+                        }`}
+                      >
+                        {diff === 'Medium' ? 'Med' : diff}
+                      </button>
+                    ))}
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => {
-                      setSearchQuery('');
-                      setDebouncedSearch('');
+                      if (isShuffled) {
+                        setIsShuffled(false);
+                        setCurrentPage(1);
+                        return;
+                      }
+                      setIsShuffled(true);
+                      setShuffleSeed(Math.floor(Math.random() * 1_000_000) + 1);
                       setCurrentPage(1);
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-                    aria-label="Clear search"
+                    aria-pressed={isShuffled}
+                    className={`px-3 py-1.5 border rounded-xl text-xs flex items-center gap-1.5 transition-colors ${
+                      isShuffled
+                        ? 'bg-primary-subtle border-primary/45 text-primary font-semibold'
+                        : 'bg-canvas border-border-subtle text-text-secondary hover:text-text-primary'
+                    }`}
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <Shuffle className="w-3.5 h-3.5 text-primary" />
+                    <span>{isShuffled ? 'Shuffled' : 'Shuffle'}</span>
                   </button>
-                )}
+
+                  {hasActiveCodingFilters && (
+                    <button
+                      type="button"
+                      onClick={resetCodingFilters}
+                      className="px-2.5 py-1.5 bg-danger-subtle border border-danger/30 rounded-xl text-xs text-danger font-mono flex items-center gap-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Reset ({filteredTotal})</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-full p-0.5 text-xs">
-                  {(['all', 'solved', 'unsolved'] as const).map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(status);
-                        setCurrentPage(1);
-                      }}
-                      className={`px-3 py-1 rounded-full capitalize transition-colors ${
-                        statusFilter === status
-                          ? 'bg-primary text-black font-semibold'
-                          : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-full p-0.5 text-xs">
-                  {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
-                    <button
-                      key={diff}
-                      type="button"
-                      onClick={() => {
-                        setSelectedDifficulty(diff);
-                        setCurrentPage(1);
-                      }}
-                      className={`px-2.5 py-1 rounded-full transition-colors ${
-                        selectedDifficulty === diff
-                          ? 'bg-primary text-black font-semibold'
-                          : diff === 'Easy'
-                            ? 'text-success hover:bg-surface-high'
-                            : diff === 'Medium'
-                              ? 'text-warning hover:bg-surface-high'
-                              : diff === 'Hard'
-                                ? 'text-danger hover:bg-surface-high'
-                                : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      {diff}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isShuffled) {
-                      setIsShuffled(false);
-                      setCurrentPage(1);
-                      return;
-                    }
-                    setIsShuffled(true);
-                    setShuffleSeed(Math.floor(Math.random() * 1_000_000) + 1);
-                    setCurrentPage(1);
-                  }}
-                  aria-pressed={isShuffled}
-                  className={`px-3 py-1.5 border rounded-full text-xs flex items-center gap-1.5 transition-colors ${
-                    isShuffled
-                      ? 'bg-primary-subtle border-primary/45 text-primary font-semibold'
-                      : 'bg-surface-elevated border-border-default text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  <Shuffle className="w-3.5 h-3.5 text-primary" />
-                  <span>{isShuffled ? 'Shuffle ON' : 'Shuffle'}</span>
-                </button>
-
-                {hasActiveCodingFilters && (
-                  <button
-                    type="button"
-                    onClick={resetCodingFilters}
-                    className="px-3 py-1.5 bg-danger-subtle border border-danger/30 rounded-full text-xs text-danger font-mono flex items-center gap-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    <span>Reset ({filteredTotal})</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* OOP Problems Table */}
-            <div className="bg-surface border border-border-subtle rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-surface-subtle text-text-muted font-mono text-[11px] uppercase tracking-wider border-b border-border-subtle">
-                    <tr>
-                      <th className="py-3 px-4 w-12 text-center">Status</th>
-                      <th className="py-3 px-4 w-16">ID</th>
-                      <th className="py-3 px-4">Class Challenge &amp; Pattern</th>
-                      <th className="py-3 px-4 w-60 hidden md:table-cell">OOP Pillar</th>
-                      <th className="py-3 px-4 w-24">Difficulty</th>
-                      <th className="py-3 px-4 w-24 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-subtle">
-                    {isLoading ? (
+              <div className="bg-surface border border-border-subtle rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface-subtle text-text-muted font-mono text-[11px] uppercase tracking-wider border-b border-border-subtle">
                       <tr>
-                        <td colSpan={6} className="py-10">
-                          <CodePrepLoader
-                            variant="section"
-                            className="min-h-[160px]"
-                            label="Loading OOPs C++17 Challenges"
-                            sublabel="Fetching paginated class-design problems..."
-                          />
-                        </td>
+                        <th className="py-3 px-4 w-12 text-center">Done</th>
+                        <th className="py-3 px-4 w-16">ID</th>
+                        <th className="py-3 px-4">Class Challenge &amp; Pattern</th>
+                        <th className="py-3 px-4 w-56 hidden md:table-cell">OOP Pillar</th>
+                        <th className="py-3 px-4 w-24">Level</th>
+                        <th className="py-3 px-4 w-20 text-right">Open</th>
                       </tr>
-                    ) : problems.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-14 text-center space-y-3">
-                          <div className="text-sm text-text-secondary font-medium">
-                            No OOP coding challenges match your current filter.
-                          </div>
-                          <button
-                            type="button"
-                            onClick={resetCodingFilters}
-                            className="px-3.5 py-1.5 rounded-lg bg-primary text-black text-xs font-semibold"
-                          >
-                            Reset All Filters
-                          </button>
-                        </td>
-                      </tr>
-                    ) : (
-                      problems.map((prob, idx) => (
-                        <tr
-                          key={prob.id}
-                          onClick={() => onSelectProblem(prob.id)}
-                          className={`hover:bg-surface-high/60 transition-colors cursor-pointer group ${
-                            idx % 2 === 0 ? 'bg-surface' : 'bg-surface-subtle/40'
-                          }`}
-                        >
-                          <td className="py-3 px-4 text-center">
-                            {prob.isSolved ? (
-                              <Check className="w-4 h-4 text-success mx-auto stroke-[2.5]" />
-                            ) : (
-                              <div className="w-1.5 h-1.5 rounded-full bg-text-muted/30 mx-auto group-hover:bg-primary/60 transition-colors" />
-                            )}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-text-muted font-semibold">
-                            #{prob.id}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-semibold text-xs sm:text-sm text-text-primary group-hover:text-primary transition-colors">
-                                {prob.title}
-                              </span>
-                              {prob.pattern && (
-                                <span className="px-2 py-0.5 rounded-md bg-surface-elevated border border-border-subtle text-[10px] font-mono text-text-muted">
-                                  {prob.pattern}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 hidden md:table-cell">
-                            <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
-                              {getPillarIcon(prob.topic)}
-                              <span>{prob.topic}</span>
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-medium">
-                            {prob.difficulty === 'Easy' && <span className="text-success">Easy</span>}
-                            {prob.difficulty === 'Medium' && <span className="text-warning">Med.</span>}
-                            {prob.difficulty === 'Hard' && <span className="text-danger">Hard</span>}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <span className="inline-flex items-center gap-1 text-primary opacity-75 group-hover:opacity-100 font-mono text-[11px] font-medium transition-opacity">
-                              <span>Open</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </span>
+                    </thead>
+                    <tbody className="divide-y divide-border-subtle">
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={6} className="py-10">
+                            <CodePrepLoader
+                              variant="section"
+                              className="min-h-[160px]"
+                              label="Loading OOPs C++17 Challenges"
+                              sublabel="Fetching paginated class-design problems..."
+                            />
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ) : problems.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-14 text-center space-y-3">
+                            <div className="text-sm text-text-secondary font-medium">
+                              No OOP coding challenges match your current filter.
+                            </div>
+                            <button
+                              type="button"
+                              onClick={resetCodingFilters}
+                              className="px-3.5 py-1.5 rounded-lg bg-primary text-black text-xs font-semibold"
+                            >
+                              Reset Filters
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        problems.map((prob, idx) => (
+                          <tr
+                            key={prob.id}
+                            onClick={() => onSelectProblem(prob.id)}
+                            className={`hover:bg-surface-high/60 transition-colors cursor-pointer group ${
+                              idx % 2 === 0 ? 'bg-surface' : 'bg-surface-subtle/40'
+                            }`}
+                          >
+                            <td className="py-3 px-4 text-center">
+                              {prob.isSolved ? (
+                                <Check className="w-4 h-4 text-success mx-auto stroke-[2.5]" />
+                              ) : (
+                                <div className="w-1.5 h-1.5 rounded-full bg-text-muted/30 mx-auto group-hover:bg-primary/60 transition-colors" />
+                              )}
+                            </td>
+                            <td className="py-3 px-4 font-mono text-text-muted font-semibold">
+                              #{prob.id}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-xs sm:text-[13px] text-text-primary group-hover:text-primary transition-colors">
+                                  {prob.title}
+                                </span>
+                                {prob.pattern && (
+                                  <span className="px-2 py-0.5 rounded-md bg-surface-elevated border border-border-subtle text-[10px] font-mono text-text-muted">
+                                    {prob.pattern}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 hidden md:table-cell">
+                              <span className="inline-flex items-center gap-1.5 text-text-secondary">
+                                {getPillarIcon(prob.topic)}
+                                <span className="truncate">{prob.topic}</span>
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px] font-semibold">
+                              {prob.difficulty === 'Easy' && <span className="text-success">Easy</span>}
+                              {prob.difficulty === 'Medium' && <span className="text-warning">Med</span>}
+                              {prob.difficulty === 'Hard' && <span className="text-danger">Hard</span>}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <ChevronRight className="w-4 h-4 text-primary opacity-55 group-hover:opacity-100 inline-block transition-opacity" />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-              <PaginationBar
-                currentPage={currentPage}
-                totalItems={filteredTotal}
-                pageSize={PAGE_SIZE}
-                onPageChange={setCurrentPage}
-                itemLabel="OOP problems"
-              />
-            </div>
+                <PaginationBar
+                  currentPage={currentPage}
+                  totalItems={filteredTotal}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setCurrentPage}
+                  itemLabel="OOP problems"
+                />
+              </div>
+            </main>
           </div>
         )}
 
@@ -1237,8 +1236,8 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
         {/* TAB 2: MEMORY & LLD BLUEPRINTS (8 MODULES + INTERACTIVE SIMULATORS)   */}
         {/* ===================================================================== */}
         {activeTab === 'study' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <aside className="lg:col-span-4 bg-surface border border-border-subtle rounded-2xl p-4 space-y-2.5 lg:sticky lg:top-20">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <aside className="lg:col-span-4 bg-surface border border-border-subtle rounded-2xl p-4 space-y-2.5 lg:sticky lg:top-16">
               <div className="flex items-center justify-between px-1 pb-2 border-b border-border-subtle">
                 <div>
                   <div className="text-[11px] font-mono uppercase tracking-wider text-text-muted font-semibold">
@@ -1264,8 +1263,8 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                       onClick={() => setSelectedModuleId(mod.id)}
                       className={`w-full text-left p-3 rounded-xl border transition-all flex items-start gap-3 ${
                         isSelected
-                          ? 'bg-surface-elevated border-primary ring-1 ring-primary/30'
-                          : 'bg-surface-subtle/50 border-border-subtle hover:border-border-hover hover:bg-surface-elevated/60'
+                          ? 'bg-surface-elevated border-primary/50 ring-1 ring-primary/25'
+                          : 'bg-surface-subtle/40 border-border-subtle hover:border-border-hover hover:bg-surface-elevated/60'
                       }`}
                     >
                       <div
@@ -1342,7 +1341,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                     }}
                     className="px-3 py-1.5 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-mono font-semibold inline-flex items-center gap-1.5 transition-colors"
                   >
-                    <span>Practice Challenges</span>
+                    <span>Practice Pillar</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1424,12 +1423,12 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                 const targetTopic =
                   MODULE_TO_PILLAR_TOPIC[activeModule.id] || 'Encapsulation & Class Invariants';
                 const pillarMeta =
-                  OOP_PILLAR_CARDS.find((p) => p.topic === targetTopic) || OOP_PILLAR_CARDS[0];
+                  OOP_PILLAR_ITEMS.find((p) => p.topic === targetTopic) || OOP_PILLAR_ITEMS[0];
                 return (
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
-                        Hands-On Problems ({pillarMeta.idRange})
+                        Recommended Challenges ({pillarMeta.idRange})
                       </h3>
                       <button
                         type="button"
@@ -1536,7 +1535,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-xl p-1 text-xs">
+                <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-xl p-1 text-xs">
                   {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
                     <button
                       key={diff}
@@ -1556,7 +1555,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                   ))}
                 </div>
 
-                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-xl p-1 text-xs">
+                <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-xl p-1 text-xs">
                   <button
                     type="button"
                     onClick={() => setMcqLayout('focus')}
@@ -1775,8 +1774,9 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                     </div>
                     <div className="flex items-center justify-between">
                       <span>Active Streak</span>
-                      <span className="font-mono text-amber-400 font-semibold">
-                        {mcqScore.streak} in a row
+                      <span className="font-mono text-amber-400 font-semibold inline-flex items-center gap-1">
+                        <Flame className="w-3.5 h-3.5" />
+                        {mcqScore.streak}
                       </span>
                     </div>
                   </div>

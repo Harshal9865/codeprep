@@ -659,31 +659,95 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
 
           {/* RIGHT TABBED WORKSPACE */}
           <div className="lg:col-span-8 space-y-5">
-            {/* Segmented Tab Bar */}
-            <div className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl bg-surface border border-border-subtle w-fit">
-              {[
-                { id: 'overview' as ProfileTab, label: 'Overview', icon: BarChart3 },
-                { id: 'appearance' as ProfileTab, label: 'Appearance', icon: Palette },
-                { id: 'settings' as ProfileTab, label: 'Account & Backup', icon: Settings },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors ${isActive
-                      ? 'bg-primary text-black shadow-xs'
-                      : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
-                      }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {/* Enhanced Segmented Option Bar */}
+            {(() => {
+              const activeThemeLabel =
+                THEME_OPTIONS.find((t) => t.id === theme)?.label || 'Custom';
+              const storageLabel = storageStatus?.engine || 'Local DB';
+              const profileTabs: Array<{
+                id: ProfileTab;
+                label: string;
+                meta: string;
+                icon: React.ComponentType<{ className?: string }>;
+              }> = [
+                {
+                  id: 'overview',
+                  label: 'Overview',
+                  meta: `${overallPct}% solved`,
+                  icon: BarChart3,
+                },
+                {
+                  id: 'appearance',
+                  label: 'Appearance',
+                  meta: activeThemeLabel,
+                  icon: Palette,
+                },
+                {
+                  id: 'settings',
+                  label: 'Account & Backup',
+                  meta: storageLabel,
+                  icon: Settings,
+                },
+              ];
+
+              return (
+                <div
+                  role="tablist"
+                  aria-label="Profile workspace sections"
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 rounded-2xl bg-surface border border-border-subtle shadow-sm"
+                >
+                  {profileTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-3.5 py-2.5 rounded-xl text-left transition-all flex items-center justify-between gap-2.5 border ${
+                          isActive
+                            ? 'bg-surface-elevated border-primary/45 shadow-sm'
+                            : 'border-transparent hover:bg-surface-elevated/60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                              isActive
+                                ? 'bg-primary text-black'
+                                : 'bg-surface-subtle text-text-muted'
+                            }`}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div
+                              className={`text-xs font-semibold truncate ${
+                                isActive ? 'text-text-primary' : 'text-text-secondary'
+                              }`}
+                            >
+                              {tab.label}
+                            </div>
+                            <div className="text-[10px] font-mono text-text-muted truncate flex items-center gap-1">
+                              {tab.id === 'settings' && storageStatus && (
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    storageStatus.persistent ? 'bg-success' : 'bg-warning'
+                                  }`}
+                                />
+                              )}
+                              <span className="truncate">{tab.meta}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* TAB 1: OVERVIEW */}
             {activeTab === 'overview' && (
