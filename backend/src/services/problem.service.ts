@@ -95,6 +95,9 @@ function matchesPrepSet(
   if (setId === 'core-sql-100') {
     return p.id >= 501 && p.id <= 600;
   }
+  if (setId === 'sql-extended-300') {
+    return p.category === 'SQL' && p.id >= 731;
+  }
   if (setId === 'extended' || setId === 'extended-all') {
     return p.id > 600;
   }

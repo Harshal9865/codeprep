@@ -1279,11 +1279,28 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                 </div>
 
                 {showSqlCheatSheet && (
-                  <div className="px-4 py-2 bg-surface-subtle border-b border-border-subtle text-[11px] font-mono text-text-secondary flex flex-wrap gap-x-4 gap-y-1">
-                    <span><strong className="text-primary">Window:</strong> RANK() OVER (PARTITION BY col ORDER BY col DESC)</span>
-                    <span><strong className="text-primary">Month:</strong> strftime(&apos;%Y-%m&apos;, dt)</span>
-                    <span><strong className="text-primary">Date Diff:</strong> julianday(d1) - julianday(d2)</span>
-                    <span><strong className="text-primary">Null Safe:</strong> COALESCE(val, 0)</span>
+                  <div className="px-4 py-2 bg-surface-subtle border-b border-border-subtle text-[11px] font-mono text-text-secondary flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider mr-1">
+                      Insert:
+                    </span>
+                    {[
+                      { label: 'Window OVER', snippet: 'DENSE_RANK() OVER (PARTITION BY col ORDER BY val DESC)' },
+                      { label: 'LAG()', snippet: 'LAG(val) OVER (PARTITION BY grp ORDER BY dt)' },
+                      { label: 'COALESCE', snippet: 'COALESCE(val, 0)' },
+                      { label: 'Float Ratio', snippet: '1.0 * num / NULLIF(den, 0)' },
+                      { label: 'CTE', snippet: 'WITH cte AS (\n  SELECT *\n  FROM tbl\n)\n' },
+                      { label: 'Month', snippet: "strftime('%Y-%m', dt)" },
+                    ].map((chip) => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => handleInsertSqlIdentifier(chip.snippet)}
+                        title={`Insert: ${chip.snippet}`}
+                        className="px-2 py-0.5 rounded-md bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[10px] text-text-secondary hover:text-primary transition-colors"
+                      >
+                        + {chip.label}
+                      </button>
+                    ))}
                   </div>
                 )}
 
@@ -1416,30 +1433,81 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                       </div>
                     )}
 
+                    {result?.verdict === 'Wrong Answer' && result.expectedColumns && result.expectedRows && (
+                      <div className="p-2.5 rounded-xl bg-warning-subtle/35 border border-warning/35 text-[11px] font-mono flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-text-primary">
+                          {(result.columns || []).join(',') === result.expectedColumns.join(',')
+                            ? '✓ Column headers match'
+                            : `✗ Column mismatch: got [${(result.columns || []).join(', ')}] vs expected [${result.expectedColumns.join(', ')}]`}
+                        </span>
+                        <span className="text-text-muted">
+                          Rows: <strong className="text-text-primary">{result.rows?.length ?? 0}</strong> returned vs{' '}
+                          <strong className="text-success">{result.expectedRows.length}</strong> expected
+                        </span>
+                      </div>
+                    )}
+
                     {result?.rows && result.rows.length > 0 && result.columns && (
                       <div className="space-y-1.5">
-                        <div className="text-xs font-mono text-text-muted">Your Output ({result.rows.length} rows)</div>
+                        <div className="text-xs font-mono text-text-muted">
+                          Your Output ({result.rows.length} rows)
+                        </div>
                         <div className="border border-border-subtle rounded-xl overflow-hidden">
                           <table className="w-full text-left text-xs">
                             <thead className="bg-surface-elevated border-b border-border-subtle font-mono text-text-secondary">
                               <tr>
-                                {result.columns.map((col) => (
-                                  <th key={col} className="py-2 px-3 font-semibold">
-                                    {col}
-                                  </th>
-                                ))}
+                                {result.columns.map((col, cIdx) => {
+                                  const colMismatch =
+                                    result.verdict === 'Wrong Answer' &&
+                                    Boolean(result.expectedColumns) &&
+                                    result.expectedColumns![cIdx] !== col;
+                                  return (
+                                    <th
+                                      key={col}
+                                      className={`py-2 px-3 font-semibold whitespace-nowrap ${
+                                        colMismatch ? 'text-danger bg-danger-subtle/40' : ''
+                                      }`}
+                                    >
+                                      {col}
+                                    </th>
+                                  );
+                                })}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-border-subtle font-mono text-xs">
-                              {result.rows.map((row, rIdx) => (
-                                <tr key={rIdx} className="hover:bg-surface-elevated/40">
-                                  {result.columns!.map((col) => (
-                                    <td key={col} className="py-2 px-3 text-text-primary">
-                                      {String(row[col] ?? 'NULL')}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
+                              {result.rows.map((row, rIdx) => {
+                                const expectedRow =
+                                  result.verdict === 'Wrong Answer'
+                                    ? result.expectedRows?.[rIdx]
+                                    : undefined;
+                                return (
+                                  <tr key={rIdx} className="hover:bg-surface-elevated/40">
+                                    {result.columns!.map((col) => {
+                                      const val = row[col];
+                                      const isDiff =
+                                        result.verdict === 'Wrong Answer' &&
+                                        expectedRow !== undefined &&
+                                        String(val ?? 'NULL') !== String(expectedRow[col] ?? 'NULL');
+                                      return (
+                                        <td
+                                          key={col}
+                                          className={`py-2 px-3 whitespace-nowrap ${
+                                            isDiff
+                                              ? 'bg-danger-subtle/40 text-danger font-semibold'
+                                              : 'text-text-primary'
+                                          }`}
+                                        >
+                                          {val === null || val === undefined ? (
+                                            <span className="text-text-muted italic">NULL</span>
+                                          ) : (
+                                            String(val)
+                                          )}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -1448,13 +1516,15 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 
                     {result?.verdict === 'Wrong Answer' && result.expectedRows && result.expectedRows.length > 0 && result.expectedColumns && (
                       <div className="space-y-1.5">
-                        <div className="text-xs font-mono text-success">Expected Output ({result.expectedRows.length} rows)</div>
+                        <div className="text-xs font-mono text-success">
+                          Expected Output ({result.expectedRows.length} rows)
+                        </div>
                         <div className="border border-success/30 rounded-xl overflow-hidden">
                           <table className="w-full text-left text-xs">
                             <thead className="bg-success-subtle border-b border-success/20 font-mono text-success">
                               <tr>
                                 {result.expectedColumns.map((col) => (
-                                  <th key={col} className="py-2 px-3 font-semibold">
+                                  <th key={col} className="py-2 px-3 font-semibold whitespace-nowrap">
                                     {col}
                                   </th>
                                 ))}
@@ -1463,11 +1533,18 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                             <tbody className="divide-y divide-border-subtle font-mono text-xs">
                               {result.expectedRows.slice(0, 10).map((row, rIdx) => (
                                 <tr key={rIdx}>
-                                  {result.expectedColumns!.map((col) => (
-                                    <td key={col} className="py-2 px-3 text-text-primary">
-                                      {String(row[col] ?? 'NULL')}
-                                    </td>
-                                  ))}
+                                  {result.expectedColumns!.map((col) => {
+                                    const val = row[col];
+                                    return (
+                                      <td key={col} className="py-2 px-3 text-text-primary whitespace-nowrap">
+                                        {val === null || val === undefined ? (
+                                          <span className="text-text-muted italic">NULL</span>
+                                        ) : (
+                                          String(val)
+                                        )}
+                                      </td>
+                                    );
+                                  })}
                                 </tr>
                               ))}
                             </tbody>

@@ -71,7 +71,7 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
     desc: 'Private state guards, atomic mutators, fee/quota clamping & const observer contracts.',
     accentText: 'text-emerald-400',
     accentBg: 'bg-emerald-500/10',
-    accentBorder: 'border-emerald-500/30',
+    accentBorder: 'border-emerald-500/35',
     moduleId: 'encapsulation',
     sampleProblems: [
       { id: 631, title: 'BankAccount Guarded State', difficulty: 'Easy' },
@@ -84,10 +84,10 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
     shortTitle: 'RAII, Rule of 5 & Lifecycles',
     idRange: '#651–#670',
     count: 20,
-    desc: 'Deterministic stack unwinding, deep vs move semantics, refcounted leases & scope guards.',
+    desc: 'Stack unwinding, deep vs move semantics, refcounted leases & scope guards.',
     accentText: 'text-sky-400',
     accentBg: 'bg-sky-500/10',
-    accentBorder: 'border-sky-500/30',
+    accentBorder: 'border-sky-500/35',
     moduleId: 'raii',
     sampleProblems: [
       { id: 651, title: 'ScopedLock Lifecycle Tracker', difficulty: 'Easy' },
@@ -100,10 +100,10 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
     shortTitle: 'Inheritance & VTable Dispatch',
     idRange: '#671–#690',
     count: 20,
-    desc: 'Dynamic vptr/vtable dispatch, pure virtual interfaces, object slicing & diamond resolution.',
+    desc: 'Dynamic vptr/vtable dispatch, pure interfaces, object slicing & diamond resolution.',
     accentText: 'text-purple-400',
     accentBg: 'bg-purple-500/10',
-    accentBorder: 'border-purple-500/30',
+    accentBorder: 'border-purple-500/35',
     moduleId: 'polymorphism',
     sampleProblems: [
       { id: 671, title: 'Polymorphic TaxCalculator', difficulty: 'Easy' },
@@ -119,7 +119,7 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
     desc: 'Algebraic value types, strict weak ordering (operator<), custom functors & vector math.',
     accentText: 'text-amber-400',
     accentBg: 'bg-amber-500/10',
-    accentBorder: 'border-amber-500/30',
+    accentBorder: 'border-amber-500/35',
     moduleId: 'operators',
     sampleProblems: [
       { id: 691, title: 'RationalNumber Value Algebra', difficulty: 'Easy' },
@@ -132,10 +132,10 @@ const OOP_PILLAR_CARDS: OopPillarMeta[] = [
     shortTitle: 'GoF Patterns & SOLID LLD',
     idRange: '#711–#730',
     count: 20,
-    desc: 'Strategy, Observer, Command Undo/Redo, State Machine & O(1) LRU Cache low-level design.',
+    desc: 'Strategy, Observer, Command Undo/Redo, State Machine & O(1) LRU Cache LLD.',
     accentText: 'text-rose-400',
     accentBg: 'bg-rose-500/10',
-    accentBorder: 'border-rose-500/30',
+    accentBorder: 'border-rose-500/35',
     moduleId: 'patterns',
     sampleProblems: [
       { id: 711, title: 'PricingStrategy Runtime Switch', difficulty: 'Easy' },
@@ -167,9 +167,6 @@ const MODULE_FILENAMES: Record<string, string> = {
   patterns: 'meyers_singleton_registry.cpp',
 };
 
-/**
- * Renders inline backtick spans (`code`) as styled monospace pills.
- */
 function renderInlineCode(text: string): React.ReactNode {
   const parts = text.split(/(`[^`]+`)/g);
   return parts.map((part, idx) => {
@@ -187,10 +184,6 @@ function renderInlineCode(text: string): React.ReactNode {
   });
 }
 
-/**
- * Splits a question string containing optional ```cpp ... ``` fenced blocks
- * into formatted prose + syntax-highlighted C++17 code cards.
- */
 function renderQuestionContent(question: string): React.ReactNode {
   const fenceRegex = /```(?:cpp|c\+\+)?\n([\s\S]*?)```/g;
   const segments: Array<{ type: 'text' | 'code'; content: string }> = [];
@@ -246,248 +239,371 @@ function renderQuestionContent(question: string): React.ReactNode {
 }
 
 /**
- * Interactive Visual Memory / Architecture Blueprint per Study Module
+ * Interactive Memory Layout & Runtime Dispatch Simulator per OOP Study Module.
  */
-const ModuleArchitectureBlueprint: React.FC<{ moduleId: string }> = ({ moduleId }) => {
-  switch (moduleId) {
-    case 'encapsulation':
-      return (
-        <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-3">
-          <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-emerald-400 font-semibold uppercase tracking-wider">
-              Memory Boundary • Class Invariant Guard
-            </span>
-            <span className="text-text-muted">0 &lt;= balanceCents_ &lt;= CAP</span>
+const ModuleInteractiveSimulator: React.FC<{ moduleId: string }> = ({ moduleId }) => {
+  const [simToggle, setSimToggle] = useState<'primary' | 'secondary' | 'tertiary'>('primary');
+
+  useEffect(() => {
+    setSimToggle('primary');
+  }, [moduleId]);
+
+  if (moduleId === 'polymorphism' || moduleId === 'abstraction') {
+    const isDynamic = simToggle === 'primary';
+    return (
+      <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-primary font-semibold">
+              Interactive 64-Bit Object &amp; VTable Simulator
+            </div>
+            <div className="text-xs text-text-muted">
+              Compare polymorphic binding vs pass-by-value object slicing in memory
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle space-y-1">
-              <div className="text-text-muted text-[10px]">1. EXTERNAL CALLER</div>
-              <div className="text-text-primary font-semibold">acct.withdraw(500)</div>
-              <div className="text-[11px] text-text-secondary font-sans">
-                Cannot touch <code className="text-danger">balanceCents_</code> directly (private).
+          <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-lg p-0.5 text-[11px] font-mono">
+            <button
+              type="button"
+              onClick={() => setSimToggle('primary')}
+              className={`px-2.5 py-1 rounded-md transition-colors ${
+                isDynamic ? 'bg-success-subtle text-success font-semibold' : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              const Shape&amp; ref = Triangle()
+            </button>
+            <button
+              type="button"
+              onClick={() => setSimToggle('secondary')}
+              className={`px-2.5 py-1 rounded-md transition-colors ${
+                !isDynamic ? 'bg-danger-subtle text-danger font-semibold' : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              Shape s = Triangle()
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs font-mono">
+          <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1">
+            <div className="text-[10px] text-text-muted uppercase">Object Bytes (Stack)</div>
+            {isDynamic ? (
+              <div className="space-y-1">
+                <div className="px-2 py-1 rounded bg-primary/15 border border-primary/30 text-primary">
+                  [0..7] vptr → Triangle::vtable
+                </div>
+                <div className="px-2 py-1 rounded bg-surface-elevated text-text-secondary">
+                  [8..15] Shape + Triangle fields
+                </div>
               </div>
+            ) : (
+              <div className="space-y-1">
+                <div className="px-2 py-1 rounded bg-danger-subtle border border-danger/30 text-danger">
+                  [0..7] vptr → Shape::vtable (reset)
+                </div>
+                <div className="px-2 py-1 rounded bg-surface-elevated text-text-muted line-through">
+                  Triangle::extra_ (SLICED OFF)
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1">
+            <div className="text-[10px] text-text-muted uppercase">VTable Slot [0] Lookup</div>
+            <div className={isDynamic ? 'text-success font-semibold' : 'text-danger font-semibold'}>
+              {isDynamic ? 'Triangle::sides()' : 'Shape::sides()'}
             </div>
-            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-1">
-              <div className="text-emerald-400 text-[10px]">2. ATOMIC PRECONDITION</div>
-              <div className="text-text-primary font-semibold">if (cents &lt;= 0 || cents &gt; bal)</div>
-              <div className="text-[11px] text-text-secondary font-sans">
-                Rejects invalid deltas before any field is mutated.
-              </div>
+            <p className="text-[11px] font-sans text-text-secondary leading-relaxed">
+              {isDynamic
+                ? 'Reference binds without copying; runtime vptr follows Triangle’s vtable slot.'
+                : 'Copy constructor constructs a brand-new Base subobject with Shape’s vptr.'}
+            </p>
+          </div>
+
+          <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1">
+            <div className="text-[10px] text-text-muted uppercase">Simulated Output</div>
+            <div className={`text-base font-bold ${isDynamic ? 'text-success' : 'text-danger'}`}>
+              sides() == {isDynamic ? '3' : '0 (Bug!)'}
             </div>
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle space-y-1">
-              <div className="text-sky-400 text-[10px]">3. CONST OBSERVER</div>
-              <div className="text-text-primary font-semibold">balance() const</div>
-              <div className="text-[11px] text-text-secondary font-sans">
-                Returns safe value copy; preserves invariant across calls.
+            <p className="text-[11px] font-sans text-text-muted">
+              {isDynamic ? 'Dynamic dispatch preserved.' : 'Derived behavior silently lost.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (moduleId === 'inheritance') {
+    const isVirtual = simToggle === 'primary';
+    return (
+      <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-sky-400 font-semibold">
+              Interactive Diamond Subobject Inspector
+            </div>
+            <div className="text-xs text-text-muted">
+              Toggle virtual base inheritance to inspect subobject layout inside AllInOne
+            </div>
+          </div>
+          <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-lg p-0.5 text-[11px] font-mono">
+            <button
+              type="button"
+              onClick={() => setSimToggle('primary')}
+              className={`px-2.5 py-1 rounded-md transition-colors ${
+                isVirtual ? 'bg-success-subtle text-success font-semibold' : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              virtual public Device
+            </button>
+            <button
+              type="button"
+              onClick={() => setSimToggle('secondary')}
+              className={`px-2.5 py-1 rounded-md transition-colors ${
+                !isVirtual ? 'bg-danger-subtle text-danger font-semibold' : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              non-virtual Device
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+          <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1.5">
+            <div className="text-[10px] text-text-muted uppercase">Subobjects Inside AllInOne</div>
+            {isVirtual ? (
+              <div className="space-y-1 text-[11px]">
+                <div className="px-2 py-1 rounded bg-surface-elevated text-text-secondary">
+                  Printer (vbptr → Device)
+                </div>
+                <div className="px-2 py-1 rounded bg-surface-elevated text-text-secondary">
+                  Scanner (vbptr → Device)
+                </div>
+                <div className="px-2 py-1 rounded bg-success-subtle border border-success/30 text-success">
+                  1x Shared Device subobject (constructed once by AllInOne)
+                </div>
               </div>
+            ) : (
+              <div className="space-y-1 text-[11px]">
+                <div className="px-2 py-1 rounded bg-danger-subtle border border-danger/30 text-danger">
+                  Printer::Device copy #1 (id)
+                </div>
+                <div className="px-2 py-1 rounded bg-danger-subtle border border-danger/30 text-danger">
+                  Scanner::Device copy #2 (id)
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1.5">
+            <div className="text-[10px] text-text-muted uppercase">Compile Result on `aio.id`</div>
+            <div className={isVirtual ? 'text-success font-semibold' : 'text-danger font-semibold'}>
+              {isVirtual ? 'Compiles cleanly → accesses single Device::id' : 'error: request for member "id" is ambiguous'}
+            </div>
+            <p className="text-[11px] font-sans text-text-secondary leading-relaxed">
+              {isVirtual
+                ? 'Most-derived class AllInOne invokes Device() directly; intermediate Printer/Scanner virtual base calls are skipped.'
+                : 'Must disambiguate with aio.Printer::id, doubling Device state unnecessarily.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (moduleId === 'raii') {
+    const mode = simToggle;
+    const ruleData =
+      mode === 'primary'
+        ? {
+            badge: 'Rule of Zero',
+            color: 'text-success',
+            summary: 'Compose std::vector, std::string, or std::unique_ptr; write 0 custom destructors/copy/move methods.',
+            vectorBehavior: 'O(1) automatic noexcept moves when standard containers reallocate.',
+          }
+        : mode === 'secondary'
+          ? {
+              badge: 'Rule of Five (noexcept move)',
+              color: 'text-sky-400',
+              summary: 'Defines ~T(), Copy Ctor/Assign, plus noexcept Move Ctor/Assign stealing pointer in O(1).',
+              vectorBehavior: 'std::vector moves elements on growth — zero heap re-cloning!',
+            }
+          : {
+              badge: 'Missing noexcept Trap',
+              color: 'text-danger',
+              summary: 'Move constructor lacks `noexcept`: std::vector refuses to move to guarantee strong exception safety.',
+              vectorBehavior: 'Silently degrades to O(N) deep copies on every vector resize!',
+            };
+    return (
+      <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] font-mono uppercase tracking-wider text-sky-400 font-semibold">
+            Interactive Rule of 0 / 3 / 5 Ownership Lab
+          </div>
+          <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-lg p-0.5 text-[11px] font-mono">
+            {[
+              { id: 'primary' as const, label: 'Rule of Zero' },
+              { id: 'secondary' as const, label: 'Rule of 5 (noexcept)' },
+              { id: 'tertiary' as const, label: 'Non-noexcept Trap' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSimToggle(item.id)}
+                className={`px-2 py-1 rounded-md transition-colors ${
+                  simToggle === item.id
+                    ? 'bg-primary text-black font-semibold'
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="p-3 rounded-lg bg-canvas border border-border-subtle space-y-1.5">
+          <div className={`text-xs font-mono font-bold ${ruleData.color}`}>{ruleData.badge}</div>
+          <p className="text-xs text-text-secondary leading-relaxed">{ruleData.summary}</p>
+          <div className="text-[11px] font-mono text-text-muted pt-1">
+            Container Reallocation: <span className={ruleData.color}>{ruleData.vectorBehavior}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (moduleId === 'encapsulation') {
+    const valid = simToggle === 'primary';
+    return (
+      <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">
+            Interactive Invariant Guard Trace (`balance = 1000`)
+          </div>
+          <div className="flex items-center gap-1 bg-canvas border border-border-subtle rounded-lg p-0.5 text-[11px] font-mono">
+            <button
+              type="button"
+              onClick={() => setSimToggle('primary')}
+              className={`px-2.5 py-1 rounded-md transition-colors ${
+                valid ? 'bg-success-subtle text-success font-semibold' : 'text-text-muted'
+              }`}
+            >
+              withdraw(400)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSimToggle('secondary')}
+              className={`px-2.5 py-1 rounded-md transition-colors ${
+                !valid ? 'bg-danger-subtle text-danger font-semibold' : 'text-text-muted'
+              }`}
+            >
+              withdraw(1500)
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
+          <div className="p-2.5 rounded-lg bg-canvas border border-border-subtle">
+            <div className="text-[10px] text-text-muted">1. Precondition</div>
+            <div className={valid ? 'text-success font-semibold' : 'text-danger font-semibold'}>
+              {valid ? '400 <= 1000 ✓' : '1500 > 1000 ✗'}
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-canvas border border-border-subtle">
+            <div className="text-[10px] text-text-muted">2. Mutation</div>
+            <div className="text-text-primary">
+              {valid ? 'balanceCents_ -= 400' : 'Aborted before write'}
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-canvas border border-border-subtle">
+            <div className="text-[10px] text-text-muted">3. Post-State</div>
+            <div className="text-text-primary font-semibold">
+              {valid ? 'returns true · bal = 600' : 'returns false · bal = 1000'}
             </div>
           </div>
         </div>
-      );
+      </div>
+    );
+  }
 
-    case 'polymorphism':
-    case 'abstraction':
-      return (
-        <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-3">
-          <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-purple-400 font-semibold uppercase tracking-wider">
-              64-Bit Memory Layout • vptr &amp; VTable Dynamic Dispatch vs Object Slicing
-            </span>
-            <span className="text-text-muted">sizeof(vptr) = 8 Bytes</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
-            <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-emerald-400 font-semibold">✓ const Shape&amp; ref = Triangle()</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                  Dynamic Dispatch
-                </span>
-              </div>
-              <div className="text-[11px] text-text-secondary font-sans leading-relaxed">
-                Follows <code className="text-primary">ref.vptr → Triangle::vtable[0]</code> at runtime. Invokes <code className="text-emerald-400">Triangle::sides() → 3</code>.
+  return (
+    <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-2.5">
+      <div className="flex items-center justify-between text-[11px] font-mono">
+        <span className="text-primary font-semibold uppercase tracking-wider">
+          {moduleId === 'operators'
+            ? 'Strict Weak Ordering Axioms (std::sort / std::set)'
+            : moduleId === 'solid'
+              ? 'Dependency Inversion & Liskov Flow'
+              : 'Low-Level Design Pattern Quick Matrix'}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+        {moduleId === 'operators' ? (
+          <>
+            <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
+              <div className="font-mono font-bold text-success mb-1">1. Irreflexive</div>
+              <div className="text-text-secondary text-[11px]">
+                <code className="font-mono">comp(a, a) == false</code>. Using <code className="font-mono">&lt;=</code> crashes <code className="font-mono">std::sort</code>!
               </div>
             </div>
-            <div className="p-3.5 rounded-lg bg-danger/10 border border-danger/30 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-danger font-semibold">✗ Shape s = Triangle()</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-danger/20 text-danger">
-                  Object Sliced!
-                </span>
-              </div>
-              <div className="text-[11px] text-text-secondary font-sans leading-relaxed">
-                By-value copy strips derived fields and resets <code className="text-danger">s.vptr → Shape::vtable</code>. Prints <code className="text-danger">0</code>!
+            <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
+              <div className="font-mono font-bold text-warning mb-1">2. Asymmetric</div>
+              <div className="text-text-secondary text-[11px]">
+                If <code className="font-mono">a &lt; b</code> is true, <code className="font-mono">b &lt; a</code> must be false.
               </div>
             </div>
-          </div>
-        </div>
-      );
-
-    case 'inheritance':
-      return (
-        <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-3">
-          <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-sky-400 font-semibold uppercase tracking-wider">
-              Diamond Inheritance Resolution • Virtual Base Subobject
-            </span>
-            <span className="text-text-muted">class Printer : virtual public Device</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle space-y-1">
-              <div className="font-mono font-semibold text-amber-400">
-                Without virtual inheritance
+            <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
+              <div className="font-mono font-bold text-sky-400 mb-1">3. std::tie Idiom</div>
+              <div className="text-text-secondary text-[11px]">
+                Use <code className="font-mono">std::tie(a.p, a.id) &lt; std::tie(b.p, b.id)</code> cleanly.
               </div>
-              <p className="text-text-secondary leading-relaxed">
-                <code className="font-mono text-text-primary">AllInOne</code> contains two separate <code className="font-mono text-text-primary">Device</code> subobjects (<code className="font-mono">Printer::id</code> and <code className="font-mono">Scanner::id</code>) — compile error on <code className="font-mono">aio.id</code>.
-              </p>
             </div>
-            <div className="p-3 rounded-lg bg-sky-500/10 border border-sky-500/30 space-y-1">
-              <div className="font-mono font-semibold text-sky-400">
-                With virtual public Device
+          </>
+        ) : moduleId === 'solid' ? (
+          <>
+            <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
+              <div className="font-mono font-bold text-text-primary mb-1">High-Level Policy</div>
+              <div className="text-text-secondary text-[11px]">
+                <code className="font-mono">OrderService</code> accepts <code className="font-mono text-primary">INotifier&amp;</code> via DI.
               </div>
-              <p className="text-text-secondary leading-relaxed">
-                Single shared <code className="font-mono text-text-primary">Device</code> subobject initialized directly by the most-derived constructor (<code className="font-mono text-text-primary">AllInOne</code>).
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-
-    case 'raii':
-      return (
-        <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-sky-400 font-semibold uppercase tracking-wider">
-              Rule of 0 / 3 / 5 Special Member Matrix
-            </span>
-            <span className="text-text-muted">Move Ctor MUST be noexcept</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-emerald-400 mb-1">Rule of Zero</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                Use <code className="font-mono">std::vector</code>, <code className="font-mono">std::string</code>, <code className="font-mono">unique_ptr</code>. Write 0 custom copy/move/dtor methods.
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-amber-400 mb-1">Rule of Three</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                If managing raw resources, define <code className="font-mono">~T()</code>, <code className="font-mono">T(const T&amp;)</code>, and <code className="font-mono">operator=(const T&amp;)</code>.
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-sky-400 mb-1">Rule of Five</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                Add <code className="font-mono">T(T&amp;&amp;) noexcept</code> and <code className="font-mono">operator=(T&amp;&amp;) noexcept</code> for O(1) pointer stealing.
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-
-    case 'operators':
-      return (
-        <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-amber-400 font-semibold uppercase tracking-wider">
-              STL Comparator Contract • Strict Weak Ordering Axioms
-            </span>
-            <span className="text-text-muted">std::sort / std::set / std::map</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-emerald-400 mb-1">1. Irreflexivity</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                <code className="font-mono">comp(a, a)</code> MUST always be <code className="font-mono text-emerald-400">false</code>. Using <code className="font-mono text-danger">&lt;=</code> causes UB segfaults in <code className="font-mono">std::sort</code>.
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-amber-400 mb-1">2. Asymmetry</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                If <code className="font-mono">comp(a, b)</code> is true, then <code className="font-mono">comp(b, a)</code> MUST be false.
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-sky-400 mb-1">3. Transitivity</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                Use <code className="font-mono">std::tie(a.x, a.y) &lt; std::tie(b.x, b.y)</code> for bug-free lexicographical ordering.
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-
-    case 'solid':
-      return (
-        <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-rose-400 font-semibold uppercase tracking-wider">
-              Dependency Inversion (DIP) &amp; Liskov Substitution (LSP)
-            </span>
-            <span className="text-text-muted">Decoupled LLD Architecture</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-text-primary mb-1">OrderService (High-Level)</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                Depends strictly on <code className="font-mono text-primary">INotifier&amp;</code> interface injected via constructor.
-              </p>
             </div>
             <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
-              <div className="font-mono font-bold text-primary mb-1">&lt;&lt;interface&gt;&gt; INotifier</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                Pure virtual contract <code className="font-mono">virtual void send(const string&amp;) = 0;</code>
-              </p>
+              <div className="font-mono font-bold text-primary mb-1">Pure Interface</div>
+              <div className="text-text-secondary text-[11px]">
+                Minimal role-segregated contract (<code className="font-mono">send(...) = 0</code>).
+              </div>
             </div>
-            <div className="p-3 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-emerald-400 mb-1">Email / SMS / Mock</div>
-              <p className="text-text-secondary text-[11px] leading-relaxed">
-                Swappable concrete implementations without editing <code className="font-mono">OrderService</code> (Open/Closed).
-              </p>
+            <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
+              <div className="font-mono font-bold text-success mb-1">Swappable Adapters</div>
+              <div className="text-text-secondary text-[11px]">
+                Email, SMS, or Mock spy injected without editing callers.
+              </div>
             </div>
-          </div>
-        </div>
-      );
-
-    case 'patterns':
-    default:
-      return (
-        <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-rose-400 font-semibold uppercase tracking-wider">
-              GoF Low-Level Design Pattern Selector
-            </span>
-            <span className="text-text-muted">Thread-Safe C++17 Idioms</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
-            <div className="p-2.5 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-emerald-400">Strategy</div>
-              <div className="text-[11px] text-text-secondary mt-0.5">Swap algorithms at runtime</div>
+          </>
+        ) : (
+          <>
+            <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
+              <div className="font-mono font-bold text-success mb-1">Strategy / State</div>
+              <div className="text-text-secondary text-[11px]">Swap runtime behavior cleanly via composition.</div>
             </div>
-            <div className="p-2.5 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-sky-400">Observer</div>
-              <div className="text-[11px] text-text-secondary mt-0.5">1-to-N event subscribers</div>
+            <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
+              <div className="font-mono font-bold text-sky-400 mb-1">Observer / Command</div>
+              <div className="text-text-secondary text-[11px]">Event pub-sub &amp; undo/redo command stacks.</div>
             </div>
-            <div className="p-2.5 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-amber-400">Command</div>
-              <div className="text-[11px] text-text-secondary mt-0.5">Execute / Undo history stack</div>
+            <div className="p-3 rounded-lg bg-canvas border border-border-subtle">
+              <div className="font-mono font-bold text-purple-400 mb-1">Meyers Singleton</div>
+              <div className="text-text-secondary text-[11px]">Thread-safe local <code className="font-mono">static</code> init since C++11.</div>
             </div>
-            <div className="p-2.5 rounded-lg bg-surface border border-border-subtle">
-              <div className="font-mono font-bold text-purple-400">Meyers Singleton</div>
-              <div className="text-[11px] text-text-secondary mt-0.5">Atomic C++11 static local</div>
-            </div>
-          </div>
-        </div>
-      );
-  }
+          </>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange }) => {
-  // Default to 'practice' or allow instant switching across Coding (100), Study (8), and MCQs (100+)
   const [activeTab, setActiveTab] = useState<OopsSectionTab>('practice');
   const [selectedModuleId, setSelectedModuleId] = useState<string>(OOPS_STUDY_MODULES[0].id);
   const [copiedModuleId, setCopiedModuleId] = useState<string | null>(null);
 
-  // Completed Study Modules persisted in localStorage
   const [completedModules, setCompletedModules] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem(MODULES_DONE_KEY);
@@ -497,7 +613,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
     }
   });
 
-  // Server-paginated OOP Coding Practice state (#631-#730)
   const [problems, setProblems] = useState<Problem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [oopTotal, setOopTotal] = useState(100);
@@ -514,7 +629,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
   const [shuffleSeed, setShuffleSeed] = useState<number>(1);
   const PAGE_SIZE = 25;
 
-  // Interactive OOP MCQs Arena state
   const [mcqBatch, setMcqBatch] = useState<OopMcqItem[]>(() => generateOopMcqBatch(20));
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
   const [mcqLayout, setMcqLayout] = useState<McqLayoutMode>('focus');
@@ -530,7 +644,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
     return { attempted: 0, correct: 0, streak: 0 };
   });
 
-  // Debounce search input by 180ms so typing doesn't flicker the table on every keystroke
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedSearch((prev) => {
@@ -656,7 +769,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
     [selectedAnswers]
   );
 
-  // Keyboard navigation in Focused MCQ Arena (1-4 / A-D to answer, ArrowLeft/Right for Prev/Next)
   useEffect(() => {
     if (activeTab !== 'mcq' || mcqLayout !== 'focus' || !currentMcqItem) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -688,7 +800,11 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
   };
 
   const handlePickRandomOopProblem = () => {
-    // IDs #631 through #730 are the 100 OOPs problems
+    const unsolved = problems.find((p) => !p.isSolved);
+    if (unsolved) {
+      onSelectProblem(unsolved.id);
+      return;
+    }
     const randomId = 631 + Math.floor(Math.random() * 100);
     onSelectProblem(randomId);
   };
@@ -720,252 +836,121 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
 
   return (
     <AppLayout currentTab="oops" onTabChange={onTabChange}>
-      <div className="max-w-[1536px] mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* HERO BANNER */}
-        <div className="rounded-2xl bg-surface border border-border-subtle p-5 sm:p-6 shadow-sm">
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-            <div className="space-y-2 max-w-3xl">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="font-bold text-2xl sm:text-3xl text-text-primary tracking-tight">
-                  Object-Oriented Design &amp; C++17 LLD
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-xs font-mono text-text-secondary">
-                  {oopSolved} / {oopTotal} Solved
+      <div className="max-w-[1536px] mx-auto px-4 sm:px-6 py-6 space-y-5">
+        {/* Compact Workspace Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-subtle pb-5">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="font-bold text-2xl text-text-primary tracking-tight">
+                C++17 OOPs &amp; Low-Level Design Lab
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-xs font-mono text-text-secondary">
+                {oopSolved}/{oopTotal} Solved ({oopPct}%)
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-text-secondary max-w-3xl">
+              Master 100 executable C++17 class challenges (#631–#730), inspect live 64-bit VTable &amp; RAII memory layouts, and drill placement MCQs.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <div className="hidden sm:flex items-center gap-3 px-3.5 py-2 rounded-xl bg-surface border border-border-subtle text-xs font-mono">
+              <span className="text-text-muted">
+                Blueprints{' '}
+                <strong className="text-text-primary">
+                  {completedModules.length}/{OOPS_STUDY_MODULES.length}
+                </strong>
+              </span>
+              <span className="text-border-default">|</span>
+              <span className="text-text-muted inline-flex items-center gap-1">
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                Quiz <strong className="text-text-primary">{mcqAccuracy}%</strong>
+              </span>
+              {mcqScore.streak > 0 && (
+                <span className="text-amber-400 inline-flex items-center gap-0.5 font-semibold">
+                  <Flame className="w-3.5 h-3.5" />
+                  {mcqScore.streak}
                 </span>
-              </div>
-              <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
-                Practice 100 executable C++17 class-design problems (#631–#730), inspect 64-bit VTable &amp; RAII memory layouts across 8 study modules, and drill placement MCQs.
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={handlePickRandomOopProblem}
-                  className="px-3.5 py-2 rounded-xl bg-primary text-black text-xs font-semibold hover:opacity-95 transition-opacity inline-flex items-center gap-1.5 shadow-sm"
-                >
-                  <Dices className="w-3.5 h-3.5" />
-                  <span>Solve Random OOP Challenge</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onTabChange('aptitude')}
-                  className="px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary transition-colors inline-flex items-center gap-1.5"
-                >
-                  <span>Timed Aptitude + OOPs Mock</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-primary" />
-                </button>
-              </div>
+              )}
             </div>
 
-            {/* 3 Live Telemetry Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 xl:min-w-[540px]">
-              {/* Card 1: Coding Progress */}
-              <div className="bg-surface-elevated/70 border border-border-subtle rounded-xl p-3.5 flex flex-col justify-between space-y-2.5">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-text-muted flex items-center gap-1.5">
-                    <Code2 className="w-3.5 h-3.5 text-purple-400" />
-                    Coding Lab
-                  </span>
-                  <span className="text-text-primary font-bold">
-                    {oopSolved}/{oopTotal} ({oopPct}%)
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-surface-high overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-emerald-400 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.max(oopPct, oopSolved > 0 ? 4 : 0)}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono text-text-muted">
-                  <span className="text-success">E: {difficultyTotals.Easy}</span>
-                  <span className="text-warning">M: {difficultyTotals.Medium}</span>
-                  <span className="text-danger">H: {difficultyTotals.Hard}</span>
-                </div>
-              </div>
+            <button
+              type="button"
+              onClick={handlePickRandomOopProblem}
+              className="px-3.5 py-2 rounded-xl bg-primary text-black text-xs font-semibold hover:opacity-95 transition-opacity inline-flex items-center gap-1.5"
+            >
+              <Dices className="w-3.5 h-3.5" />
+              <span>Launch Challenge</span>
+            </button>
 
-              {/* Card 2: Curriculum Study Progress */}
-              <div className="bg-surface-elevated/70 border border-border-subtle rounded-xl p-3.5 flex flex-col justify-between space-y-2.5">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-text-muted flex items-center gap-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-sky-400" />
-                    Study Modules
-                  </span>
-                  <span className="text-text-primary font-bold">
-                    {completedModules.length}/{OOPS_STUDY_MODULES.length} Read
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-surface-high overflow-hidden">
-                  <div
-                    className="h-full bg-sky-400 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.round(
-                        (completedModules.length / OOPS_STUDY_MODULES.length) * 100
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <div className="text-[10px] font-mono text-text-muted flex items-center justify-between">
-                  <span>8 LLD Blueprints</span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('study')}
-                    className="text-sky-400 hover:underline"
-                  >
-                    Open Reader →
-                  </button>
-                </div>
-              </div>
-
-              {/* Card 3: MCQ Arena Accuracy */}
-              <div className="bg-surface-elevated/70 border border-border-subtle rounded-xl p-3.5 flex flex-col justify-between space-y-2.5">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-text-muted flex items-center gap-1.5">
-                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                    MCQ Accuracy
-                  </span>
-                  <span className="text-text-primary font-bold">{mcqAccuracy}%</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-surface-high overflow-hidden">
-                  <div
-                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
-                    style={{ width: `${mcqAccuracy}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono text-text-muted">
-                  <span>
-                    {mcqScore.correct}/{mcqScore.attempted} Correct
-                  </span>
-                  <span className="text-amber-400 inline-flex items-center gap-0.5">
-                    <Flame className="w-3 h-3" /> Streak {mcqScore.streak}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => onTabChange('aptitude')}
+              className="px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-high border border-border-default text-xs font-medium text-text-primary transition-colors inline-flex items-center gap-1.5"
+            >
+              <span>Aptitude + OOPs Test</span>
+              <ArrowRight className="w-3.5 h-3.5 text-primary" />
+            </button>
           </div>
         </div>
 
-        {/* 3-MODE SEGMENTED NAVIGATION BAR */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <button
-            type="button"
-            onClick={() => setActiveTab('practice')}
-            className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-              activeTab === 'practice'
-                ? 'bg-surface-elevated border-primary ring-1 ring-primary/30 shadow-sm'
-                : 'bg-surface border-border-subtle hover:border-border-hover hover:bg-surface-elevated/50'
-            }`}
-          >
-            <div className="flex items-center gap-3.5">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  activeTab === 'practice'
-                    ? 'bg-primary text-black'
-                    : 'bg-purple-500/15 text-purple-400'
-                }`}
-              >
-                <Code2 className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-text-primary flex items-center gap-2">
-                  <span>OOPs Coding Lab</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-high text-text-secondary">
-                    {oopTotal} Problems
-                  </span>
-                </div>
-                <p className="text-xs text-text-muted mt-0.5">
-                  Executable C++17 classes, RAII &amp; Design Patterns (#631–#730)
-                </p>
-              </div>
-            </div>
-            <ChevronRight
-              className={`w-4 h-4 shrink-0 ${
-                activeTab === 'practice' ? 'text-primary' : 'text-text-muted'
+        {/* Clean Single-Row Section Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface border border-border-subtle">
+            <button
+              type="button"
+              onClick={() => setActiveTab('practice')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition-colors ${
+                activeTab === 'practice'
+                  ? 'bg-primary text-black shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
               }`}
-            />
-          </button>
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>Coding Lab ({oopTotal})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('study')}
-            className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-              activeTab === 'study'
-                ? 'bg-surface-elevated border-primary ring-1 ring-primary/30 shadow-sm'
-                : 'bg-surface border-border-subtle hover:border-border-hover hover:bg-surface-elevated/50'
-            }`}
-          >
-            <div className="flex items-center gap-3.5">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  activeTab === 'study' ? 'bg-primary text-black' : 'bg-sky-500/15 text-sky-400'
-                }`}
-              >
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-text-primary flex items-center gap-2">
-                  <span>Study &amp; LLD Blueprints</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-high text-text-secondary">
-                    {OOPS_STUDY_MODULES.length} Modules
-                  </span>
-                </div>
-                <p className="text-xs text-text-muted mt-0.5">
-                  VTables, Object Slicing, Rule of 5, SOLID &amp; Interview Red Flags
-                </p>
-              </div>
-            </div>
-            <ChevronRight
-              className={`w-4 h-4 shrink-0 ${
-                activeTab === 'study' ? 'text-primary' : 'text-text-muted'
+            <button
+              type="button"
+              onClick={() => setActiveTab('study')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition-colors ${
+                activeTab === 'study'
+                  ? 'bg-primary text-black shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
               }`}
-            />
-          </button>
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Memory &amp; LLD Blueprints ({OOPS_STUDY_MODULES.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('mcq')}
-            className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-              activeTab === 'mcq'
-                ? 'bg-surface-elevated border-primary ring-1 ring-primary/30 shadow-sm'
-                : 'bg-surface border-border-subtle hover:border-border-hover hover:bg-surface-elevated/50'
-            }`}
-          >
-            <div className="flex items-center gap-3.5">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  activeTab === 'mcq'
-                    ? 'bg-primary text-black'
-                    : 'bg-amber-500/15 text-amber-400'
-                }`}
-              >
-                <Target className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-text-primary flex items-center gap-2">
-                  <span>Placement MCQ Arena</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-high text-text-secondary">
-                    100+ Drills
-                  </span>
-                </div>
-                <p className="text-xs text-text-muted mt-0.5">
-                  Interactive C++17 output traces, vtable binding &amp; SOLID quizzes
-                </p>
-              </div>
-            </div>
-            <ChevronRight
-              className={`w-4 h-4 shrink-0 ${
-                activeTab === 'mcq' ? 'text-primary' : 'text-text-muted'
+            <button
+              type="button"
+              onClick={() => setActiveTab('mcq')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition-colors ${
+                activeTab === 'mcq'
+                  ? 'bg-primary text-black shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
               }`}
-            />
-          </button>
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span>VTable &amp; Output Arena</span>
+            </button>
+          </div>
+
+          <div className="text-[11px] font-mono text-text-muted hidden md:flex items-center gap-3">
+            <span className="text-success">Easy {difficultyTotals.Easy}</span>
+            <span className="text-warning">Medium {difficultyTotals.Medium}</span>
+            <span className="text-danger">Hard {difficultyTotals.Hard}</span>
+          </div>
         </div>
 
         {/* ===================================================================== */}
-        {/* TAB 1: 100 OOPs CODING PRACTICE LAB (#631-#730)                       */}
+        {/* TAB 1: OOPs CODING LAB (#631-#730)                                    */}
         {/* ===================================================================== */}
         {activeTab === 'practice' && (
-          <div className="space-y-5">
-            {/* 5 Interactive OOP Pillar Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="space-y-4">
+            {/* Compact 5-Pillar Track Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
               {OOP_PILLAR_CARDS.map((pillar) => {
                 const isSelected = selectedTopic === pillar.topic;
                 return (
@@ -988,33 +973,31 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                         setCurrentPage(1);
                       }
                     }}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
                       isSelected
-                        ? `${pillar.accentBg} ${pillar.accentBorder} ring-1 ring-primary/40 shadow-sm`
+                        ? `${pillar.accentBg} ${pillar.accentBorder} ring-1 ring-primary/35`
                         : 'bg-surface border-border-subtle hover:border-border-hover hover:bg-surface-elevated/60'
                     }`}
                   >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-text-primary">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                        <span className="inline-flex items-center gap-1.5 font-semibold">
                           {getPillarIcon(pillar.topic)}
                           <span className={pillar.accentText}>{pillar.idRange}</span>
                         </span>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-text-muted">
-                          {pillar.count} Qs
-                        </span>
+                        <span className="text-text-muted">{pillar.count} Qs</span>
                       </div>
                       <div className="text-xs font-bold text-text-primary leading-snug">
                         {pillar.shortTitle}
                       </div>
-                      <p className="text-[11px] text-text-muted line-clamp-2 leading-relaxed">
+                      <p className="text-[11px] text-text-muted line-clamp-2 leading-snug">
                         {pillar.desc}
                       </p>
                     </div>
 
-                    <div className="pt-1 border-t border-border-subtle flex items-center justify-between text-[10px] font-mono">
+                    <div className="flex items-center justify-between text-[10px] font-mono pt-1 border-t border-border-subtle/70">
                       <span className={isSelected ? 'text-primary font-semibold' : 'text-text-muted'}>
-                        {isSelected ? '✓ Active Filter' : 'Click to filter'}
+                        {isSelected ? 'Filtered' : 'Filter track'}
                       </span>
                       <button
                         type="button"
@@ -1025,7 +1008,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                         }}
                         className="text-sky-400 hover:underline"
                       >
-                        Study Guide →
+                        Blueprint →
                       </button>
                     </div>
                   </div>
@@ -1033,16 +1016,16 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               })}
             </div>
 
-            {/* Filter & Search Controls Bar */}
-            <div className="bg-surface border border-border-subtle rounded-2xl p-3.5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
               <div className="relative flex-1 max-w-md">
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Search OOP problems by #id (631-730), class name, or pattern..."
+                  placeholder="Search OOP challenges by #id, class name, or pattern..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-9 py-2 bg-surface-elevated border border-border-default rounded-xl text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/60 transition-colors"
+                  className="w-full pl-10 pr-9 py-2 bg-surface-elevated border border-border-default rounded-full text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/60 transition-colors"
                 />
                 {searchQuery && (
                   <button
@@ -1052,7 +1035,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                       setDebouncedSearch('');
                       setCurrentPage(1);
                     }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-0.5"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
                     aria-label="Clear search"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -1061,8 +1044,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Status Filter */}
-                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-xl p-1 text-xs">
+                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-full p-0.5 text-xs">
                   {(['all', 'solved', 'unsolved'] as const).map((status) => (
                     <button
                       key={status}
@@ -1071,7 +1053,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                         setStatusFilter(status);
                         setCurrentPage(1);
                       }}
-                      className={`px-2.5 py-1 rounded-lg capitalize transition-colors ${
+                      className={`px-3 py-1 rounded-full capitalize transition-colors ${
                         statusFilter === status
                           ? 'bg-primary text-black font-semibold'
                           : 'text-text-secondary hover:text-text-primary'
@@ -1082,8 +1064,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                   ))}
                 </div>
 
-                {/* Difficulty Pills */}
-                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-xl p-1 text-xs">
+                <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-full p-0.5 text-xs">
                   {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
                     <button
                       key={diff}
@@ -1092,16 +1073,16 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                         setSelectedDifficulty(diff);
                         setCurrentPage(1);
                       }}
-                      className={`px-2.5 py-1 rounded-lg transition-colors ${
+                      className={`px-2.5 py-1 rounded-full transition-colors ${
                         selectedDifficulty === diff
                           ? 'bg-primary text-black font-semibold'
                           : diff === 'Easy'
-                          ? 'text-success hover:bg-surface-high'
-                          : diff === 'Medium'
-                          ? 'text-warning hover:bg-surface-high'
-                          : diff === 'Hard'
-                          ? 'text-danger hover:bg-surface-high'
-                          : 'text-text-secondary hover:text-text-primary'
+                            ? 'text-success hover:bg-surface-high'
+                            : diff === 'Medium'
+                              ? 'text-warning hover:bg-surface-high'
+                              : diff === 'Hard'
+                                ? 'text-danger hover:bg-surface-high'
+                                : 'text-text-secondary hover:text-text-primary'
                       }`}
                     >
                       {diff}
@@ -1112,22 +1093,31 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                 <button
                   type="button"
                   onClick={() => {
+                    if (isShuffled) {
+                      setIsShuffled(false);
+                      setCurrentPage(1);
+                      return;
+                    }
                     setIsShuffled(true);
                     setShuffleSeed(Math.floor(Math.random() * 1_000_000) + 1);
                     setCurrentPage(1);
                   }}
-                  className="px-3 py-2 bg-surface-elevated hover:bg-surface-high border border-border-default rounded-xl text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5 transition-colors"
-                  title="Shuffle OOP problem order"
+                  aria-pressed={isShuffled}
+                  className={`px-3 py-1.5 border rounded-full text-xs flex items-center gap-1.5 transition-colors ${
+                    isShuffled
+                      ? 'bg-primary-subtle border-primary/45 text-primary font-semibold'
+                      : 'bg-surface-elevated border-border-default text-text-secondary hover:text-text-primary'
+                  }`}
                 >
                   <Shuffle className="w-3.5 h-3.5 text-primary" />
-                  <span>Shuffle</span>
+                  <span>{isShuffled ? 'Shuffle ON' : 'Shuffle'}</span>
                 </button>
 
                 {hasActiveCodingFilters && (
                   <button
                     type="button"
                     onClick={resetCodingFilters}
-                    className="px-3 py-2 bg-danger-subtle hover:opacity-90 border border-danger/30 rounded-xl text-xs text-danger font-mono flex items-center gap-1 transition-opacity"
+                    className="px-3 py-1.5 bg-danger-subtle border border-danger/30 rounded-full text-xs text-danger font-mono flex items-center gap-1"
                   >
                     <X className="w-3.5 h-3.5" />
                     <span>Reset ({filteredTotal})</span>
@@ -1142,12 +1132,12 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                 <table className="w-full text-left text-xs">
                   <thead className="bg-surface-subtle text-text-muted font-mono text-[11px] uppercase tracking-wider border-b border-border-subtle">
                     <tr>
-                      <th className="py-3.5 px-4 w-14 text-center">Status</th>
-                      <th className="py-3.5 px-4 w-20">ID</th>
-                      <th className="py-3.5 px-4">Class Challenge &amp; Pattern</th>
-                      <th className="py-3.5 px-4 w-64 hidden md:table-cell">OOP Pillar</th>
-                      <th className="py-3.5 px-4 w-28">Difficulty</th>
-                      <th className="py-3.5 px-4 w-32 text-right">Action</th>
+                      <th className="py-3 px-4 w-12 text-center">Status</th>
+                      <th className="py-3 px-4 w-16">ID</th>
+                      <th className="py-3 px-4">Class Challenge &amp; Pattern</th>
+                      <th className="py-3 px-4 w-60 hidden md:table-cell">OOP Pillar</th>
+                      <th className="py-3 px-4 w-24">Difficulty</th>
+                      <th className="py-3 px-4 w-24 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-subtle">
@@ -1186,21 +1176,19 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                             idx % 2 === 0 ? 'bg-surface' : 'bg-surface-subtle/40'
                           }`}
                         >
-                          <td className="py-3.5 px-4 text-center">
+                          <td className="py-3 px-4 text-center">
                             {prob.isSolved ? (
-                              <span className="w-5 h-5 rounded-full bg-success-subtle text-success inline-flex items-center justify-center mx-auto">
-                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                              </span>
+                              <Check className="w-4 h-4 text-success mx-auto stroke-[2.5]" />
                             ) : (
-                              <span className="w-2 h-2 rounded-full bg-text-muted/30 inline-block mx-auto group-hover:bg-primary/60 transition-colors" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-text-muted/30 mx-auto group-hover:bg-primary/60 transition-colors" />
                             )}
                           </td>
-                          <td className="py-3.5 px-4 font-mono text-text-muted font-semibold">
+                          <td className="py-3 px-4 font-mono text-text-muted font-semibold">
                             #{prob.id}
                           </td>
-                          <td className="py-3.5 px-4">
+                          <td className="py-3 px-4">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-semibold text-sm text-text-primary group-hover:text-primary transition-colors">
+                              <span className="font-semibold text-xs sm:text-sm text-text-primary group-hover:text-primary transition-colors">
                                 {prob.title}
                               </span>
                               {prob.pattern && (
@@ -1210,28 +1198,20 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                               )}
                             </div>
                           </td>
-                          <td className="py-3.5 px-4 hidden md:table-cell">
+                          <td className="py-3 px-4 hidden md:table-cell">
                             <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
                               {getPillarIcon(prob.topic)}
                               <span>{prob.topic}</span>
                             </span>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <span
-                              className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold ${
-                                prob.difficulty === 'Easy'
-                                  ? 'bg-success-subtle text-success'
-                                  : prob.difficulty === 'Medium'
-                                  ? 'bg-warning-subtle text-warning'
-                                  : 'bg-danger-subtle text-danger'
-                              }`}
-                            >
-                              {prob.difficulty}
-                            </span>
+                          <td className="py-3 px-4 font-medium">
+                            {prob.difficulty === 'Easy' && <span className="text-success">Easy</span>}
+                            {prob.difficulty === 'Medium' && <span className="text-warning">Med.</span>}
+                            {prob.difficulty === 'Hard' && <span className="text-danger">Hard</span>}
                           </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-elevated group-hover:bg-primary group-hover:text-black text-text-secondary font-mono text-[11px] font-medium transition-colors">
-                              <span>Solve</span>
+                          <td className="py-3 px-4 text-right">
+                            <span className="inline-flex items-center gap-1 text-primary opacity-75 group-hover:opacity-100 font-mono text-[11px] font-medium transition-opacity">
+                              <span>Open</span>
                               <ChevronRight className="w-3.5 h-3.5" />
                             </span>
                           </td>
@@ -1254,16 +1234,15 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
         )}
 
         {/* ===================================================================== */}
-        {/* TAB 2: INTERACTIVE STUDY & MEMORY BLUEPRINTS (8 MODULES)              */}
+        {/* TAB 2: MEMORY & LLD BLUEPRINTS (8 MODULES + INTERACTIVE SIMULATORS)   */}
         {/* ===================================================================== */}
         {activeTab === 'study' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left Curriculum Rail */}
-            <aside className="lg:col-span-4 bg-surface border border-border-subtle rounded-2xl p-4 space-y-3 lg:sticky lg:top-20">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <aside className="lg:col-span-4 bg-surface border border-border-subtle rounded-2xl p-4 space-y-2.5 lg:sticky lg:top-20">
               <div className="flex items-center justify-between px-1 pb-2 border-b border-border-subtle">
                 <div>
-                  <div className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
-                    C++17 OOP Curriculum
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-text-muted font-semibold">
+                    C++17 Syllabus
                   </div>
                   <div className="text-sm font-bold text-text-primary">
                     8 Engineering Blueprints
@@ -1274,7 +1253,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                 </span>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {OOPS_STUDY_MODULES.map((mod, idx) => {
                   const isSelected = mod.id === activeModule.id;
                   const isDone = completedModules.includes(mod.id);
@@ -1283,31 +1262,31 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                       key={mod.id}
                       type="button"
                       onClick={() => setSelectedModuleId(mod.id)}
-                      className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-start gap-3 ${
+                      className={`w-full text-left p-3 rounded-xl border transition-all flex items-start gap-3 ${
                         isSelected
-                          ? 'bg-surface-elevated border-primary ring-1 ring-primary/30 shadow-sm'
+                          ? 'bg-surface-elevated border-primary ring-1 ring-primary/30'
                           : 'bg-surface-subtle/50 border-border-subtle hover:border-border-hover hover:bg-surface-elevated/60'
                       }`}
                     >
                       <div
-                        className={`w-7 h-7 rounded-lg font-mono text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${
+                        className={`w-6 h-6 rounded-lg font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 ${
                           isDone
                             ? 'bg-success-subtle text-success border border-success/30'
                             : isSelected
-                            ? 'bg-primary text-black'
-                            : 'bg-surface-high text-text-muted'
+                              ? 'bg-primary text-black'
+                              : 'bg-surface-high text-text-muted'
                         }`}
                       >
                         {isDone ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : `0${idx + 1}`}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2 text-[11px] font-mono mb-0.5">
+                        <div className="flex items-center justify-between gap-2 text-[10px] font-mono mb-0.5">
                           <span className={isSelected ? 'text-primary font-semibold' : 'text-text-muted'}>
                             {mod.pillar}
                           </span>
                           <span className="text-text-muted shrink-0">{mod.readTime}</span>
                         </div>
-                        <div className="text-xs sm:text-sm font-semibold text-text-primary leading-snug">
+                        <div className="text-xs font-semibold text-text-primary leading-snug">
                           {mod.title}
                         </div>
                       </div>
@@ -1317,23 +1296,21 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               </div>
             </aside>
 
-            {/* Right Deep-Dive Reader */}
-            <section className="lg:col-span-8 bg-surface border border-border-subtle rounded-2xl p-5 sm:p-7 space-y-6 shadow-sm">
-              {/* Reader Header */}
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-border-subtle pb-5">
-                <div className="space-y-2">
+            <section className="lg:col-span-8 bg-surface border border-border-subtle rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-border-subtle pb-4">
+                <div className="space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full bg-primary-subtle text-primary text-xs font-mono font-semibold">
                       Module 0{activeModuleIdx + 1} • {activeModule.pillar}
                     </span>
                     <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-xs font-mono text-text-muted">
-                      {activeModule.readTime} read
+                      {activeModule.readTime}
                     </span>
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-text-primary tracking-tight">
+                  <h2 className="text-xl font-bold text-text-primary tracking-tight">
                     {activeModule.title}
                   </h2>
-                  <p className="text-sm text-text-secondary leading-relaxed">
+                  <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
                     {activeModule.summary}
                   </p>
                 </div>
@@ -1342,7 +1319,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                   <button
                     type="button"
                     onClick={() => toggleModuleCompleted(activeModule.id)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-mono font-semibold border transition-colors inline-flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold border transition-colors inline-flex items-center gap-1.5 ${
                       completedModules.includes(activeModule.id)
                         ? 'bg-success-subtle border-success/40 text-success'
                         : 'bg-surface-elevated hover:bg-surface-high border-border-default text-text-secondary hover:text-text-primary'
@@ -1350,7 +1327,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>
-                      {completedModules.includes(activeModule.id) ? 'Completed' : 'Mark Complete'}
+                      {completedModules.includes(activeModule.id) ? 'Completed' : 'Mark Read'}
                     </span>
                   </button>
 
@@ -1363,30 +1340,28 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                       setCurrentPage(1);
                       setActiveTab('practice');
                     }}
-                    className="px-3.5 py-2 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-mono font-semibold inline-flex items-center gap-1.5 transition-colors"
+                    className="px-3 py-1.5 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-mono font-semibold inline-flex items-center gap-1.5 transition-colors"
                   >
-                    <span>Practice Pillar Problems</span>
+                    <span>Practice Challenges</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
 
-              {/* Interactive Visual Blueprint */}
-              <ModuleArchitectureBlueprint moduleId={activeModule.id} />
+              <ModuleInteractiveSimulator moduleId={activeModule.id} />
 
-              {/* Core Engineering Rules */}
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <h3 className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
-                  Core C++17 Engineering Rules &amp; Invariants
+                  Core Engineering Invariants
                 </h3>
-                <div className="grid grid-cols-1 gap-2.5">
+                <div className="grid grid-cols-1 gap-2">
                   {activeModule.keyRules.map((rule, idx) => (
                     <div
                       key={idx}
-                      className="flex items-start gap-3 text-sm text-text-secondary bg-surface-elevated/60 border border-border-subtle rounded-xl p-3.5"
+                      className="flex items-start gap-3 text-xs sm:text-sm text-text-secondary bg-surface-elevated/60 border border-border-subtle rounded-xl p-3"
                     >
-                      <span className="w-6 h-6 rounded-lg bg-success-subtle text-success font-mono text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
-                        0{idx + 1}
+                      <span className="w-5 h-5 rounded-md bg-success-subtle text-success font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                        {idx + 1}
                       </span>
                       <span className="leading-relaxed text-text-primary/90">
                         {renderInlineCode(rule)}
@@ -1396,66 +1371,48 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                 </div>
               </div>
 
-              {/* Properly Padded IDE Window for Canonical C++17 Pattern */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
-                    C++17 Implementation Reference
-                  </h3>
-                </div>
-
-                <div className="rounded-2xl border border-border-subtle overflow-hidden bg-canvas shadow-sm">
-                  {/* Window Titlebar */}
-                  <div className="px-4 py-2.5 bg-surface-elevated border-b border-border-subtle flex items-center justify-between text-xs font-mono">
+              <div className="space-y-2">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
+                  C++17 Reference Pattern
+                </h3>
+                <div className="rounded-xl border border-border-subtle overflow-hidden bg-canvas">
+                  <div className="px-4 py-2 bg-surface-elevated border-b border-border-subtle flex items-center justify-between text-xs font-mono">
                     <span className="text-text-secondary font-medium">
                       {MODULE_FILENAMES[activeModule.id] || 'pattern.cpp'}
                     </span>
-
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-surface-high text-[10px] text-text-muted">
-                        C++17
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void handleCopyCode(activeModule.id, activeModule.codeExample)
-                        }
-                        className="px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-high border border-border-subtle text-[11px] text-text-secondary hover:text-text-primary inline-flex items-center gap-1.5 transition-colors"
-                      >
-                        {copiedModuleId === activeModule.id ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-success" />
-                            <span className="text-success">Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Copy Snippet</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyCode(activeModule.id, activeModule.codeExample)}
+                      className="px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-high border border-border-subtle text-[11px] text-text-secondary hover:text-text-primary inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      {copiedModuleId === activeModule.id ? (
+                        <>
+                          <Check className="w-3 h-3 text-success" />
+                          <span className="text-success">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-
-                  {/* Code Body with Line Numbers & Generous Padding */}
-                  <div className="p-5 overflow-x-auto bg-canvas/80">
+                  <div className="p-4 overflow-x-auto bg-canvas/80">
                     <HighlightedCode
                       code={activeModule.codeExample}
                       language="cpp"
-                      className="text-[13px] leading-6"
+                      className="text-xs sm:text-[13px] leading-6"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Interview Red Flag / Pitfall Callout */}
-              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <div className="space-y-1 text-xs sm:text-sm">
-                  <div className="font-mono text-xs font-bold text-amber-400 uppercase tracking-wider">
-                    Interview Red Flag &amp; Memory Pitfall
+              <div className="p-3.5 rounded-xl bg-warning-subtle/35 border border-warning/35 flex items-start gap-3">
+                <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                <div className="space-y-0.5 text-xs sm:text-sm">
+                  <div className="font-mono text-[11px] font-bold text-warning uppercase tracking-wider">
+                    Interview Red Flag
                   </div>
                   <p className="text-text-secondary leading-relaxed">
                     {renderInlineCode(activeModule.interviewTrap)}
@@ -1463,17 +1420,16 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                 </div>
               </div>
 
-              {/* Recommended Hands-On Problems for this Module */}
               {(() => {
                 const targetTopic =
                   MODULE_TO_PILLAR_TOPIC[activeModule.id] || 'Encapsulation & Class Invariants';
                 const pillarMeta =
                   OOP_PILLAR_CARDS.find((p) => p.topic === targetTopic) || OOP_PILLAR_CARDS[0];
                 return (
-                  <div className="pt-2 space-y-3">
+                  <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
-                        Recommended Hands-On C++17 Challenges ({pillarMeta.idRange})
+                        Hands-On Problems ({pillarMeta.idRange})
                       </h3>
                       <button
                         type="button"
@@ -1484,16 +1440,16 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                         }}
                         className="text-xs font-mono text-primary hover:underline"
                       >
-                        View all 20 {pillarMeta.shortTitle} problems →
+                        Browse all 20 →
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       {pillarMeta.sampleProblems.map((sp) => (
                         <button
                           key={sp.id}
                           type="button"
                           onClick={() => onSelectProblem(sp.id)}
-                          className="p-3.5 rounded-xl bg-surface-elevated/70 hover:bg-surface-high border border-border-subtle hover:border-primary/40 text-left transition-all group flex flex-col justify-between gap-2"
+                          className="p-3 rounded-xl bg-surface-elevated/70 hover:bg-surface-high border border-border-subtle hover:border-primary/40 text-left transition-all group space-y-1.5"
                         >
                           <div className="flex items-center justify-between text-[11px] font-mono">
                             <span className="text-text-muted">#{sp.id}</span>
@@ -1502,8 +1458,8 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                                 sp.difficulty === 'Easy'
                                   ? 'text-success'
                                   : sp.difficulty === 'Medium'
-                                  ? 'text-warning'
-                                  : 'text-danger'
+                                    ? 'text-warning'
+                                    : 'text-danger'
                               }
                             >
                               {sp.difficulty}
@@ -1512,10 +1468,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                           <div className="text-xs font-semibold text-text-primary group-hover:text-primary transition-colors">
                             {sp.title}
                           </div>
-                          <div className="text-[11px] font-mono text-primary inline-flex items-center gap-1">
-                            <span>Open in C++17 IDE</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </div>
                         </button>
                       ))}
                     </div>
@@ -1523,22 +1475,21 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                 );
               })()}
 
-              {/* Previous / Next Module Footer */}
-              <div className="pt-4 border-t border-border-subtle flex items-center justify-between gap-3">
+              <div className="pt-3 border-t border-border-subtle flex items-center justify-between gap-3">
                 <button
                   type="button"
                   disabled={activeModuleIdx === 0}
                   onClick={() =>
                     setSelectedModuleId(OOPS_STUDY_MODULES[Math.max(0, activeModuleIdx - 1)].id)
                   }
-                  className="px-4 py-2 rounded-xl bg-surface-elevated hover:bg-surface-high disabled:opacity-40 border border-border-subtle text-xs font-mono text-text-primary inline-flex items-center gap-1.5 transition-colors"
+                  className="px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-high disabled:opacity-40 border border-border-subtle text-xs font-mono text-text-primary inline-flex items-center gap-1.5"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  <span>Previous Module</span>
+                  <span>Previous</span>
                 </button>
 
                 <span className="text-xs font-mono text-text-muted">
-                  Module {activeModuleIdx + 1} of {OOPS_STUDY_MODULES.length}
+                  Module {activeModuleIdx + 1} / {OOPS_STUDY_MODULES.length}
                 </span>
 
                 <button
@@ -1554,9 +1505,9 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                       ].id
                     );
                   }}
-                  className="px-4 py-2 rounded-xl bg-primary text-black disabled:opacity-40 text-xs font-semibold inline-flex items-center gap-1.5 transition-opacity"
+                  className="px-3.5 py-2 rounded-xl bg-primary text-black disabled:opacity-40 text-xs font-semibold inline-flex items-center gap-1.5"
                 >
-                  <span>Complete &amp; Next Module</span>
+                  <span>Complete &amp; Next</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -1565,28 +1516,26 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
         )}
 
         {/* ===================================================================== */}
-        {/* TAB 3: PLACEMENT OOPs MCQs ARENA (FOCUS MODE + GRID MODE)             */}
+        {/* TAB 3: VTABLE & C++17 OUTPUT MCQ ARENA                                */}
         {/* ===================================================================== */}
         {activeTab === 'mcq' && (
-          <div className="space-y-5">
-            {/* MCQ Arena Control Bar */}
-            <div className="bg-surface border border-border-subtle rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-4">
+            <div className="bg-surface border border-border-subtle rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-bold text-text-primary">
-                    Interactive C++17 &amp; OOPs Placement Quiz Arena
+                    C++17 &amp; OOPs Output Trace Arena
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full bg-primary-subtle text-primary font-mono text-xs font-semibold">
-                    {Object.keys(selectedAnswers).length} / {mcqBatch.length} Answered in Batch
+                    {Object.keys(selectedAnswers).length} / {filteredMcqs.length} Answered
                   </span>
                 </div>
                 <p className="text-xs text-text-muted font-mono">
-                  Session Score: {mcqScore.correct}/{mcqScore.attempted} ({mcqAccuracy}%) • Active Streak: {mcqScore.streak} • Press 1–4 or A–D to answer in Focus Mode
+                  Accuracy {mcqAccuracy}% ({mcqScore.correct}/{mcqScore.attempted}) • Streak {mcqScore.streak} • Shortcuts: 1–4 or A–D, Arrows
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
-                {/* Difficulty Filter */}
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-xl p-1 text-xs">
                   {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
                     <button
@@ -1607,7 +1556,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                   ))}
                 </div>
 
-                {/* Focus Mode vs Grid Mode Switcher */}
                 <div className="flex items-center gap-1 bg-surface-elevated border border-border-default rounded-xl p-1 text-xs">
                   <button
                     type="button"
@@ -1619,7 +1567,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                     }`}
                   >
                     <Target className="w-3.5 h-3.5" />
-                    <span>Focus Arena</span>
+                    <span>Focus</span>
                   </button>
                   <button
                     type="button"
@@ -1631,30 +1579,28 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                     }`}
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />
-                    <span>All 20 Grid</span>
+                    <span>All 20</span>
                   </button>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleRefreshMcqs}
-                  className="px-4 py-2 rounded-xl bg-primary text-black text-xs font-semibold hover:opacity-95 flex items-center gap-1.5 shadow-sm"
+                  className="px-3.5 py-2 rounded-xl bg-primary text-black text-xs font-semibold hover:opacity-95 flex items-center gap-1.5"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>New 20-Question Batch</span>
+                  <span>New 20 Batch</span>
                 </button>
               </div>
             </div>
 
-            {/* FOCUS ARENA MODE (1 Question at a time + 20-Question Matrix Sidebar) */}
             {mcqLayout === 'focus' && currentMcqItem && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                {/* Active Question Card */}
-                <div className="lg:col-span-8 bg-surface border border-border-subtle rounded-2xl p-6 space-y-5 shadow-sm">
+                <div className="lg:col-span-8 bg-surface border border-border-subtle rounded-2xl p-5 sm:p-6 space-y-5">
                   <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border-subtle">
                     <div className="flex items-center gap-2">
                       <span className="px-2.5 py-1 rounded-lg bg-primary-subtle text-primary font-mono text-xs font-bold">
-                        Question {activeMcqIdx + 1} of {filteredMcqs.length}
+                        Q{activeMcqIdx + 1} of {filteredMcqs.length}
                       </span>
                       <span className="text-xs font-mono font-semibold text-text-primary">
                         {currentMcqItem.subtopic}
@@ -1669,8 +1615,8 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                           currentMcqItem.difficulty === 'Easy'
                             ? 'bg-success-subtle text-success'
                             : currentMcqItem.difficulty === 'Hard'
-                            ? 'bg-danger-subtle text-danger'
-                            : 'bg-warning-subtle text-warning'
+                              ? 'bg-danger-subtle text-danger'
+                              : 'bg-warning-subtle text-warning'
                         }`}
                       >
                         {currentMcqItem.difficulty}
@@ -1678,10 +1624,8 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                     </div>
                   </div>
 
-                  {/* Formatted Question with Syntax-Highlighted C++ Code Blocks */}
                   {renderQuestionContent(currentMcqItem.question)}
 
-                  {/* Options A, B, C, D */}
                   <div className="space-y-2.5 pt-1">
                     {currentMcqItem.options.map((opt, idx) => {
                       const chosen = selectedAnswers[currentMcqItem.id];
@@ -1697,14 +1641,14 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                       if (isAnswered) {
                         if (isCorrectOpt) {
                           style =
-                            'bg-emerald-500/15 border-emerald-500/50 text-emerald-200 font-medium';
-                          badgeStyle = 'bg-emerald-500 text-black font-bold';
+                            'bg-success-subtle border-success/50 text-text-primary font-medium';
+                          badgeStyle = 'bg-success text-black font-bold';
                         } else if (isSelected) {
-                          style = 'bg-red-500/15 border-red-500/50 text-red-200';
-                          badgeStyle = 'bg-red-500 text-white font-bold';
+                          style = 'bg-danger-subtle border-danger/50 text-text-primary';
+                          badgeStyle = 'bg-danger text-white font-bold';
                         } else {
                           style =
-                            'bg-surface-elevated/30 border-border-subtle text-text-muted opacity-65';
+                            'bg-surface-elevated/40 border-border-subtle text-text-muted opacity-65';
                         }
                       }
 
@@ -1725,33 +1669,31 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                             <span className="leading-relaxed">{renderInlineCode(opt)}</span>
                           </div>
                           {isAnswered && isCorrectOpt && (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                           )}
                           {isAnswered && isSelected && !isCorrectOpt && (
-                            <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                            <XCircle className="w-4 h-4 text-danger shrink-0" />
                           )}
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* Instant Explanation & Shortcut Tip */}
                   {selectedAnswers[currentMcqItem.id] !== undefined && (
                     <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-2 text-xs sm:text-sm">
                       <div className="font-mono text-xs font-bold uppercase tracking-wider text-text-primary">
-                        Engineering Explanation
+                        Memory &amp; Language Rule
                       </div>
                       <p className="text-text-secondary leading-relaxed">
                         {renderInlineCode(currentMcqItem.explanation)}
                       </p>
                       <div className="pt-1 flex items-start gap-2 text-primary font-mono text-xs">
                         <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
-                        <span>Shortcut Rule: {renderInlineCode(currentMcqItem.shortcutTip)}</span>
+                        <span>Shortcut: {renderInlineCode(currentMcqItem.shortcutTip)}</span>
                       </div>
                     </div>
                   )}
 
-                  {/* Prev / Next Navigation Footer */}
                   <div className="pt-3 border-t border-border-subtle flex items-center justify-between">
                     <button
                       type="button"
@@ -1762,10 +1704,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                       <ChevronLeft className="w-4 h-4" />
                       <span>Previous</span>
                     </button>
-
-                    <span className="text-xs font-mono text-text-muted hidden sm:inline">
-                      Tip: Use keys 1–4 (or A–D) &amp; ArrowRight
-                    </span>
 
                     <button
                       type="button"
@@ -1781,7 +1719,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                   </div>
                 </div>
 
-                {/* Right Question Navigator Matrix */}
                 <aside className="lg:col-span-4 bg-surface border border-border-subtle rounded-2xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono uppercase tracking-wider text-text-muted font-semibold">
@@ -1803,8 +1740,8 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                         'bg-surface-elevated border-border-subtle text-text-secondary hover:text-text-primary';
                       if (isAnswered) {
                         btnClass = isRight
-                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 font-bold'
-                          : 'bg-red-500/20 border-red-500/50 text-red-300 font-bold';
+                          ? 'bg-success-subtle border-success/50 text-success font-bold'
+                          : 'bg-danger-subtle border-danger/50 text-danger font-bold';
                       }
                       if (isCurrent) {
                         btnClass += ' ring-2 ring-primary border-primary';
@@ -1837,7 +1774,7 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Current Streak</span>
+                      <span>Active Streak</span>
                       <span className="font-mono text-amber-400 font-semibold">
                         {mcqScore.streak} in a row
                       </span>
@@ -1847,7 +1784,6 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
               </div>
             )}
 
-            {/* ALL 20 GRID MODE */}
             {mcqLayout === 'grid' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                 {filteredMcqs.map((item, qIdx) => {
@@ -1856,73 +1792,68 @@ export const OopsPage: React.FC<OopsPageProps> = ({ onSelectProblem, onTabChange
                   return (
                     <div
                       key={item.id}
-                      className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-3.5 flex flex-col justify-between"
+                      className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-3.5"
                     >
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
-                          <span className="text-primary font-semibold">
-                            Q{qIdx + 1} • {item.subtopic}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-text-muted">{item.askedIn}</span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full ${
-                                item.difficulty === 'Easy'
-                                  ? 'bg-success-subtle text-success'
-                                  : item.difficulty === 'Hard'
-                                  ? 'bg-danger-subtle text-danger'
-                                  : 'bg-warning-subtle text-warning'
-                              }`}
-                            >
-                              {item.difficulty}
-                            </span>
-                          </div>
-                        </div>
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                        <span className="text-primary font-semibold">
+                          Q{qIdx + 1} • {item.subtopic}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full ${
+                            item.difficulty === 'Easy'
+                              ? 'bg-success-subtle text-success'
+                              : item.difficulty === 'Hard'
+                                ? 'bg-danger-subtle text-danger'
+                                : 'bg-warning-subtle text-warning'
+                          }`}
+                        >
+                          {item.difficulty}
+                        </span>
+                      </div>
 
-                        {renderQuestionContent(item.question)}
+                      {renderQuestionContent(item.question)}
 
-                        <div className="space-y-2 pt-1">
-                          {item.options.map((opt, idx) => {
-                            const isSelected = chosen === idx;
-                            const isCorrectOpt = idx === item.correctIndex;
-                            const letter = String.fromCharCode(65 + idx);
-                            let style =
-                              'bg-surface-elevated border-border-subtle hover:border-primary/40 text-text-secondary';
-                            if (isAnswered) {
-                              if (isCorrectOpt) {
-                                style =
-                                  'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 font-medium';
-                              } else if (isSelected) {
-                                style = 'bg-red-500/15 border-red-500/50 text-red-300';
-                              } else {
-                                style =
-                                  'bg-surface-elevated/40 border-border-subtle text-text-muted opacity-70';
-                              }
+                      <div className="space-y-2 pt-1">
+                        {item.options.map((opt, idx) => {
+                          const isSelected = chosen === idx;
+                          const isCorrectOpt = idx === item.correctIndex;
+                          const letter = String.fromCharCode(65 + idx);
+                          let style =
+                            'bg-surface-elevated border-border-subtle hover:border-primary/40 text-text-secondary';
+                          if (isAnswered) {
+                            if (isCorrectOpt) {
+                              style =
+                                'bg-success-subtle border-success/50 text-text-primary font-medium';
+                            } else if (isSelected) {
+                              style = 'bg-danger-subtle border-danger/50 text-text-primary';
+                            } else {
+                              style =
+                                'bg-surface-elevated/40 border-border-subtle text-text-muted opacity-70';
                             }
-                            return (
-                              <button
-                                key={idx}
-                                type="button"
-                                disabled={isAnswered}
-                                onClick={() => handleAnswerMcq(item, idx)}
-                                className={`w-full text-left px-3.5 py-2.5 rounded-xl border text-xs transition-all flex items-center justify-between gap-2 ${style}`}
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  <span className="font-mono font-bold text-text-muted">
-                                    {letter}.
-                                  </span>
-                                  <span>{renderInlineCode(opt)}</span>
-                                </div>
-                                {isAnswered && isCorrectOpt && (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                                )}
-                                {isAnswered && isSelected && !isCorrectOpt && (
-                                  <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
+                          }
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              disabled={isAnswered}
+                              onClick={() => handleAnswerMcq(item, idx)}
+                              className={`w-full text-left px-3.5 py-2.5 rounded-xl border text-xs transition-all flex items-center justify-between gap-2 ${style}`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <span className="font-mono font-bold text-text-muted">
+                                  {letter}.
+                                </span>
+                                <span>{renderInlineCode(opt)}</span>
+                              </div>
+                              {isAnswered && isCorrectOpt && (
+                                <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                              )}
+                              {isAnswered && isSelected && !isCorrectOpt && (
+                                <XCircle className="w-4 h-4 text-danger shrink-0" />
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
 
                       {isAnswered && (
