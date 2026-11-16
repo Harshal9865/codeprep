@@ -10,38 +10,37 @@ interface StreakSplashScreenProps {
 type SplashPhase = 'ignite' | 'surge' | 'closing';
 
 /**
- * 16x16 Crisp Pixel-Art Fire Emblem in Crimson Red & Hot White Core
+ * 16x16 Crisp Pixel-Art Fire Emblem in Orange, Yellow & Hot White Core
  */
 const PixelFireCodeEmblem: React.FC<{ isSurge: boolean }> = ({ isSurge }) => (
   <svg
     viewBox="0 0 16 16"
-    className={`w-20 h-20 transition-transform duration-300 ${
-      isSurge ? 'scale-110 drop-shadow-[0_0_24px_rgba(239,68,68,0.85)]' : 'drop-shadow-[0_0_12px_rgba(239,68,68,0.55)]'
+      isSurge ? 'scale-110 drop-shadow-[0_0_24px_rgba(251,146,60,0.9)]' : 'drop-shadow-[0_0_14px_rgba(250,204,21,0.6)]'
     }`}
     shapeRendering="crispEdges"
     aria-hidden="true"
   >
-    {/* Deep Dark Crimson Outer Flame */}
-    <rect x="7" y="1" width="2" height="1" fill="#ef4444" />
-    <rect x="6" y="2" width="4" height="1" fill="#ef4444" />
-    <rect x="5" y="3" width="6" height="2" fill="#dc2626" />
-    <rect x="4" y="5" width="8" height="2" fill="#dc2626" />
-    <rect x="3" y="7" width="10" height="4" fill="#b91c1c" />
-    <rect x="4" y="11" width="8" height="2" fill="#991b1b" />
-    <rect x="5" y="13" width="6" height="1" fill="#7f1d1d" />
-    {/* Bright Scarlet Inner Flame */}
-    <rect x="6" y="5" width="4" height="2" fill="#f87171" />
-    <rect x="5" y="7" width="6" height="4" fill="#ef4444" />
-    <rect x="6" y="11" width="4" height="2" fill="#dc2626" />
-    {/* Hot White Pixel Core */}
-    <rect x="7" y="7" width="2" height="1" fill="#fecaca" />
+    {/* Deep Amber & Orange Outer Flame */}
+    <rect x="7" y="1" width="2" height="1" fill="#fde047" />
+    <rect x="6" y="2" width="4" height="1" fill="#fb923c" />
+    <rect x="5" y="3" width="6" height="2" fill="#f97316" />
+    <rect x="4" y="5" width="8" height="2" fill="#ea580c" />
+    <rect x="3" y="7" width="10" height="4" fill="#ea580c" />
+    <rect x="4" y="11" width="8" height="2" fill="#c2410c" />
+    <rect x="5" y="13" width="6" height="1" fill="#9a3412" />
+    {/* Bright Golden Yellow Mid Flame */}
+    <rect x="6" y="5" width="4" height="2" fill="#fde047" />
+    <rect x="5" y="7" width="6" height="4" fill="#facc15" />
+    <rect x="6" y="11" width="4" height="2" fill="#f59e0b" />
+    {/* Hot White-Yellow Pixel Core */}
+    <rect x="7" y="7" width="2" height="1" fill="#fef08a" />
     <rect x="6" y="8" width="4" height="3" fill="#ffffff" />
-    <rect x="7" y="11" width="2" height="1" fill="#fee2e2" />
+    <rect x="7" y="11" width="2" height="1" fill="#fef9c3" />
     {/* Rising Code Sparks */}
     <rect x="2" y="3" width="1" height="1" fill="#ffffff" />
-    <rect x="13" y="2" width="1" height="1" fill="#ef4444" />
+    <rect x="13" y="2" width="1" height="1" fill="#fde047" />
     <rect x="12" y="5" width="1" height="1" fill="#ffffff" />
-    <rect x="3" y="5" width="1" height="1" fill="#f87171" />
+    <rect x="3" y="5" width="1" height="1" fill="#fb923c" />
   </svg>
 );
 
@@ -139,20 +138,20 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
     canvas.width = W;
     canvas.height = H;
 
-    // 36-level Red -> Bright Crimson -> Pale Pink -> Pure White Palette
+    // 36-level Deep Amber -> Vivid Orange -> Golden Yellow -> Hot White Palette
     const palette: Array<[number, number, number, number]> = [];
     for (let i = 0; i < 36; i++) {
       if (i === 0) {
         palette.push([2, 2, 2, 0]);
       } else if (i < 10) {
         const t = i / 10;
-        palette.push([Math.round(50 + t * 135), Math.round(t * 14), Math.round(t * 14), Math.round(90 + t * 145)]);
+        palette.push([Math.round(120 + t * 129), Math.round(32 + t * 83), Math.round(t * 22), Math.round(95 + t * 145)]);
       } else if (i < 24) {
         const t = (i - 10) / 14;
-        palette.push([Math.round(185 + t * 70), Math.round(14 + t * 48), Math.round(14 + t * 48), 255]);
+        palette.push([Math.round(249 + t * 6), Math.round(115 + t * 109), Math.round(22 + t * 50), 255]);
       } else {
         const t = (i - 24) / 11;
-        palette.push([255, Math.round(62 + t * 193), Math.round(62 + t * 193), 255]);
+        palette.push([255, Math.round(224 + t * 31), Math.round(72 + t * 183), 255]);
       }
     }
 
@@ -241,16 +240,18 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
       />
 
       {/* Floating Pixel Code Tokens rising from flames */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-10 flex justify-around px-6 opacity-75">
+      <div className="pointer-events-none absolute inset-x-0 bottom-10 flex justify-around px-6 opacity-80">
         {CODE_TOKENS.map((tok, idx) => (
           <span
             key={tok}
-            className={`font-mono text-[11px] font-bold px-1.5 py-0.5 border animate-pixel-float ${
-              idx % 2 === 0
-                ? 'text-white border-white/30 bg-red-600/30'
-                : 'text-red-300 border-red-500/40 bg-black/50'
-            }`}
-            style={{ animationDelay: `${idx * 160}ms` }}
+            className={`font - mono text - [11px] font - bold px - 1.5 py - 0.5 border animate - pixel - float ${
+  idx % 3 === 0
+    ? 'text-white border-white/35 bg-orange-500/35'
+    : idx % 3 === 1
+      ? 'text-yellow-300 border-amber-400/50 bg-black/55'
+      : 'text-orange-200 border-orange-400/45 bg-orange-950/50'
+} `}
+            style={{ animationDelay: `${ idx * 160 } ms` }}
           >
             {tok}
           </span>
@@ -259,25 +260,25 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
 
       {/* Center Streak & Code Ignition Card */}
       <div
-        className={`relative z-10 flex flex-col items-center text-center px-6 py-7 rounded-none border-2 transition-all duration-300 bg-black/80 backdrop-blur-sm max-w-sm w-[90%] ${
-          phase === 'surge'
-            ? 'border-white scale-105 shadow-[0_0_40px_rgba(239,68,68,0.75)]'
-            : 'border-red-500/70 shadow-[0_0_24px_rgba(220,38,38,0.45)]'
-        }`}
+        className={`relative z - 10 flex flex - col items - center text - center px - 6 py - 7 rounded - none border - 2 transition - all duration - 300 bg - black / 80 backdrop - blur - sm max - w - sm w - [90 %] ${
+  phase === 'surge'
+      ? 'border-white scale-105 shadow-[0_0_42px_rgba(250,204,21,0.75)]'
+      : 'border-amber-400/75 shadow-[0_0_26px_rgba(249,115,22,0.5)]'
+} `}
       >
         <PixelFireCodeEmblem isSurge={phase === 'surge'} />
 
         <div className="mt-3 space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border border-red-500/50 bg-red-950/60 font-mono text-[11px] tracking-widest uppercase text-red-200">
-            <Flame className="w-3 h-3 text-red-400" />
-            <span>{displayName ? `Welcome, ${displayName}` : 'CodePrep Ignited'}</span>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border border-amber-400/50 bg-orange-950/60 font-mono text-[11px] tracking-widest uppercase text-amber-100">
+            <Flame className="w-3 h-3 text-amber-400" />
+            <span>{displayName ? `Welcome, ${ displayName } ` : 'CodePrep Ignited'}</span>
           </div>
 
           <div className="flex items-baseline justify-center gap-2 pt-2 font-mono">
             <span className="text-5xl font-black tracking-tight text-white">
               {displayStreak}
             </span>
-            <span className="text-sm font-bold uppercase tracking-wider text-red-400">
+            <span className="text-sm font-bold uppercase tracking-wider text-amber-400">
               Day{displayStreak === 1 ? '' : 's'} Streak
             </span>
           </div>
@@ -289,9 +290,9 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
 
         {/* Pixelated Ignition Meter */}
         <div className="w-full mt-5 space-y-1.5">
-          <div className="w-full h-2 bg-neutral-900 border border-red-900/70 overflow-hidden p-0.5">
+          <div className="w-full h-2 bg-neutral-900 border border-orange-900/70 overflow-hidden p-0.5">
             <div
-              className="h-full bg-gradient-to-r from-red-700 via-red-500 to-white animate-progress-fill"
+              className="h-full bg-gradient-to-r from-orange-600 via-yellow-400 to-white animate-progress-fill"
               style={{ animationDuration: '2.9s' }}
             />
           </div>
@@ -312,10 +313,10 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
       <button
         type="button"
         onClick={() => onCompleteRef.current()}
-        className="fixed top-4 right-4 z-30 inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/80 hover:bg-red-950/90 border border-red-500/50 text-xs font-mono text-white transition-colors"
+        className="fixed top-4 right-4 z-30 inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/80 hover:bg-orange-950/90 border border-amber-400/50 text-xs font-mono text-white transition-colors"
       >
         <span>Skip</span>
-        <ArrowRight className="w-3.5 h-3.5 text-red-400" />
+        <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
       </button>
 
       {/* Top & Bottom Pixelated Closing Shutters (ignite edge meets at center at 3.0s) */}
@@ -325,13 +326,13 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
             aria-hidden="true"
             className="fixed inset-x-0 top-0 h-1/2 z-40 bg-[#020202] animate-fire-shutter-top flex flex-col justify-end pointer-events-none"
           >
-            {/* Pixelated Red + White Ignition Edge on Top Shutter */}
-            <div className="w-full h-3 bg-gradient-to-r from-red-700 via-red-500 to-red-700 flex justify-around items-center">
+            {/* Pixelated Orange + Yellow + White Ignition Edge on Top Shutter */}
+            <div className="w-full h-3 bg-gradient-to-r from-orange-600 via-yellow-400 to-orange-600 flex justify-around items-center">
               <span className="w-6 h-1.5 bg-white" />
               <span className="w-10 h-2 bg-white" />
-              <span className="w-4 h-1.5 bg-red-200" />
+              <span className="w-4 h-1.5 bg-yellow-200" />
               <span className="w-12 h-2 bg-white" />
-              <span className="w-6 h-1.5 bg-white" />
+              <span className="w-6 h-1.5 bg-yellow-300" />
             </div>
           </div>
 
@@ -339,12 +340,12 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
             aria-hidden="true"
             className="fixed inset-x-0 bottom-0 h-1/2 z-40 bg-[#020202] animate-fire-shutter-bottom flex flex-col justify-start pointer-events-none"
           >
-            {/* Pixelated Red + White Ignition Edge on Bottom Shutter */}
-            <div className="w-full h-3 bg-gradient-to-r from-red-700 via-white to-red-700 flex justify-around items-center">
+            {/* Pixelated Orange + Yellow + White Ignition Edge on Bottom Shutter */}
+            <div className="w-full h-3 bg-gradient-to-r from-orange-600 via-white to-orange-600 flex justify-around items-center">
               <span className="w-8 h-1.5 bg-white" />
-              <span className="w-4 h-2 bg-red-300" />
+              <span className="w-4 h-2 bg-yellow-300" />
               <span className="w-12 h-2 bg-white" />
-              <span className="w-6 h-1.5 bg-red-200" />
+              <span className="w-6 h-1.5 bg-amber-200" />
               <span className="w-8 h-1.5 bg-white" />
             </div>
           </div>
