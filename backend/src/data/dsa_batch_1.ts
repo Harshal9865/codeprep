@@ -1,5 +1,6 @@
 import { ProblemDefinition } from '../judge/types';
 import { DSA_20_PROBLEMS } from './dsa20';
+import { buildBatch1ProblemSpec } from './batchProblemSpecs';
 
 const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
   {
@@ -182,6 +183,7 @@ const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
     ];
     const name = titles[idx] || `Array Problem Variant ${id}`;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const spec = buildBatch1ProblemSpec(name);
 
     return {
       id,
@@ -190,33 +192,16 @@ const ADDITIONAL_BATCH_1: ProblemDefinition[] = [
       difficulty: diff,
       category: 'DSA' as const,
       topic: 'Arrays and Hashing',
-      pattern: 'Prefix Sum / Matrix Traversal / In-Place Manipulation',
-      statement: `Given an array or matrix structure, solve the standard interview problem for ${name}. Optimize time and auxiliary space.`,
-      constraints: '1 <= nums.length <= 10^5\n-10^4 <= nums[i] <= 10^4',
-      examples: [
-        { input: '[1,1,1] | 2', output: '2', explanation: 'Subarrays summing to target.' },
-        { input: '[1,2,3] | 3', output: '2' },
-      ],
+      pattern: 'Prefix Sum / Subarray Target Accumulation',
+      statement: spec.statement,
+      constraints: spec.constraints,
+      examples: spec.examples,
       functionSignature: 'int solve(vector<int>& nums, int k)',
       paramTypes: ['vector<int>', 'int'],
       returnType: 'int',
       defaultCodeStub: `class Solution {\npublic:\n    int solve(vector<int>& nums, int k) {\n        // Your code here\n    }\n};`,
-      sampleTestCases: [
-        { input: '[1,1,1] | 2', expectedOutput: '2' },
-        { input: '[1,2,3] | 3', expectedOutput: '2' },
-        { input: '[1,-1,0] | 0', expectedOutput: '3' },
-      ],
-      hiddenTestCases: [
-        { input: '[10,2,-2,-20,10] | -10', expectedOutput: '3', isHidden: true },
-        { input: '[] | 0', expectedOutput: '0', isHidden: true },
-        { input: '[5] | 5', expectedOutput: '1', isHidden: true },
-        { input: '[5] | 0', expectedOutput: '0', isHidden: true },
-        { input: '[0,0,0,0] | 0', expectedOutput: '10', isHidden: true },
-        { input: '[-1,-1,1] | 0', expectedOutput: '1', isHidden: true },
-        { input: '[3,4,7,2,-3,1,4,2] | 7', expectedOutput: '4', isHidden: true },
-        { input: '[-2,-1,-3] | -3', expectedOutput: '2', isHidden: true },
-        { input: '[1,2,3,4,5] | 15', expectedOutput: '1', isHidden: true },
-      ],
+      sampleTestCases: spec.sampleTestCases,
+      hiddenTestCases: spec.hiddenTestCases,
     };
   }),
 ];

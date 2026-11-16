@@ -1,4 +1,5 @@
 import { ProblemDefinition } from '../judge/types';
+import { buildBatch9ProblemSpec } from './batchProblemSpecs';
 
 export const DSA_BATCH_9: ProblemDefinition[] = Array.from({ length: 50 }, (_, i) => {
   const id = 401 + i;
@@ -41,6 +42,7 @@ export const DSA_BATCH_9: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
 
   const title = titles[i] || `Greedy / Interval Problem ${id}`;
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const spec = buildBatch9ProblemSpec(title, topic);
 
   return {
     id,
@@ -50,31 +52,15 @@ export const DSA_BATCH_9: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     category: 'DSA' as const,
     topic,
     pattern,
-    statement: `Solve ${title} by proving that local decisions yield global optimality, or by interval sorting. Ensure all corner cases are handled.`,
-    constraints: '1 <= N <= 10^5\nAll operations must execute within standard bounds.',
-    examples: [
-      { input: '[2,3,1,1,4]', output: 'true', explanation: 'Reach the last index with minimum steps.' },
-    ],
+    statement: spec.statement,
+    constraints: spec.constraints,
+    examples: spec.examples,
     functionSignature: 'bool solve(vector<int>& nums)',
     paramTypes: ['vector<int>'],
     returnType: 'bool',
     defaultCodeStub: `class Solution {\npublic:\n    bool solve(vector<int>& nums) {\n        // Your code here\n    }\n};`,
-    sampleTestCases: [
-      { input: '[2,3,1,1,4]', expectedOutput: 'true' },
-      { input: '[3,2,1,0,4]', expectedOutput: 'false' },
-      { input: '[2,0,0]', expectedOutput: 'true' },
-    ],
-    hiddenTestCases: [
-      { input: '[0]', expectedOutput: 'true', isHidden: true },
-      { input: '[1,0,1,0]', expectedOutput: 'false', isHidden: true },
-      { input: '[]', expectedOutput: 'true', isHidden: true },
-      { input: '[0,1]', expectedOutput: 'false', isHidden: true },
-      { input: '[1,0]', expectedOutput: 'true', isHidden: true },
-      { input: '[1,1,1,0]', expectedOutput: 'true', isHidden: true },
-      { input: '[1,1,0,1]', expectedOutput: 'false', isHidden: true },
-      { input: '[5,0,0,0,0]', expectedOutput: 'true', isHidden: true },
-      { input: '[3,0,8,2,0,0,1]', expectedOutput: 'true', isHidden: true },
-    ],
+    sampleTestCases: spec.sampleTestCases,
+    hiddenTestCases: spec.hiddenTestCases,
   };
 });
 

@@ -1,4 +1,5 @@
 import { ProblemDefinition } from '../judge/types';
+import { buildBatch4ProblemSpec } from './batchProblemSpecs';
 
 export const DSA_BATCH_4: ProblemDefinition[] = Array.from({ length: 50 }, (_, i) => {
   const id = 151 + i;
@@ -38,6 +39,7 @@ export const DSA_BATCH_4: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
 
   const title = titles[i] || `Data Structure Problem ${id}`;
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const spec = buildBatch4ProblemSpec(title);
 
   return {
     id,
@@ -47,31 +49,15 @@ export const DSA_BATCH_4: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     category: 'DSA' as const,
     topic,
     pattern,
-    statement: `Implement ${title}. Ensure all algorithmic invariants are preserved and operations adhere strictly to required time complexities.`,
-    constraints: '1 <= nums.length <= 10^5\n-10^9 <= nums[i] <= 10^9',
-    examples: [
-      { input: '[1,3,4,2,2]', output: '2', explanation: 'Optimal result computed under problem constraints.' },
-    ],
+    statement: spec.statement,
+    constraints: spec.constraints,
+    examples: spec.examples,
     functionSignature: 'int solve(vector<int>& nums)',
     paramTypes: ['vector<int>'],
     returnType: 'int',
     defaultCodeStub: `class Solution {\npublic:\n    int solve(vector<int>& nums) {\n        // Your code here\n    }\n};`,
-    sampleTestCases: [
-      { input: '[1,3,4,2,2]', expectedOutput: '2' },
-      { input: '[3,1,3,4,2]', expectedOutput: '3' },
-      { input: '[1,1]', expectedOutput: '1' },
-    ],
-    hiddenTestCases: [
-      { input: '[2,2,2,2,2]', expectedOutput: '2', isHidden: true },
-      { input: '[]', expectedOutput: '0', isHidden: true },
-      { input: '[1,2,2]', expectedOutput: '2', isHidden: true },
-      { input: '[1,2,1]', expectedOutput: '1', isHidden: true },
-      { input: '[5,4,3,2,1,5]', expectedOutput: '5', isHidden: true },
-      { input: '[1,3,4,2,1]', expectedOutput: '1', isHidden: true },
-      { input: '[4,3,1,4,2]', expectedOutput: '4', isHidden: true },
-      { input: '[2,5,9,6,9,3,8,9,7,1]', expectedOutput: '9', isHidden: true },
-      { input: '[6,1,2,3,4,5,6]', expectedOutput: '6', isHidden: true },
-    ],
+    sampleTestCases: spec.sampleTestCases,
+    hiddenTestCases: spec.hiddenTestCases,
   };
 });
 

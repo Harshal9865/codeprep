@@ -1,4 +1,5 @@
 import { ProblemDefinition } from '../judge/types';
+import { buildBatch6ProblemSpec } from './batchProblemSpecs';
 
 export const DSA_BATCH_6: ProblemDefinition[] = Array.from({ length: 50 }, (_, i) => {
   const id = 251 + i;
@@ -42,6 +43,7 @@ export const DSA_BATCH_6: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
 
   const title = titles[i] || `Heap / Graph Problem ${id}`;
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const spec = buildBatch6ProblemSpec(title, topic);
 
   return {
     id,
@@ -51,31 +53,15 @@ export const DSA_BATCH_6: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     category: 'DSA' as const,
     topic,
     pattern,
-    statement: `Implement an optimal solution for ${title}. Demonstrate mastery of ${topic} algorithms and clear runtime guarantees.`,
-    constraints: '1 <= N <= 10^5\nAll inputs within valid domain boundaries.',
-    examples: [
-      { input: '[1,3,2]', output: '2', explanation: 'Computed verified output under algorithmic constraints.' },
-    ],
+    statement: spec.statement,
+    constraints: spec.constraints,
+    examples: spec.examples,
     functionSignature: 'int solve(vector<int>& nums)',
     paramTypes: ['vector<int>'],
     returnType: 'int',
     defaultCodeStub: `class Solution {\npublic:\n    int solve(vector<int>& nums) {\n        // Your code here\n    }\n};`,
-    sampleTestCases: [
-      { input: '[1,3,2]', expectedOutput: '2' },
-      { input: '[4,5,6]', expectedOutput: '5' },
-      { input: '[10,20,30,40]', expectedOutput: '25' },
-    ],
-    hiddenTestCases: [
-      { input: '[1]', expectedOutput: '1', isHidden: true },
-      { input: '[]', expectedOutput: '0', isHidden: true },
-      { input: '[0,0,0,0]', expectedOutput: '0', isHidden: true },
-      { input: '[-5,-10,-15]', expectedOutput: '-10', isHidden: true },
-      { input: '[-1,1,-2,2]', expectedOutput: '0', isHidden: true },
-      { input: '[1,2]', expectedOutput: '1', isHidden: true },
-      { input: '[-10,1,2]', expectedOutput: '-2', isHidden: true },
-      { input: '[7,7,7,7,7]', expectedOutput: '7', isHidden: true },
-      { input: '[1000000000,1000000000,1000000000]', expectedOutput: '1000000000', isHidden: true },
-    ],
+    sampleTestCases: spec.sampleTestCases,
+    hiddenTestCases: spec.hiddenTestCases,
   };
 });
 

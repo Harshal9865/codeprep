@@ -37,6 +37,13 @@ export interface Problem {
   defaultCodeStub?: string;
   userDraftCode?: string;
   sampleTestCases: TestCase[];
+  parameters?: Array<{ name: string; type: string }>;
+  returnType?: string;
+  expectedComplexity?: { time: string; space: string };
+  hints?: string[];
+  followUp?: string;
+  inputFormatNote?: string;
+  tags?: string[];
   similarProblems?: Array<{ id: number; title: string; difficulty: Difficulty }>;
   isBookmark?: boolean;
   userNotes?: string;

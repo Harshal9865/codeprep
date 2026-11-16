@@ -3,6 +3,7 @@ import { DSA_500_PROBLEMS } from '../data/dsa500';
 import { SQL_100_PROBLEMS } from '../data/sql100';
 import { Logger } from '../utils/logger';
 import { UserProblemStateService } from './userProblemState.service';
+import { enrichProblemDetails } from './problemEnricher';
 
 export interface ProblemFilterOptions {
   category?: string;
@@ -250,6 +251,52 @@ export class ProblemService {
             create: {
               id: prob.id,
               slug,
+              title: prob.title,
+              difficulty: prob.difficulty,
+              category: prob.category,
+              topic: prob.topic,
+              pattern: prob.pattern,
+              statement: prob.statement,
+              constraints: prob.constraints,
+              examplesJson: JSON.stringify(prob.examples),
+              functionSignature: prob.functionSignature,
+              cppHarnessTemplate: prob.defaultCodeStub || null,
+            },
+          });
+        }
+      }
+
+      // Synchronize upgraded LeetCode-style batch descriptions & worked examples for problems 26..500
+      const batchSentinel31 = existingCount >= totalTarget
+        ? await prisma.problem.findUnique({ where: { id: 31 }, select: { statement: true, examplesJson: true } })
+        : null;
+      const expected31 = DSA_500_PROBLEMS.find((p) => p.id === 31);
+      const needsBatchSync =
+        Boolean(expected31) &&
+        existingCount >= totalTarget &&
+        (batchSentinel31?.statement !== expected31!.statement ||
+          batchSentinel31?.examplesJson !== JSON.stringify(expected31!.examples));
+
+      if (needsBatchSync) {
+        const batchProblemsToSync = DSA_500_PROBLEMS.filter((p) => p.id >= 21 && p.id <= 500);
+        for (const prob of batchProblemsToSync) {
+          await prisma.problem.upsert({
+            where: { id: prob.id },
+            update: {
+              slug: prob.slug,
+              title: prob.title,
+              difficulty: prob.difficulty,
+              topic: prob.topic,
+              pattern: prob.pattern,
+              statement: prob.statement,
+              constraints: prob.constraints,
+              examplesJson: JSON.stringify(prob.examples),
+              functionSignature: prob.functionSignature,
+              cppHarnessTemplate: prob.defaultCodeStub || null,
+            },
+            create: {
+              id: prob.id,
+              slug: prob.slug,
               title: prob.title,
               difficulty: prob.difficulty,
               category: prob.category,
@@ -701,15 +748,19 @@ export class ProblemService {
 
     if (!problem) return null;
 
-    let examples = [];
+    let dbExamples = [];
     try {
-      examples = JSON.parse(problem.examplesJson);
+      dbExamples = JSON.parse(problem.examplesJson);
     } catch {
-      examples = [];
+      dbExamples = [];
     }
 
-    // Find in memory definition for sample and hidden test cases, with fallback to examples
+    // Find in memory definition for sample/hidden test cases and up-to-date LeetCode specification
     const def = DSA_500_PROBLEMS.find((p) => p.id === id) || SQL_100_PROBLEMS.find((p) => p.id === id);
+    const examples =
+      def?.examples && def.examples.length > 0
+        ? def.examples
+        : dbExamples;
 
     const sampleTestCases =
       def?.sampleTestCases && def.sampleTestCases.length > 0
@@ -751,8 +802,28 @@ export class ProblemService {
       take: 4,
     });
 
+    const effectiveStatement = def?.statement || problem.statement;
+    const effectiveConstraints = def?.constraints || problem.constraints;
+    const effectivePattern = def?.pattern || problem.pattern;
+    const effectiveSignature = def?.functionSignature || problem.functionSignature;
+
+    const enrichedDetails = enrichProblemDetails({
+      id: problem.id,
+      slug: problem.slug,
+      title: problem.title,
+      category: problem.category,
+      topic: problem.topic,
+      pattern: effectivePattern,
+      constraints: effectiveConstraints,
+      functionSignature: effectiveSignature,
+    });
+
     return {
       ...problem,
+      statement: effectiveStatement,
+      constraints: effectiveConstraints,
+      pattern: effectivePattern,
+      functionSignature: effectiveSignature,
       isBookmark: effectiveState.isBookmark,
       userNotes: effectiveState.userNotes,
       unlockedAiSolution: effectiveState.unlockedAiSolution,
@@ -760,13 +831,14 @@ export class ProblemService {
       examples,
       schemaDdl: def && 'schemaDdl' in def ? def.schemaDdl : undefined,
       expectedResult,
-      defaultCodeStub: problem.cppHarnessTemplate || def?.defaultCodeStub || '',
+      defaultCodeStub: def?.defaultCodeStub || problem.cppHarnessTemplate || '',
       userDraftCode: draft ? draft.code : null,
       sampleTestCases,
       similarProblems,
       isSolved,
       recentSubmissions: submissions,
       aiLesson: lesson || null,
+      ...enrichedDetails,
     };
   }
 

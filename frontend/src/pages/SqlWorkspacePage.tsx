@@ -39,6 +39,7 @@ import {
   Eye,
   Code2,
   GitCompare,
+  Lightbulb,
 } from 'lucide-react';
 
 interface SqlProblemData {
@@ -46,8 +47,14 @@ interface SqlProblemData {
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   topic: string;
+  pattern?: string;
   statement: string;
   constraints: string;
+  examples?: Array<{ input: string; output: string; explanation?: string }>;
+  hints?: string[];
+  followUp?: string;
+  expectedComplexity?: { time: string; space: string };
+  tags?: string[];
   schemaDdl?: string;
   expectedResult?: Array<Record<string, unknown>>;
   defaultCodeStub?: string;
@@ -97,6 +104,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   const [solutionError, setSolutionError] = useState<string | null>(null);
   const [isUnlockingSolution, setIsUnlockingSolution] = useState(false);
   const [copiedSolution, setCopiedSolution] = useState(false);
+  const [expandedSqlHints, setExpandedSqlHints] = useState<Record<number, boolean>>({});
   const [showSqlCheatSheet, setShowSqlCheatSheet] = useState(false);
   const [justFormattedSql, setJustFormattedSql] = useState(false);
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, selectedChars: 0 });
@@ -196,7 +204,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           method: 'POST',
           body: JSON.stringify({ problemId, isTabActive: isUserActive }),
         });
-      } catch {}
+      } catch { }
     }, 5000);
     return () => window.clearInterval(interval);
   }, [problemId]);
@@ -217,6 +225,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       setActiveLeftTab('description');
       setSolutionSql(null);
       setSolutionError(null);
+      setExpandedSqlHints({});
       setCoachGuidance('');
       setCoachAnalysis(null);
       setCoachProvider(undefined);
@@ -397,10 +406,10 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       setProblem((prev) =>
         prev
           ? {
-              ...prev,
-              isSolved: prev.isSolved || res.result.verdict === 'Accepted',
-              recentSubmissions: [newSub, ...(prev.recentSubmissions || [])].slice(0, 20),
-            }
+            ...prev,
+            isSolved: prev.isSolved || res.result.verdict === 'Accepted',
+            recentSubmissions: [newSub, ...(prev.recentSubmissions || [])].slice(0, 20),
+          }
           : null
       );
 
@@ -457,7 +466,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     }
   };
 
-  const sqlWorkspaceActionRef = useRef<(action: string) => void>(() => {});
+  const sqlWorkspaceActionRef = useRef<(action: string) => void>(() => { });
   sqlWorkspaceActionRef.current = (action: string) => {
     if (action === 'run') {
       expandBottom();
@@ -602,13 +611,12 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           </div>
           <h2 className="text-sm font-semibold text-text-primary truncate">{problem.title}</h2>
           <span
-            className={`text-xs font-mono px-2.5 py-0.5 rounded-full shrink-0 ${
-              problem.difficulty === 'Easy'
+            className={`text-xs font-mono px-2.5 py-0.5 rounded-full shrink-0 ${problem.difficulty === 'Easy'
                 ? 'bg-success-subtle text-success'
                 : problem.difficulty === 'Hard'
-                ? 'bg-danger-subtle text-danger'
-                : 'bg-warning-subtle text-warning'
-            }`}
+                  ? 'bg-danger-subtle text-danger'
+                  : 'bg-warning-subtle text-warning'
+              }`}
           >
             {problem.difficulty}
           </span>
@@ -652,11 +660,10 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
               }
             }}
             aria-expanded={isCoachOpen}
-            className={`relative px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold border flex items-center gap-1.5 transition-colors ${
-              isCoachOpen
+            className={`relative px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold border flex items-center gap-1.5 transition-colors ${isCoachOpen
                 ? 'bg-primary text-black border-primary'
                 : 'bg-primary-subtle hover:bg-primary/20 text-primary border-primary/35'
-            }`}
+              }`}
             title="Toggle AI SQL Coach & Mistake Analyzer"
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -669,11 +676,10 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
           <button
             type="button"
             onClick={handleBookmarkToggle}
-            className={`p-1.5 rounded-lg border transition-colors ${
-              problem.isBookmark
+            className={`p-1.5 rounded-lg border transition-colors ${problem.isBookmark
                 ? 'text-primary bg-primary-subtle border-primary/40'
                 : 'text-text-muted hover:text-text-primary bg-surface-elevated border-border-subtle'
-            }`}
+              }`}
             title={problem.isBookmark ? 'Saved to Bookmarks' : 'Bookmark Problem'}
           >
             <Bookmark className="w-4 h-4" fill={problem.isBookmark ? 'currentColor' : 'none'} />
@@ -734,278 +740,362 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       >
         {/* Left Pane: Spec, Schema & Solution Tabs */}
         {layout.maximizedPane !== 'editor' && layout.maximizedPane !== 'console' && (
-        <div
-          className={`${
-            layout.maximizedPane === 'spec'
-              ? 'w-full h-full flex-1'
-              : 'w-full md:flex-none md:w-[var(--sql-left-w)] h-[44%] md:h-full'
-          } flex flex-col border-b md:border-b-0 border-border-subtle bg-surface overflow-hidden min-w-0 ${
-            isDraggingSplit ? '' : 'transition-[width] duration-75'
-          }`}
-        >
-          <div className="h-11 border-b border-border-subtle bg-surface/90 px-3 flex items-center gap-1 overflow-x-auto shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveLeftTab('description')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${
-                activeLeftTab === 'description'
-                  ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
-                  : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+          <div
+            className={`${layout.maximizedPane === 'spec'
+                ? 'w-full h-full flex-1'
+                : 'w-full md:flex-none md:w-[var(--sql-left-w)] h-[44%] md:h-full'
+              } flex flex-col border-b md:border-b-0 border-border-subtle bg-surface overflow-hidden min-w-0 ${isDraggingSplit ? '' : 'transition-[width] duration-75'
               }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-primary" />
-              <span>Description</span>
-            </button>
+          >
+            <div className="h-11 border-b border-border-subtle bg-surface/90 px-3 flex items-center gap-1 overflow-x-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveLeftTab('description')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${activeLeftTab === 'description'
+                    ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
+                    : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+                  }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-primary" />
+                <span>Description</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setActiveLeftTab('solution');
-                if ((problem.isSolved || problem.unlockedAiSolution) && !solutionSql && !isUnlockingSolution) {
-                  void handleUnlockAndLoadSolution();
-                }
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${
-                activeLeftTab === 'solution'
-                  ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
-                  : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5 text-warning" />
-              <span>Solution</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveLeftTab('solution');
+                  if ((problem.isSolved || problem.unlockedAiSolution) && !solutionSql && !isUnlockingSolution) {
+                    void handleUnlockAndLoadSolution();
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${activeLeftTab === 'solution'
+                    ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
+                    : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+                  }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-warning" />
+                <span>Solution</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveLeftTab('submissions')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${
-                activeLeftTab === 'submissions'
-                  ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
-                  : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
-              }`}
-            >
-              <History className="w-3.5 h-3.5 text-success" />
-              <span>Submissions</span>
-              {problem.recentSubmissions && problem.recentSubmissions.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-surface-high text-[10px] font-mono text-text-secondary">
-                  {problem.recentSubmissions.length}
-                </span>
-              )}
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveLeftTab('submissions')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shrink-0 ${activeLeftTab === 'submissions'
+                    ? 'bg-surface-elevated text-text-primary shadow-sm border border-border-subtle'
+                    : 'text-text-muted hover:text-text-primary hover:bg-surface-elevated/60'
+                  }`}
+              >
+                <History className="w-3.5 h-3.5 text-success" />
+                <span>Submissions</span>
+                {problem.recentSubmissions && problem.recentSubmissions.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-surface-high text-[10px] font-mono text-text-secondary">
+                    {problem.recentSubmissions.length}
+                  </span>
+                )}
+              </button>
 
-            <button
-              type="button"
-              onClick={() => toggleMaximize('spec')}
-              className={`ml-auto p-1.5 rounded-lg border transition-colors shrink-0 ${
-                layout.maximizedPane === 'spec'
-                  ? 'bg-primary-subtle text-primary border-primary/40'
-                  : 'text-text-muted hover:text-text-primary bg-surface-elevated/60 hover:bg-surface-high border-border-subtle'
-              }`}
-              title={layout.maximizedPane === 'spec' ? 'Restore split view' : 'Maximize description pane'}
-            >
-              {layout.maximizedPane === 'spec' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => toggleMaximize('spec')}
+                className={`ml-auto p-1.5 rounded-lg border transition-colors shrink-0 ${layout.maximizedPane === 'spec'
+                    ? 'bg-primary-subtle text-primary border-primary/40'
+                    : 'text-text-muted hover:text-text-primary bg-surface-elevated/60 hover:bg-surface-high border-border-subtle'
+                  }`}
+                title={layout.maximizedPane === 'spec' ? 'Restore split view' : 'Maximize description pane'}
+              >
+                {layout.maximizedPane === 'spec' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
+            </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {activeLeftTab === 'description' ? (
-              <>
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-xs font-mono text-primary uppercase tracking-wider">{problem.topic}</span>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {activeLeftTab === 'description' ? (
+                <>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="text-xs font-mono text-primary uppercase tracking-wider">{problem.topic}</span>
+                      {problem.pattern && (
+                        <span className="px-2 py-0.5 rounded-full bg-surface-elevated border border-border-subtle text-[11px] font-mono text-text-secondary">
+                          {problem.pattern}
+                        </span>
+                      )}
+                      {problem.expectedComplexity && (
+                        <span className="px-2 py-0.5 rounded-full bg-surface-subtle border border-border-subtle text-[11px] font-mono text-emerald-400">
+                          {problem.expectedComplexity.time}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-xl font-bold text-text-primary">Problem Statement</h3>
+                    <p className="text-[15px] text-text-secondary mt-2.5 leading-relaxed whitespace-pre-wrap">
+                      {problem.statement}
+                    </p>
                   </div>
-                  <h3 className="text-xl font-bold text-text-primary">Problem Statement</h3>
-                  <p className="text-[15px] text-text-secondary mt-2.5 leading-relaxed whitespace-pre-wrap">
-                    {problem.statement}
-                  </p>
-                </div>
 
-                <SqlSchemaTables
-                  schemaDdl={problem.schemaDdl}
-                  expectedResult={problem.expectedResult}
-                  onInsertIdentifier={handleInsertSqlIdentifier}
-                />
+                  <SqlSchemaTables
+                    schemaDdl={problem.schemaDdl}
+                    expectedResult={problem.expectedResult}
+                    onInsertIdentifier={handleInsertSqlIdentifier}
+                  />
 
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">Query Rules</h4>
-                  <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle text-xs font-mono text-text-muted space-y-1">
-                    <div>• Isolated SQLite sandbox seeded cleanly per execution</div>
-                    <div>• Read-only SELECT or WITH statements permitted</div>
-                    <div>• Prohibited: DROP, ALTER, TRUNCATE, INSERT, UPDATE, DELETE</div>
-                  </div>
-                </div>
-              </>
-            ) : activeLeftTab === 'solution' ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-base font-bold text-text-primary">Reference SQL Solution</span>
-                </div>
-                {!solutionSql ? (
-                  <div className="p-5 rounded-xl bg-surface-elevated border border-border-subtle space-y-3 text-center">
-                    {solutionError ? (
-                      <p className="text-xs font-mono text-danger">{solutionError}</p>
-                    ) : (
-                      <p className="text-xs text-text-secondary">
-                        Reveal the reference query for #{problem.id} cleanly in one click.
-                      </p>
-                    )}
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={handleUnlockAndLoadSolution}
-                      isLoading={isUnlockingSolution}
-                      icon={<Unlock className="w-3.5 h-3.5" />}
-                    >
-                      {solutionError ? 'Retry Loading Solution' : 'Unlock Solution'}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="rounded-xl overflow-hidden border border-border-subtle code-window-card">
-                      <div className="px-4 py-2 bg-surface-elevated/60 border-b border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
-                        <span className="text-text-secondary">solution.sql</span>
-                        <span className="text-[10px] uppercase tracking-wider">SQLite Optimal</span>
-                      </div>
-                      <div className="p-4 bg-canvas/55 overflow-x-auto">
-                        <HighlightedCode
-                          code={solutionSql}
-                          language="sql"
-                          className="text-xs leading-relaxed"
-                        />
+                  {problem.examples && problem.examples.some((ex) => ex.explanation) && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">
+                        Worked Example Walkthrough
+                      </h4>
+                      <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle space-y-1.5 text-xs text-text-secondary leading-relaxed">
+                        {problem.examples.map((ex, i) =>
+                          ex.explanation ? (
+                            <div key={i}>
+                              <strong className="text-text-primary font-mono">Explanation: </strong>
+                              {ex.explanation}
+                            </div>
+                          ) : null
+                        )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(solutionSql);
-                        setCopiedSolution(true);
-                        setTimeout(() => setCopiedSolution(false), 2000);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary inline-flex items-center gap-1.5 transition-colors"
-                    >
-                      {copiedSolution ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedSolution ? 'Copied' : 'Copy Query'}</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-base text-text-primary">SQL Submission History</h3>
-                  <span className="text-xs font-mono text-text-muted">Stored in database</span>
-                </div>
+                  )}
 
-                {!problem.recentSubmissions || problem.recentSubmissions.length === 0 ? (
-                  <div className="p-6 rounded-xl bg-surface-subtle border border-border-subtle text-sm text-text-muted text-center">
-                    No SQL submissions recorded yet for #{problem.id}. Submit your query to track verdict history.
+                  {problem.constraints && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">
+                        Schema Constraints &amp; Ordering Rules
+                      </h4>
+                      <ul className="list-disc list-inside space-y-1 text-xs font-mono text-text-secondary pl-1">
+                        {problem.constraints.split('\n').filter(Boolean).map((line, i) => (
+                          <li key={i} className="text-text-primary/90">{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {problem.followUp && (
+                    <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sky-400">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Follow-up</span>
+                      </div>
+                      <p className="text-xs text-text-secondary leading-relaxed">
+                        {problem.followUp}
+                      </p>
+                    </div>
+                  )}
+
+                  {problem.hints && problem.hints.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-border-subtle">
+                      <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                        <Lightbulb className="w-3.5 h-3.5 text-warning" />
+                        <span>SQL Hints ({problem.hints.length})</span>
+                      </h4>
+                      <div className="space-y-2">
+                        {problem.hints.map((hint, idx) => {
+                          const isOpen = Boolean(expandedSqlHints[idx]);
+                          return (
+                            <div
+                              key={idx}
+                              className="rounded-xl bg-surface-subtle border border-border-subtle overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedSqlHints((prev) => ({ ...prev, [idx]: !prev[idx] }))
+                                }
+                                className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-medium text-text-primary hover:bg-surface-elevated/60 transition-colors"
+                              >
+                                <span>Hint {idx + 1}</span>
+                                {isOpen ? (
+                                  <ChevronUp className="w-3.5 h-3.5 text-text-muted" />
+                                ) : (
+                                  <ChevronDown className="w-3.5 h-3.5 text-text-muted" />
+                                )}
+                              </button>
+                              {isOpen && (
+                                <div className="px-3.5 pb-3 pt-1 text-xs text-text-secondary leading-relaxed border-t border-border-subtle/70">
+                                  {hint}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">Query Rules</h4>
+                    <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle text-xs font-mono text-text-muted space-y-1">
+                      <div>• Isolated SQLite sandbox seeded cleanly per execution</div>
+                      <div>• Read-only SELECT or WITH statements permitted</div>
+                      <div>• Prohibited: DROP, ALTER, TRUNCATE, INSERT, UPDATE, DELETE</div>
+                    </div>
                   </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {problem.recentSubmissions.map((sub) => {
-                      const isAccepted = sub.verdict === 'Accepted';
-                      const isPreview = previewSqlSubId === sub.id;
-                      const isDiffing = diffSqlSubId === sub.id;
-                      return (
-                        <div
-                          key={sub.id}
-                          className="rounded-xl bg-surface-subtle border border-border-subtle overflow-hidden"
-                        >
-                          <div className="p-3.5 flex items-center justify-between gap-3">
-                            <div className="space-y-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`text-xs font-bold font-mono ${
-                                    isAccepted ? 'text-success' : 'text-danger'
-                                  }`}
-                                >
-                                  {sub.verdict}
-                                </span>
-                                {typeof sub.runtimeMs === 'number' && (
-                                  <span className="text-xs font-mono text-text-muted">
-                                    {sub.runtimeMs} ms
+                </>
+              ) : activeLeftTab === 'solution' ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-base font-bold text-text-primary">Reference SQL Solution</span>
+                  </div>
+                  {!solutionSql ? (
+                    <div className="p-5 rounded-xl bg-surface-elevated border border-border-subtle space-y-3 text-center">
+                      {solutionError ? (
+                        <p className="text-xs font-mono text-danger">{solutionError}</p>
+                      ) : (
+                        <p className="text-xs text-text-secondary">
+                          Reveal the reference query for #{problem.id} cleanly in one click.
+                        </p>
+                      )}
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={handleUnlockAndLoadSolution}
+                        isLoading={isUnlockingSolution}
+                        icon={<Unlock className="w-3.5 h-3.5" />}
+                      >
+                        {solutionError ? 'Retry Loading Solution' : 'Unlock Solution'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="rounded-xl overflow-hidden border border-border-subtle code-window-card">
+                        <div className="px-4 py-2 bg-surface-elevated/60 border-b border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
+                          <span className="text-text-secondary">solution.sql</span>
+                          <span className="text-[10px] uppercase tracking-wider">SQLite Optimal</span>
+                        </div>
+                        <div className="p-4 bg-canvas/55 overflow-x-auto">
+                          <HighlightedCode
+                            code={solutionSql}
+                            language="sql"
+                            className="text-xs leading-relaxed"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(solutionSql);
+                          setCopiedSolution(true);
+                          setTimeout(() => setCopiedSolution(false), 2000);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        {copiedSolution ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedSolution ? 'Copied' : 'Copy Query'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-base text-text-primary">SQL Submission History</h3>
+                    <span className="text-xs font-mono text-text-muted">Stored in database</span>
+                  </div>
+
+                  {!problem.recentSubmissions || problem.recentSubmissions.length === 0 ? (
+                    <div className="p-6 rounded-xl bg-surface-subtle border border-border-subtle text-sm text-text-muted text-center">
+                      No SQL submissions recorded yet for #{problem.id}. Submit your query to track verdict history.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {problem.recentSubmissions.map((sub) => {
+                        const isAccepted = sub.verdict === 'Accepted';
+                        const isPreview = previewSqlSubId === sub.id;
+                        const isDiffing = diffSqlSubId === sub.id;
+                        return (
+                          <div
+                            key={sub.id}
+                            className="rounded-xl bg-surface-subtle border border-border-subtle overflow-hidden"
+                          >
+                            <div className="p-3.5 flex items-center justify-between gap-3">
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`text-xs font-bold font-mono ${isAccepted ? 'text-success' : 'text-danger'
+                                      }`}
+                                  >
+                                    {sub.verdict}
                                   </span>
+                                  {typeof sub.runtimeMs === 'number' && (
+                                    <span className="text-xs font-mono text-text-muted">
+                                      {sub.runtimeMs} ms
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs font-mono text-text-muted">
+                                  {new Date(sub.submittedAt).toLocaleString()}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {sub.code && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDiffSqlSubId(null);
+                                      setPreviewSqlSubId(isPreview ? null : sub.id);
+                                    }}
+                                    className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${isPreview
+                                        ? 'bg-primary-subtle text-primary border-primary/40'
+                                        : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
+                                      }`}
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>{isPreview ? 'Hide' : 'View'}</span>
+                                  </button>
+                                )}
+                                {sub.code && (query || (problem.recentSubmissions?.length ?? 0) > 1) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPreviewSqlSubId(null);
+                                      setDiffSqlSubId(isDiffing ? null : sub.id);
+                                    }}
+                                    className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${isDiffing
+                                        ? 'bg-primary-subtle text-primary border-primary/40'
+                                        : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
+                                      }`}
+                                    title="Compare this submission against your editor or another past submission"
+                                  >
+                                    <GitCompare className="w-3.5 h-3.5" />
+                                    <span>{isDiffing ? 'Close Diff' : 'Diff'}</span>
+                                  </button>
+                                )}
+                                {sub.code && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setQuery(sub.code);
+                                      setSaveStatus(sub.code === savedQueryRef.current ? 'saved' : 'dirty');
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary flex items-center gap-1.5"
+                                  >
+                                    <Code2 className="w-3.5 h-3.5 text-primary" />
+                                    <span>Load</span>
+                                  </button>
                                 )}
                               </div>
-                              <div className="text-xs font-mono text-text-muted">
-                                {new Date(sub.submittedAt).toLocaleString()}
+                            </div>
+
+                            {isDiffing && sub.code && (
+                              <SubmissionDiffViewer
+                                baseSubmission={sub}
+                                allSubmissions={problem.recentSubmissions || []}
+                                currentCode={query}
+                              />
+                            )}
+
+                            {isPreview && sub.code && (
+                              <div className="border-t border-border-subtle bg-canvas p-3 max-h-52 overflow-auto">
+                                <HighlightedCode code={sub.code} language="sql" className="text-xs leading-5" />
                               </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {sub.code && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDiffSqlSubId(null);
-                                    setPreviewSqlSubId(isPreview ? null : sub.id);
-                                  }}
-                                  className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${
-                                    isPreview
-                                      ? 'bg-primary-subtle text-primary border-primary/40'
-                                      : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
-                                  }`}
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>{isPreview ? 'Hide' : 'View'}</span>
-                                </button>
-                              )}
-                              {sub.code && (query || (problem.recentSubmissions?.length ?? 0) > 1) && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPreviewSqlSubId(null);
-                                    setDiffSqlSubId(isDiffing ? null : sub.id);
-                                  }}
-                                  className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${
-                                    isDiffing
-                                      ? 'bg-primary-subtle text-primary border-primary/40'
-                                      : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
-                                  }`}
-                                  title="Compare this submission against your editor or another past submission"
-                                >
-                                  <GitCompare className="w-3.5 h-3.5" />
-                                  <span>{isDiffing ? 'Close Diff' : 'Diff'}</span>
-                                </button>
-                              )}
-                              {sub.code && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setQuery(sub.code);
-                                    setSaveStatus(sub.code === savedQueryRef.current ? 'saved' : 'dirty');
-                                  }}
-                                  className="px-2.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-primary flex items-center gap-1.5"
-                                >
-                                  <Code2 className="w-3.5 h-3.5 text-primary" />
-                                  <span>Load</span>
-                                </button>
-                              )}
-                            </div>
+                            )}
                           </div>
-
-                          {isDiffing && sub.code && (
-                            <SubmissionDiffViewer
-                              baseSubmission={sub}
-                              allSubmissions={problem.recentSubmissions || []}
-                              currentCode={query}
-                            />
-                          )}
-
-                          {isPreview && sub.code && (
-                            <div className="border-t border-border-subtle bg-canvas p-3 max-h-52 overflow-auto">
-                              <HighlightedCode code={sub.code} language="sql" className="text-xs leading-5" />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         )}
 
         {layout.maximizedPane === 'none' && (
@@ -1025,351 +1115,347 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 
         {/* Right Pane: SQL Editor + Output Table */}
         {layout.maximizedPane !== 'spec' && (
-        <div
-          ref={rightColumnRef}
-          className="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden"
-        >
-          {layout.maximizedPane !== 'console' && (
-          <div className="flex-1 min-h-[120px] flex flex-col bg-canvas overflow-hidden">
-            <div className="px-4 py-2 border-b border-border-subtle bg-surface flex items-center justify-between gap-2 text-xs font-mono text-text-secondary shrink-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="flex items-center gap-1.5">
-                  <Database className="w-3.5 h-3.5 text-primary" />
-                  <span>SQL Query Editor</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowSqlCheatSheet((prev) => !prev)}
-                  className="px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[10px] text-text-muted hover:text-text-primary transition-colors"
-                >
-                  {showSqlCheatSheet ? 'Hide SQL Tips' : 'SQL Tips'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const formatted = formatCode(query, 'sql');
-                    if (formatted !== query) setQuery(formatted);
+          <div
+            ref={rightColumnRef}
+            className="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden"
+          >
+            {layout.maximizedPane !== 'console' && (
+              <div className="flex-1 min-h-[120px] flex flex-col bg-canvas overflow-hidden">
+                <div className="px-4 py-2 border-b border-border-subtle bg-surface flex items-center justify-between gap-2 text-xs font-mono text-text-secondary shrink-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="flex items-center gap-1.5">
+                      <Database className="w-3.5 h-3.5 text-primary" />
+                      <span>SQL Query Editor</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSqlCheatSheet((prev) => !prev)}
+                      className="px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[10px] text-text-muted hover:text-text-primary transition-colors"
+                    >
+                      {showSqlCheatSheet ? 'Hide SQL Tips' : 'SQL Tips'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const formatted = formatCode(query, 'sql');
+                        if (formatted !== query) setQuery(formatted);
+                        setJustFormattedSql(true);
+                        window.setTimeout(() => setJustFormattedSql(false), 1500);
+                      }}
+                      className="px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[10px] text-text-muted hover:text-text-primary transition-colors flex items-center gap-1"
+                      title="Format SQL query spacing & keywords (Shift+Alt+F)"
+                    >
+                      {justFormattedSql ? (
+                        <Check className="w-3 h-3 text-success" />
+                      ) : (
+                        <AlignLeft className="w-3 h-3 text-primary" />
+                      )}
+                      <span>{justFormattedSql ? 'Formatted' : 'Format'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAutoFormatSql((prev) => {
+                          const next = !prev;
+                          try {
+                            localStorage.setItem('codeprep_auto_format', String(next));
+                          } catch {
+                            // Ignore storage errors
+                          }
+                          return next;
+                        });
+                      }}
+                      className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] transition-colors ${autoFormatSql
+                          ? 'bg-success-subtle text-success border-success/35'
+                          : 'bg-surface-elevated text-text-muted border-border-subtle'
+                        }`}
+                      title="Auto-format pasted SQL queries"
+                    >
+                      <span>Auto {autoFormatSql ? 'ON' : 'OFF'}</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="hidden sm:flex items-center rounded border border-border-subtle bg-surface-elevated overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFontSizePx((prev) => {
+                            const next = Math.max(12, prev - 1);
+                            try {
+                              localStorage.setItem('codeprep_editor_font_size', String(next));
+                            } catch { }
+                            return next;
+                          })
+                        }
+                        disabled={fontSizePx <= 12}
+                        className="px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary disabled:opacity-40"
+                        title="Decrease SQL font size"
+                      >
+                        A-
+                      </button>
+                      <span className="px-1 text-[10px] text-text-muted border-x border-border-subtle">
+                        {fontSizePx}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFontSizePx((prev) => {
+                            const next = Math.min(16, prev + 1);
+                            try {
+                              localStorage.setItem('codeprep_editor_font_size', String(next));
+                            } catch { }
+                            return next;
+                          })
+                        }
+                        disabled={fontSizePx >= 16}
+                        className="px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary disabled:opacity-40"
+                        title="Increase SQL font size"
+                      >
+                        A+
+                      </button>
+                    </div>
+                    <span className="hidden xl:inline text-[10px] text-text-muted">
+                      Ln {cursorInfo.line}, Col {cursorInfo.col}
+                    </span>
+                    <span
+                      className={
+                        saveStatus === 'error'
+                          ? 'text-danger'
+                          : saveStatus === 'saved'
+                            ? 'text-success'
+                            : 'text-warning'
+                      }
+                    >
+                      {saveStatus === 'saving'
+                        ? 'Saving...'
+                        : saveStatus === 'dirty'
+                          ? 'Unsaved edits'
+                          : saveStatus === 'error'
+                            ? 'Autosave retry pending'
+                            : 'Draft saved'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleMaximize('editor')}
+                      className={`p-1 rounded border transition-colors ${layout.maximizedPane === 'editor'
+                          ? 'bg-primary-subtle text-primary border-primary/40'
+                          : 'text-text-muted hover:text-text-primary bg-surface-elevated hover:bg-surface-high border-border-subtle'
+                        }`}
+                      title={layout.maximizedPane === 'editor' ? 'Restore editor height' : 'Maximize SQL editor'}
+                    >
+                      {layout.maximizedPane === 'editor' ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                {showSqlCheatSheet && (
+                  <div className="px-4 py-2 bg-surface-subtle border-b border-border-subtle text-[11px] font-mono text-text-secondary flex flex-wrap gap-x-4 gap-y-1">
+                    <span><strong className="text-primary">Window:</strong> RANK() OVER (PARTITION BY col ORDER BY col DESC)</span>
+                    <span><strong className="text-primary">Month:</strong> strftime(&apos;%Y-%m&apos;, dt)</span>
+                    <span><strong className="text-primary">Date Diff:</strong> julianday(d1) - julianday(d2)</span>
+                    <span><strong className="text-primary">Null Safe:</strong> COALESCE(val, 0)</span>
+                  </div>
+                )}
+
+                <HighlightedCodeEditor
+                  value={query}
+                  onChange={setQuery}
+                  textareaRef={sqlTextareaRef}
+                  documentKey={problem.id}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                      e.preventDefault();
+                      expandBottom();
+                      if (e.shiftKey) {
+                        handleSubmitQuery();
+                      } else {
+                        handleRunQuery(false);
+                      }
+                    }
+                  }}
+                  language="sql"
+                  schemaDdl={problem.schemaDdl}
+                  showLineNumbers
+                  paddingClass="p-4"
+                  autoFormat={autoFormatSql}
+                  fontSizePx={fontSizePx}
+                  onCursorChange={setCursorInfo}
+                  onSaveShortcut={() => void persistDraftNow(problem.id, query)}
+                  onFormatted={() => {
                     setJustFormattedSql(true);
                     window.setTimeout(() => setJustFormattedSql(false), 1500);
                   }}
-                  className="px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[10px] text-text-muted hover:text-text-primary transition-colors flex items-center gap-1"
-                  title="Format SQL query spacing & keywords (Shift+Alt+F)"
-                >
-                  {justFormattedSql ? (
-                    <Check className="w-3 h-3 text-success" />
-                  ) : (
-                    <AlignLeft className="w-3 h-3 text-primary" />
-                  )}
-                  <span>{justFormattedSql ? 'Formatted' : 'Format'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAutoFormatSql((prev) => {
-                      const next = !prev;
-                      try {
-                        localStorage.setItem('codeprep_auto_format', String(next));
-                      } catch {
-                        // Ignore storage errors
-                      }
-                      return next;
-                    });
-                  }}
-                  className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] transition-colors ${
-                    autoFormatSql
-                      ? 'bg-success-subtle text-success border-success/35'
-                      : 'bg-surface-elevated text-text-muted border-border-subtle'
-                  }`}
-                  title="Auto-format pasted SQL queries"
-                >
-                  <span>Auto {autoFormatSql ? 'ON' : 'OFF'}</span>
-                </button>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="hidden sm:flex items-center rounded border border-border-subtle bg-surface-elevated overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFontSizePx((prev) => {
-                        const next = Math.max(12, prev - 1);
-                        try {
-                          localStorage.setItem('codeprep_editor_font_size', String(next));
-                        } catch {}
-                        return next;
-                      })
-                    }
-                    disabled={fontSizePx <= 12}
-                    className="px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary disabled:opacity-40"
-                    title="Decrease SQL font size"
-                  >
-                    A-
-                  </button>
-                  <span className="px-1 text-[10px] text-text-muted border-x border-border-subtle">
-                    {fontSizePx}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFontSizePx((prev) => {
-                        const next = Math.min(16, prev + 1);
-                        try {
-                          localStorage.setItem('codeprep_editor_font_size', String(next));
-                        } catch {}
-                        return next;
-                      })
-                    }
-                    disabled={fontSizePx >= 16}
-                    className="px-1.5 py-0.5 text-[10px] text-text-muted hover:text-text-primary disabled:opacity-40"
-                    title="Increase SQL font size"
-                  >
-                    A+
-                  </button>
-                </div>
-                <span className="hidden xl:inline text-[10px] text-text-muted">
-                  Ln {cursorInfo.line}, Col {cursorInfo.col}
-                </span>
-                <span
-                  className={
-                    saveStatus === 'error'
-                      ? 'text-danger'
-                      : saveStatus === 'saved'
-                      ? 'text-success'
-                      : 'text-warning'
-                  }
-                >
-                  {saveStatus === 'saving'
-                    ? 'Saving...'
-                    : saveStatus === 'dirty'
-                    ? 'Unsaved edits'
-                    : saveStatus === 'error'
-                    ? 'Autosave retry pending'
-                    : 'Draft saved'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => toggleMaximize('editor')}
-                  className={`p-1 rounded border transition-colors ${
-                    layout.maximizedPane === 'editor'
-                      ? 'bg-primary-subtle text-primary border-primary/40'
-                      : 'text-text-muted hover:text-text-primary bg-surface-elevated hover:bg-surface-high border-border-subtle'
-                  }`}
-                  title={layout.maximizedPane === 'editor' ? 'Restore editor height' : 'Maximize SQL editor'}
-                >
-                  {layout.maximizedPane === 'editor' ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
-                </button>
-              </div>
-            </div>
-
-            {showSqlCheatSheet && (
-              <div className="px-4 py-2 bg-surface-subtle border-b border-border-subtle text-[11px] font-mono text-text-secondary flex flex-wrap gap-x-4 gap-y-1">
-                <span><strong className="text-primary">Window:</strong> RANK() OVER (PARTITION BY col ORDER BY col DESC)</span>
-                <span><strong className="text-primary">Month:</strong> strftime(&apos;%Y-%m&apos;, dt)</span>
-                <span><strong className="text-primary">Date Diff:</strong> julianday(d1) - julianday(d2)</span>
-                <span><strong className="text-primary">Null Safe:</strong> COALESCE(val, 0)</span>
+                />
               </div>
             )}
 
-            <HighlightedCodeEditor
-              value={query}
-              onChange={setQuery}
-              textareaRef={sqlTextareaRef}
-              documentKey={problem.id}
-              onKeyDown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                  e.preventDefault();
-                  expandBottom();
-                  if (e.shiftKey) {
-                    handleSubmitQuery();
-                  } else {
-                    handleRunQuery(false);
-                  }
+            {layout.maximizedPane === 'none' && !layout.isBottomCollapsed && (
+              <ResizableDivider
+                orientation="horizontal"
+                onDragStateChange={setIsDraggingSplit}
+                onDragDelta={(deltaPx) => {
+                  const maxH = Math.max(220, (rightColumnRef.current?.clientHeight || 600) - 140);
+                  setBottomHeightPx(Math.min(maxH, layout.bottomHeightPx - deltaPx));
+                }}
+                onDoubleClick={() => setBottomHeightPx(270)}
+                title="Drag to resize SQL editor & result output height (double-click to reset)"
+              />
+            )}
+
+            {layout.maximizedPane !== 'editor' && (
+              <div
+                style={
+                  layout.maximizedPane === 'console'
+                    ? undefined
+                    : layout.isBottomCollapsed
+                      ? undefined
+                      : { height: `${layout.bottomHeightPx}px` }
                 }
-              }}
-              language="sql"
-              schemaDdl={problem.schemaDdl}
-              showLineNumbers
-              paddingClass="p-4"
-              autoFormat={autoFormatSql}
-              fontSizePx={fontSizePx}
-              onCursorChange={setCursorInfo}
-              onSaveShortcut={() => void persistDraftNow(problem.id, query)}
-              onFormatted={() => {
-                setJustFormattedSql(true);
-                window.setTimeout(() => setJustFormattedSql(false), 1500);
-              }}
-            />
-          </div>
-          )}
-
-          {layout.maximizedPane === 'none' && !layout.isBottomCollapsed && (
-            <ResizableDivider
-              orientation="horizontal"
-              onDragStateChange={setIsDraggingSplit}
-              onDragDelta={(deltaPx) => {
-                const maxH = Math.max(220, (rightColumnRef.current?.clientHeight || 600) - 140);
-                setBottomHeightPx(Math.min(maxH, layout.bottomHeightPx - deltaPx));
-              }}
-              onDoubleClick={() => setBottomHeightPx(270)}
-              title="Drag to resize SQL editor & result output height (double-click to reset)"
-            />
-          )}
-
-          {layout.maximizedPane !== 'editor' && (
-          <div
-            style={
-              layout.maximizedPane === 'console'
-                ? undefined
-                : layout.isBottomCollapsed
-                  ? undefined
-                  : { height: `${layout.bottomHeightPx}px` }
-            }
-            className={`${
-              layout.maximizedPane === 'console' ? 'flex-1 h-full' : layout.isBottomCollapsed ? 'h-10' : ''
-            } flex flex-col bg-surface overflow-hidden shrink-0 border-t border-border-subtle`}
-          >
-            <div className="h-10 px-4 border-b border-border-subtle bg-surface-elevated flex items-center justify-between text-xs shrink-0">
-              <span className="font-semibold text-text-primary flex items-center gap-1.5">
-                <TableIcon className="w-3.5 h-3.5 text-primary" />
-                <span>Query Result Output</span>
-              </span>
-              <div className="flex items-center gap-2">
-                {result && (
-                  <div className="flex items-center gap-2 font-mono text-xs mr-1">
-                    <span
-                      className={
-                        result.verdict === 'Accepted'
-                          ? 'text-success font-bold'
-                          : result.verdict === 'Query Plan'
-                          ? 'text-primary font-bold'
-                          : 'text-danger font-bold'
-                      }
-                    >
-                      {result.verdict}
-                    </span>
-                    <span className="text-text-muted">•</span>
-                    <span className="text-text-secondary">{result.runtimeMs} ms</span>
-                    {result.verdict === 'Accepted' && sqlBenchmarks && (
-                      <>
-                        <span className="text-text-muted">•</span>
-                        <span className="text-success font-semibold">
-                          Beats {sqlBenchmarks.runtimePercentile.toFixed(1)}%
+                className={`${layout.maximizedPane === 'console' ? 'flex-1 h-full' : layout.isBottomCollapsed ? 'h-10' : ''
+                  } flex flex-col bg-surface overflow-hidden shrink-0 border-t border-border-subtle`}
+              >
+                <div className="h-10 px-4 border-b border-border-subtle bg-surface-elevated flex items-center justify-between text-xs shrink-0">
+                  <span className="font-semibold text-text-primary flex items-center gap-1.5">
+                    <TableIcon className="w-3.5 h-3.5 text-primary" />
+                    <span>Query Result Output</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {result && (
+                      <div className="flex items-center gap-2 font-mono text-xs mr-1">
+                        <span
+                          className={
+                            result.verdict === 'Accepted'
+                              ? 'text-success font-bold'
+                              : result.verdict === 'Query Plan'
+                                ? 'text-primary font-bold'
+                                : 'text-danger font-bold'
+                          }
+                        >
+                          {result.verdict}
                         </span>
-                      </>
+                        <span className="text-text-muted">•</span>
+                        <span className="text-text-secondary">{result.runtimeMs} ms</span>
+                        {result.verdict === 'Accepted' && sqlBenchmarks && (
+                          <>
+                            <span className="text-text-muted">•</span>
+                            <span className="text-success font-semibold">
+                              Beats {sqlBenchmarks.runtimePercentile.toFixed(1)}%
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {layout.maximizedPane !== 'console' && (
+                      <button
+                        type="button"
+                        onClick={toggleBottomCollapsed}
+                        className="p-1 rounded bg-surface hover:bg-surface-high text-text-muted hover:text-text-primary border border-border-subtle transition-colors"
+                        title={layout.isBottomCollapsed ? 'Expand output panel' : 'Collapse output panel'}
+                      >
+                        {layout.isBottomCollapsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => toggleMaximize('console')}
+                      className={`p-1 rounded border transition-colors ${layout.maximizedPane === 'console'
+                          ? 'bg-primary-subtle text-primary border-primary/40'
+                          : 'bg-surface hover:bg-surface-high text-text-muted hover:text-text-primary border-border-subtle'
+                        }`}
+                      title={layout.maximizedPane === 'console' ? 'Restore output height' : 'Maximize query result output'}
+                    >
+                      {layout.maximizedPane === 'console' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {!layout.isBottomCollapsed && (
+                  <div className="flex-1 overflow-auto p-4 space-y-4">
+                    {!result && (
+                      <div className="h-full flex flex-col items-center justify-center text-sm text-text-muted gap-2">
+                        <Play className="w-6 h-6 opacity-40" />
+                        <span>Run your SQL query above to inspect real table output.</span>
+                      </div>
+                    )}
+
+                    {result?.error && (
+                      <div className="p-3.5 bg-danger-subtle border border-danger/30 rounded-xl text-xs text-danger font-mono">
+                        {result.error}
+                      </div>
+                    )}
+
+                    {result?.rows && result.rows.length > 0 && result.columns && (
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-mono text-text-muted">Your Output ({result.rows.length} rows)</div>
+                        <div className="border border-border-subtle rounded-xl overflow-hidden">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-surface-elevated border-b border-border-subtle font-mono text-text-secondary">
+                              <tr>
+                                {result.columns.map((col) => (
+                                  <th key={col} className="py-2 px-3 font-semibold">
+                                    {col}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border-subtle font-mono text-xs">
+                              {result.rows.map((row, rIdx) => (
+                                <tr key={rIdx} className="hover:bg-surface-elevated/40">
+                                  {result.columns!.map((col) => (
+                                    <td key={col} className="py-2 px-3 text-text-primary">
+                                      {String(row[col] ?? 'NULL')}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {result?.verdict === 'Wrong Answer' && result.expectedRows && result.expectedRows.length > 0 && result.expectedColumns && (
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-mono text-success">Expected Output ({result.expectedRows.length} rows)</div>
+                        <div className="border border-success/30 rounded-xl overflow-hidden">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-success-subtle border-b border-success/20 font-mono text-success">
+                              <tr>
+                                {result.expectedColumns.map((col) => (
+                                  <th key={col} className="py-2 px-3 font-semibold">
+                                    {col}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border-subtle font-mono text-xs">
+                              {result.expectedRows.slice(0, 10).map((row, rIdx) => (
+                                <tr key={rIdx}>
+                                  {result.expectedColumns!.map((col) => (
+                                    <td key={col} className="py-2 px-3 text-text-primary">
+                                      {String(row[col] ?? 'NULL')}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {result?.rows && result.rows.length === 0 && !result.error && (
+                      <div className="text-xs text-text-muted font-mono">
+                        Query executed successfully. (0 rows returned)
+                      </div>
                     )}
                   </div>
                 )}
-
-                {layout.maximizedPane !== 'console' && (
-                  <button
-                    type="button"
-                    onClick={toggleBottomCollapsed}
-                    className="p-1 rounded bg-surface hover:bg-surface-high text-text-muted hover:text-text-primary border border-border-subtle transition-colors"
-                    title={layout.isBottomCollapsed ? 'Expand output panel' : 'Collapse output panel'}
-                  >
-                    {layout.isBottomCollapsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => toggleMaximize('console')}
-                  className={`p-1 rounded border transition-colors ${
-                    layout.maximizedPane === 'console'
-                      ? 'bg-primary-subtle text-primary border-primary/40'
-                      : 'bg-surface hover:bg-surface-high text-text-muted hover:text-text-primary border-border-subtle'
-                  }`}
-                  title={layout.maximizedPane === 'console' ? 'Restore output height' : 'Maximize query result output'}
-                >
-                  {layout.maximizedPane === 'console' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                </button>
               </div>
-            </div>
-
-            {!layout.isBottomCollapsed && (
-            <div className="flex-1 overflow-auto p-4 space-y-4">
-              {!result && (
-                <div className="h-full flex flex-col items-center justify-center text-sm text-text-muted gap-2">
-                  <Play className="w-6 h-6 opacity-40" />
-                  <span>Run your SQL query above to inspect real table output.</span>
-                </div>
-              )}
-
-              {result?.error && (
-                <div className="p-3.5 bg-danger-subtle border border-danger/30 rounded-xl text-xs text-danger font-mono">
-                  {result.error}
-                </div>
-              )}
-
-              {result?.rows && result.rows.length > 0 && result.columns && (
-                <div className="space-y-1.5">
-                  <div className="text-xs font-mono text-text-muted">Your Output ({result.rows.length} rows)</div>
-                  <div className="border border-border-subtle rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-surface-elevated border-b border-border-subtle font-mono text-text-secondary">
-                        <tr>
-                          {result.columns.map((col) => (
-                            <th key={col} className="py-2 px-3 font-semibold">
-                              {col}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border-subtle font-mono text-xs">
-                        {result.rows.map((row, rIdx) => (
-                          <tr key={rIdx} className="hover:bg-surface-elevated/40">
-                            {result.columns!.map((col) => (
-                              <td key={col} className="py-2 px-3 text-text-primary">
-                                {String(row[col] ?? 'NULL')}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {result?.verdict === 'Wrong Answer' && result.expectedRows && result.expectedRows.length > 0 && result.expectedColumns && (
-                <div className="space-y-1.5">
-                  <div className="text-xs font-mono text-success">Expected Output ({result.expectedRows.length} rows)</div>
-                  <div className="border border-success/30 rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-success-subtle border-b border-success/20 font-mono text-success">
-                        <tr>
-                          {result.expectedColumns.map((col) => (
-                            <th key={col} className="py-2 px-3 font-semibold">
-                              {col}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border-subtle font-mono text-xs">
-                        {result.expectedRows.slice(0, 10).map((row, rIdx) => (
-                          <tr key={rIdx}>
-                            {result.expectedColumns!.map((col) => (
-                              <td key={col} className="py-2 px-3 text-text-primary">
-                                {String(row[col] ?? 'NULL')}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {result?.rows && result.rows.length === 0 && !result.error && (
-                <div className="text-xs text-text-muted font-mono">
-                  Query executed successfully. (0 rows returned)
-                </div>
-              )}
-            </div>
             )}
           </div>
-          )}
-        </div>
         )}
       </div>
 

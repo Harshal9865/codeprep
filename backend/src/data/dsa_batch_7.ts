@@ -1,4 +1,5 @@
 import { ProblemDefinition } from '../judge/types';
+import { buildBatch7ProblemSpec } from './batchProblemSpecs';
 
 export const DSA_BATCH_7: ProblemDefinition[] = Array.from({ length: 50 }, (_, i) => {
   const id = 301 + i;
@@ -31,6 +32,7 @@ export const DSA_BATCH_7: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
 
   const title = titles[i] || `Graph / Backtracking Problem ${id}`;
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const spec = buildBatch7ProblemSpec(title, topic);
 
   return {
     id,
@@ -40,31 +42,15 @@ export const DSA_BATCH_7: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     category: 'DSA' as const,
     topic,
     pattern,
-    statement: `Solve ${title} using structured ${pattern}. Prune unpromising branches early to avoid exponential time explosions.`,
-    constraints: '1 <= N <= 2000\nGraph or search space fits within standard interview bounds.',
-    examples: [
-      { input: '[[1,2],[2,3],[3,1]]', output: 'true', explanation: 'Result verified across edge transitions.' },
-    ],
+    statement: spec.statement,
+    constraints: spec.constraints,
+    examples: spec.examples,
     functionSignature: 'bool solve(vector<vector<int>>& grid)',
     paramTypes: ['vector<vector<int>>'],
     returnType: 'bool',
     defaultCodeStub: `class Solution {\npublic:\n    bool solve(vector<vector<int>>& grid) {\n        // Your code here\n    }\n};`,
-    sampleTestCases: [
-      { input: '[[1,2],[2,3],[3,1]]', expectedOutput: 'true' },
-      { input: '[[1,2],[2,3]]', expectedOutput: 'false' },
-      { input: '[[1,2],[2,3],[1,3]]', expectedOutput: 'false' },
-    ],
-    hiddenTestCases: [
-      { input: '[]', expectedOutput: 'false', isHidden: true },
-      { input: '[[1,2]]', expectedOutput: 'true', isHidden: true },
-      { input: '[[1,1]]', expectedOutput: 'true', isHidden: true },
-      { input: '[[1,2],[2,2]]', expectedOutput: 'true', isHidden: true },
-      { input: '[[1,2],[2,1]]', expectedOutput: 'true', isHidden: true },
-      { input: '[[1,2],[3,4],[5,6]]', expectedOutput: 'false', isHidden: true },
-      { input: '[[1,2],[3,4],[4,5],[5,3]]', expectedOutput: 'true', isHidden: true },
-      { input: '[[0,1],[0,2],[1,3],[2,3],[3,4]]', expectedOutput: 'false', isHidden: true },
-      { input: '[[1,2],[2,3],[3,4],[4,2]]', expectedOutput: 'true', isHidden: true },
-    ],
+    sampleTestCases: spec.sampleTestCases,
+    hiddenTestCases: spec.hiddenTestCases,
   };
 });
 

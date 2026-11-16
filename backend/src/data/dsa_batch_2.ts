@@ -1,4 +1,5 @@
 import { ProblemDefinition } from '../judge/types';
+import { buildBatch2ProblemSpec } from './batchProblemSpecs';
 
 export const DSA_BATCH_2: ProblemDefinition[] = Array.from({ length: 50 }, (_, i) => {
   const id = 51 + i;
@@ -30,7 +31,8 @@ export const DSA_BATCH_2: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
 
   const title = isTwoPointer ? (twoPointerTitles[i] || `Two Pointers Problem ${id}`) : (slidingWindowTitles[i - 26] || `Sliding Window Problem ${id}`);
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const pattern = isTwoPointer ? 'Opposite Ends / Fast & Slow Pointers' : 'Dynamic Shrinking/Expanding Window';
+  const pattern = isTwoPointer ? 'Opposite Ends / Boundary Two Pointers' : 'Dynamic Shrinking/Expanding Window';
+  const spec = buildBatch2ProblemSpec(title);
 
   return {
     id,
@@ -40,32 +42,15 @@ export const DSA_BATCH_2: ProblemDefinition[] = Array.from({ length: 50 }, (_, i
     category: 'DSA' as const,
     topic,
     pattern,
-    statement: `Solve ${title} using optimal ${pattern} principles. Analyze time complexity and ensure minimal space overhead.`,
-    constraints: '1 <= nums.length <= 10^5\n-10^4 <= nums[i] <= 10^4',
-    examples: [
-      { input: '[0,1,0,2,1,0,1,3,2,1,2,1]', output: '6', explanation: 'Computed optimal answer under constraints.' },
-      { input: '[4,2,0,3,2,5]', output: '9' },
-    ],
+    statement: spec.statement,
+    constraints: spec.constraints,
+    examples: spec.examples,
     functionSignature: 'int solve(vector<int>& nums)',
     paramTypes: ['vector<int>'],
     returnType: 'int',
     defaultCodeStub: `class Solution {\npublic:\n    int solve(vector<int>& nums) {\n        // Your code here\n    }\n};`,
-    sampleTestCases: [
-      { input: '[0,1,0,2,1,0,1,3,2,1,2,1]', expectedOutput: '6' },
-      { input: '[4,2,0,3,2,5]', expectedOutput: '9' },
-      { input: '[2,0,2]', expectedOutput: '2' },
-    ],
-    hiddenTestCases: [
-      { input: '[3,0,0,2,0,4]', expectedOutput: '10', isHidden: true },
-      { input: '[]', expectedOutput: '0', isHidden: true },
-      { input: '[5]', expectedOutput: '0', isHidden: true },
-      { input: '[1,5]', expectedOutput: '0', isHidden: true },
-      { input: '[1,2,3,4,5]', expectedOutput: '0', isHidden: true },
-      { input: '[5,4,3,2,1]', expectedOutput: '0', isHidden: true },
-      { input: '[3,3,3,3]', expectedOutput: '0', isHidden: true },
-      { input: '[0,0,0,0]', expectedOutput: '0', isHidden: true },
-      { input: '[5,0,3,0,4,0,2]', expectedOutput: '11', isHidden: true },
-    ],
+    sampleTestCases: spec.sampleTestCases,
+    hiddenTestCases: spec.hiddenTestCases,
   };
 });
 
