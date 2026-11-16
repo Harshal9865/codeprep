@@ -114,8 +114,8 @@ export const AiSolutionPage: React.FC<AiSolutionPageProps> = ({
         <CodePrepLoader
           variant="section"
           className="flex-1 min-h-[380px]"
-          label="Loading Reference Walkthrough"
-          sublabel="Preparing complexity breakdown & visual trace..."
+          label="Loading Solution"
+          sublabel="Preparing step-by-step explanation..."
         />
       </AppLayout>
     );

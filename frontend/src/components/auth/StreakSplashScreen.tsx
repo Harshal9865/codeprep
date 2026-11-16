@@ -272,7 +272,7 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
         <div className="mt-3 space-y-1">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border border-amber-400/50 bg-orange-950/60 font-mono text-[11px] tracking-widest uppercase text-amber-100">
             <Flame className="w-3 h-3 text-amber-400" />
-            <span>{displayName ? `Welcome, ${displayName}` : 'CodePrep Ignited'}</span>
+            <span>{displayName ? `Welcome, ${displayName}` : 'CodePrep'}</span>
           </div>
 
           <div className="flex items-baseline justify-center gap-2 pt-2 font-mono">
@@ -285,11 +285,11 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
           </div>
 
           <p className="font-mono text-xs text-neutral-300 pt-1">
-            {totalSolved} solved • Launching Explore Workspace
+            {totalSolved} solved
           </p>
         </div>
 
-        {/* Pixelated Ignition Meter */}
+        {/* Progress Meter */}
         <div className="w-full mt-5 space-y-1.5">
           <div className="w-full h-2 bg-neutral-900 border border-orange-900/70 overflow-hidden p-0.5">
             <div
@@ -300,12 +300,12 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
           <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-neutral-400">
             <span>
               {phase === 'closing'
-                ? 'Closing Shutters...'
+                ? 'Ready...'
                 : phase === 'surge'
-                ? 'Core Ignited'
-                : 'Compiling Arena...'}
+                ? 'Loading Dashboard'
+                : 'Loading Workspace...'}
             </span>
-            <span className="text-white">3.0s</span>
+            <span className="text-white">CodePrep</span>
           </div>
         </div>
       </div>

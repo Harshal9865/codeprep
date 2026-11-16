@@ -13,7 +13,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
-import { apiRequest } from '../services/api';
+import { fetchDashboardAnalytics } from '../services/analyticsCache';
 import { ActivityHeatmap } from '../components/dashboard/ActivityHeatmap';
 import { LeetCodeProfileCard } from '../components/dashboard/LeetCodeProfileCard';
 import { LeetCodeSkillsPanel } from '../components/dashboard/LeetCodeSkillsPanel';
@@ -120,13 +120,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchAnalytics = async () => {
+    const fetchAnalytics = async (force = false) => {
       try {
         setLoadError(null);
-        const res = await apiRequest<{ analytics?: DashboardAnalytics } & Partial<DashboardAnalytics>>(
-          '/analytics/dashboard'
-        );
-        const payload = res && typeof res === 'object' && res.analytics ? res.analytics : (res as DashboardAnalytics);
+        const payload = await fetchDashboardAnalytics<DashboardAnalytics>(force);
         setData(payload || null);
       } catch (err: unknown) {
         setLoadError(err instanceof Error ? err.message : 'Unable to load dashboard analytics');
@@ -135,9 +132,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       }
     };
 
-    fetchAnalytics();
+    void fetchAnalytics();
     const handleProgressUpdated = () => {
-      void fetchAnalytics();
+      void fetchAnalytics(true);
     };
     window.addEventListener('codeprep:progress-updated', handleProgressUpdated);
     return () => {
@@ -285,10 +282,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-text-primary">
-                      Original 600 Problems — Kept Separate
+                      Core 600 Problem Set
                     </h3>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      Solve your core 500 DSA (#1–#500) and 100 SQL (#501–#600) problems directly without mixing into the 2,400 extended problems.
+                      500 DSA (#1–#500) and 100 SQL (#501–#600) foundational problems.
                     </p>
                   </div>
                   <div className="w-full max-w-md h-1.5 rounded-full bg-surface-high overflow-hidden">

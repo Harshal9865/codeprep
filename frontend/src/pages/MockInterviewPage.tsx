@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { apiRequest } from '../services/api';
+import { fetchDashboardAnalytics } from '../services/analyticsCache';
 import {
   AptitudeCategory,
   GeneratedAptitudeQuestion,
@@ -12,25 +13,23 @@ import {
 } from '../components/aptitude/AptitudeVisuals';
 import {
   ArrowRight,
-  Award,
-  Briefcase,
   CheckCircle2,
   Clock,
   Code2,
-  Database,
   Eye,
   EyeOff,
   Flag,
   HelpCircle,
   History,
   Lightbulb,
+  Minus,
   Play,
+  Plus,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
   Shuffle,
-  Sparkles,
-  Target,
+  SlidersHorizontal,
   Trophy,
   XCircle,
 } from 'lucide-react';
@@ -58,11 +57,8 @@ type CompanyTrackId =
   | 'core-cpp-oop'
   | 'full-drive';
 
-type DifficultyMixPreset = 'easy-medium' | 'medium-heavy' | 'mixed-combo' | 'custom';
-
 interface RoundConfig {
   trackId: CompanyTrackId;
-  mixPreset: DifficultyMixPreset;
   easyDsa: number;
   mediumDsa: number;
   hardDsa: number;
@@ -83,10 +79,9 @@ interface WeaknessRadar {
 interface CompanyProfile {
   id: CompanyTrackId;
   name: string;
-  badge: string;
+  shortLabel: string;
   tagline: string;
-  whatTheyAsk: string[];
-  typicalSplit: string;
+  highlights: string[];
   defaultConfig: Omit<RoundConfig, 'trackId'>;
 }
 
@@ -122,22 +117,19 @@ export interface ActiveMockSession {
 
 export const ACTIVE_MOCK_STORAGE_KEY = 'codeprep_active_mock_session_v1';
 const SEEN_MOCK_IDS_KEY = 'codeprep_mock_seen_ids_v1';
-const MOCK_HISTORY_KEY = 'codeprep_mock_history_v1';
+const MOCK_HISTORY_KEY = 'codeprep_mock_assessment_history_v1';
 
 const COMPANY_PROFILES: CompanyProfile[] = [
   {
     id: 'product-faang',
-    name: 'Product / FAANG OA',
-    badge: 'Most Popular',
-    tagline: 'Tests clean Medium DSA + fast Logical & Quant screening under strict timers.',
-    whatTheyAsk: [
-      '2 Medium + 1 Easy DSA (Sliding Window, Binary Search, Trees/Graphs, DP)',
-      'Edge-case heavy inputs (empty arrays, duplicates, integer overflow)',
-      'Timed Data Interpretation, Probability & Logical Deduction screening',
+    name: 'Product / Big Tech OA',
+    shortLabel: 'Product OA',
+    tagline: 'Balanced Easy–Medium DSA paired with timed Quantitative & Logical screening.',
+    highlights: [
+      '1 Easy + 2 Medium DSA (Sliding Window, Binary Search, Trees, Graphs, DP)',
+      '10 Mixed Aptitude & Logical Reasoning MCQs under 75 minutes',
     ],
-    typicalSplit: 'Easy–Medium DSA + Mixed Aptitude',
     defaultConfig: {
-      mixPreset: 'easy-medium',
       easyDsa: 1,
       mediumDsa: 2,
       hardDsa: 0,
@@ -150,17 +142,14 @@ const COMPANY_PROFILES: CompanyProfile[] = [
   },
   {
     id: 'startup-growth',
-    name: 'High-Growth Startups',
-    badge: 'Practical Speed',
-    tagline: 'Favors pragmatic Easy–Medium problems and debugging speed over obscure math.',
-    whatTheyAsk: [
-      'Hash Maps, Two Pointers, BFS/DFS, Intervals & String parsing',
-      'Working code quickly with clean complexity explanations',
-      'Puzzles, Arithmetic speed & Verbal/Logical accuracy',
+    name: 'Startup Coding Screen',
+    shortLabel: 'Startup',
+    tagline: 'Speed-focused practical coding round prioritizing clean implementation.',
+    highlights: [
+      '2 Easy + 2 Medium DSA (Hash Maps, Two Pointers, Intervals, BFS/DFS)',
+      '8 Mixed Aptitude & Puzzle MCQs in 65 minutes',
     ],
-    typicalSplit: '2 Easy + 2 Medium DSA + Aptitude',
     defaultConfig: {
-      mixPreset: 'easy-medium',
       easyDsa: 2,
       mediumDsa: 2,
       hardDsa: 0,
@@ -173,17 +162,14 @@ const COMPANY_PROFILES: CompanyProfile[] = [
   },
   {
     id: 'backend-data',
-    name: 'Backend & Data Systems',
-    badge: 'DSA + SQL',
-    tagline: 'Blends core Medium DSA with real SQL querying and data interpretation.',
-    whatTheyAsk: [
-      'Medium DSA (Graphs, Heaps, Hash Indexing) + SQL JOINs/Aggregations',
-      'Data Interpretation charts, ratios & quarterly metric comparisons',
-      'Query correctness and handling NULL / ties cleanly',
+    name: 'Backend & Data Engineering',
+    shortLabel: 'Backend + SQL',
+    tagline: 'Tests core DSA alongside SQL joins, aggregations, and data interpretation.',
+    highlights: [
+      'Easy + Medium DSA plus 1 applied SQL query problem',
+      '8 Data Interpretation MCQs in 60 minutes',
     ],
-    typicalSplit: 'Easy + Medium DSA + SQL + DI Aptitude',
     defaultConfig: {
-      mixPreset: 'easy-medium',
       easyDsa: 1,
       mediumDsa: 1,
       hardDsa: 0,
@@ -196,17 +182,14 @@ const COMPANY_PROFILES: CompanyProfile[] = [
   },
   {
     id: 'core-cpp-oop',
-    name: 'Core C++ & LLD Systems',
-    badge: 'DSA + OOP',
-    tagline: 'Combines Medium DSA with C++ Object-Oriented Design and OOP conceptual checks.',
-    whatTheyAsk: [
-      'Medium DSA + Class/System design in C++ (Inheritance, Polymorphism, State)',
-      'Virtual destructors, RAII, Smart Pointers & SOLID MCQs',
-      'Pointer safety and object lifecycle precision',
+    name: 'C++ & Object-Oriented Design',
+    shortLabel: 'C++ / OOP',
+    tagline: 'Combines DSA with C++ class design, polymorphism, and OOP fundamentals.',
+    highlights: [
+      'Easy + Medium DSA plus 1 C++ OOP implementation problem',
+      '8 OOPs & C++ Design MCQs in 60 minutes',
     ],
-    typicalSplit: 'Easy + Medium DSA + OOP + OOPs Aptitude',
     defaultConfig: {
-      mixPreset: 'easy-medium',
       easyDsa: 1,
       mediumDsa: 1,
       hardDsa: 0,
@@ -220,16 +203,13 @@ const COMPANY_PROFILES: CompanyProfile[] = [
   {
     id: 'full-drive',
     name: 'Full Campus Placement Drive',
-    badge: 'Complete Loop',
-    tagline: 'End-to-end simulation mixing Easy, Medium, and Hard DSA plus SQL, OOP & Aptitude.',
-    whatTheyAsk: [
-      'Mixed-difficulty coding ladder (1 Easy, 1 Medium, 1 Hard DSA)',
-      'Applied SQL database task + OOP engineering problem',
-      '10 cross-category Aptitude & Interview Puzzle MCQs',
+    shortLabel: 'Full Loop',
+    tagline: 'Complete multi-section simulation covering DSA, SQL, OOP, and Aptitude.',
+    highlights: [
+      '1 Easy + 1 Medium + 1 Hard DSA, 1 SQL, and 1 OOP challenge',
+      '10 Mixed Aptitude MCQs in 90 minutes',
     ],
-    typicalSplit: 'Easy + Med + Hard + SQL + OOP + 10 MCQ',
     defaultConfig: {
-      mixPreset: 'mixed-combo',
       easyDsa: 1,
       mediumDsa: 1,
       hardDsa: 1,
@@ -259,10 +239,10 @@ function loadSeenIds(): number[] {
 
 function saveSeenIds(ids: number[]) {
   try {
-    // Keep most recent 450 drawn problem IDs so cycling eventually resets gracefully
-    const trimmed = ids.slice(-450);
-    localStorage.setItem(SEEN_MOCK_IDS_KEY, JSON.stringify(trimmed));
-  } catch {}
+    localStorage.setItem(SEEN_MOCK_IDS_KEY, JSON.stringify(ids.slice(-450)));
+  } catch {
+    // Ignore storage quota errors
+  }
 }
 
 function loadMockHistory(): MockHistoryEntry[] {
@@ -279,7 +259,9 @@ function loadMockHistory(): MockHistoryEntry[] {
 function saveMockHistory(entries: MockHistoryEntry[]) {
   try {
     localStorage.setItem(MOCK_HISTORY_KEY, JSON.stringify(entries.slice(0, 15)));
-  } catch {}
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 function loadActiveMock(): ActiveMockSession | null {
@@ -304,7 +286,9 @@ function persistActiveMock(session: ActiveMockSession | null) {
       localStorage.setItem(ACTIVE_MOCK_STORAGE_KEY, JSON.stringify(session));
     }
     notifyMockUpdated();
-  } catch {}
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 function shuffleArray<T>(items: T[]): T[] {
@@ -330,15 +314,22 @@ function pickRandomProblems(
   const isPreferred = (p: CatalogProblem) =>
     preferredTopics && preferredTopics.size > 0 && preferredTopics.has(p.topic);
 
-  // Tier priority so users get genuinely new, unsolved problems every time (with optional weak-topic boost):
-  const tier0Pref = preferredTopics && preferredTopics.size > 0
-    ? shuffleArray(available.filter((p) => isPreferred(p) && !seenIds.has(p.id) && !p.isSolved))
-    : [];
-  const tier1 = shuffleArray(available.filter((p) => !isPreferred(p) && !seenIds.has(p.id) && !p.isSolved));
-  const tier2Pref = preferredTopics && preferredTopics.size > 0
-    ? shuffleArray(available.filter((p) => isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved)))
-    : [];
-  const tier2 = shuffleArray(available.filter((p) => !isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved)));
+  const tier0Pref =
+    preferredTopics && preferredTopics.size > 0
+      ? shuffleArray(available.filter((p) => isPreferred(p) && !seenIds.has(p.id) && !p.isSolved))
+      : [];
+  const tier1 = shuffleArray(
+    available.filter((p) => !isPreferred(p) && !seenIds.has(p.id) && !p.isSolved)
+  );
+  const tier2Pref =
+    preferredTopics && preferredTopics.size > 0
+      ? shuffleArray(
+          available.filter((p) => isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved))
+        )
+      : [];
+  const tier2 = shuffleArray(
+    available.filter((p) => !isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved))
+  );
   const tier3 = shuffleArray(available.filter((p) => seenIds.has(p.id) && !p.isSolved));
   const tier4 = shuffleArray(available.filter((p) => seenIds.has(p.id) && Boolean(p.isSolved)));
 
@@ -359,6 +350,49 @@ function formatTimer(seconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+interface CounterRowProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  badgeColor?: string;
+  onChange: (next: number) => void;
+}
+
+const CounterControl: React.FC<CounterRowProps> = ({
+  label,
+  value,
+  min,
+  max,
+  badgeColor = 'text-text-primary',
+  onChange,
+}) => (
+  <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-surface-subtle border border-border-subtle">
+    <span className={`text-xs font-medium ${badgeColor}`}>{label}</span>
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={value <= min}
+        onClick={() => onChange(Math.max(min, value - 1))}
+        aria-label={`Decrease ${label}`}
+        className="w-6 h-6 rounded-md bg-surface-elevated hover:bg-surface-high border border-border-subtle flex items-center justify-center text-text-secondary hover:text-text-primary disabled:opacity-35 transition-colors"
+      >
+        <Minus className="w-3 h-3" />
+      </button>
+      <span className="w-6 text-center font-mono text-xs font-bold text-text-primary">{value}</span>
+      <button
+        type="button"
+        disabled={value >= max}
+        onClick={() => onChange(Math.min(max, value + 1))}
+        aria-label={`Increase ${label}`}
+        className="w-6 h-6 rounded-md bg-surface-elevated hover:bg-surface-high border border-border-subtle flex items-center justify-center text-text-secondary hover:text-text-primary disabled:opacity-35 transition-colors"
+      >
+        <Plus className="w-3 h-3" />
+      </button>
+    </div>
+  </div>
+);
+
 export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
   onSelectProblem,
   onTabChange,
@@ -369,7 +403,13 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
   });
 
   const [session, setSession] = useState<ActiveMockSession | null>(() => loadActiveMock());
-  const [activeSection, setActiveSection] = useState<'aptitude' | 'coding'>('aptitude');
+  const [activeSection, setActiveSection] = useState<'aptitude' | 'coding'>(() => {
+    const existing = loadActiveMock();
+    if (existing && existing.aptitudeQuestions.length === 0 && existing.codingProblems.length > 0) {
+      return 'coding';
+    }
+    return 'aptitude';
+  });
   const [aptitudeIndex, setAptitudeIndex] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSyncingSolveStatus, setIsSyncingSolveStatus] = useState<boolean>(false);
@@ -387,49 +427,23 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
     return Math.max(0, Math.floor((existing.expiresAtMs - Date.now()) / 1000));
   });
 
+  const initialSyncReadyRef = useRef<boolean>(false);
+  const submitMockRef = useRef<() => void>(() => {});
+
   const selectedProfile = useMemo(
     () => COMPANY_PROFILES.find((p) => p.id === config.trackId) || COMPANY_PROFILES[0],
     [config.trackId]
   );
 
   const handleSelectProfile = (profile: CompanyProfile) => {
-    setConfig({
+    setConfig((prev) => ({
       trackId: profile.id,
       ...profile.defaultConfig,
-    });
+      targetWeakTopics: prev.targetWeakTopics,
+    }));
   };
 
-  const handleApplyMixPreset = (preset: DifficultyMixPreset) => {
-    if (preset === 'easy-medium') {
-      setConfig((prev) => ({
-        ...prev,
-        mixPreset: 'easy-medium',
-        easyDsa: 1,
-        mediumDsa: 2,
-        hardDsa: 0,
-      }));
-    } else if (preset === 'medium-heavy') {
-      setConfig((prev) => ({
-        ...prev,
-        mixPreset: 'medium-heavy',
-        easyDsa: 0,
-        mediumDsa: 3,
-        hardDsa: 0,
-      }));
-    } else if (preset === 'mixed-combo') {
-      setConfig((prev) => ({
-        ...prev,
-        mixPreset: 'mixed-combo',
-        easyDsa: 1,
-        mediumDsa: 1,
-        hardDsa: 1,
-      }));
-    } else {
-      setConfig((prev) => ({ ...prev, mixPreset: 'custom' }));
-    }
-  };
-
-  // Fetch live solve status for coding problems in the current active mock
+  // Sync live solve status from backend for coding problems in active round
   const syncCodingSolveStatus = useCallback(async (targetSession?: ActiveMockSession | null) => {
     const active = targetSession ?? loadActiveMock();
     if (!active || active.codingProblems.length === 0) return;
@@ -459,20 +473,27 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
     }
   }, []);
 
-  // Sync solve status + detect weak DSA & Aptitude topics for targeted mock recommendations
+  // Initial sync + weak-topic stats + auto-sync when user returns from coding workspace
   useEffect(() => {
-    if (session && session.codingProblems.length > 0) {
-      syncCodingSolveStatus(session);
+    const current = loadActiveMock();
+    if (current && current.codingProblems.length > 0) {
+      syncCodingSolveStatus(current).finally(() => {
+        initialSyncReadyRef.current = true;
+        if (!current.submitted && current.expiresAtMs <= Date.now()) {
+          submitMockRef.current();
+        }
+      });
+    } else {
+      initialSyncReadyRef.current = true;
     }
 
-    const loadWeaknessRadar = async () => {
+    const loadWeaknessData = async () => {
       let weakTopics: WeaknessRadar['weakTopics'] = [];
       try {
-        const dash = await apiRequest<{
-          analytics?: { topicStats?: Array<{ topic: string; total: number; solved: number; accuracy: number }> };
+        const dash = await fetchDashboardAnalytics<{
           topicStats?: Array<{ topic: string; total: number; solved: number; accuracy: number }>;
-        }>('/analytics/dashboard');
-        const stats = dash.analytics?.topicStats || dash.topicStats || [];
+        }>();
+        const stats = dash?.topicStats || [];
         weakTopics = [...stats]
           .filter((t) => t.total > t.solved)
           .sort((a, b) => {
@@ -482,7 +503,9 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
             return a.accuracy - b.accuracy;
           })
           .slice(0, 3);
-      } catch {}
+      } catch {
+        // Optional analytics endpoint
+      }
 
       let weakAptitudeCategory: AptitudeCategory | null = null;
       let weakAptitudeAccuracy: number | null = null;
@@ -502,7 +525,9 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
             weakAptitudeAccuracy = Math.round((topWeak.correct / topWeak.attempted) * 100);
           }
         }
-      } catch {}
+      } catch {
+        // Ignore malformed local stats
+      }
 
       setWeaknessRadar({
         weakTopics,
@@ -511,19 +536,37 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
       });
     };
 
-    void loadWeaknessRadar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void loadWeaknessData();
 
-  const submitMockRef = React.useRef<() => void>(() => {});
+    const handleReturnSync = () => {
+      const latest = loadActiveMock();
+      if (latest && latest.codingProblems.length > 0) {
+        void syncCodingSolveStatus(latest);
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        handleReturnSync();
+      }
+    };
 
-  // Live countdown timer when an unsubmitted mock is active (auto-submits when time runs out)
+    window.addEventListener('focus', handleReturnSync);
+    window.addEventListener('codeprep:progress-updated', handleReturnSync);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', handleReturnSync);
+      window.removeEventListener('codeprep:progress-updated', handleReturnSync);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [syncCodingSolveStatus]);
+
+  // Countdown timer when unsubmitted mock is running
   useEffect(() => {
     if (!session || session.submitted) return;
     const tick = () => {
       const remaining = Math.max(0, Math.floor((session.expiresAtMs - Date.now()) / 1000));
       setSecondsLeft(remaining);
-      if (remaining === 0) {
+      if (remaining === 0 && initialSyncReadyRef.current) {
         submitMockRef.current();
       }
     };
@@ -581,9 +624,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
   };
 
   const handleStartNewMock = async () => {
-    const totalCoding = config.easyDsa + config.mediumDsa + config.hardDsa + config.sqlCount + config.oopCount;
+    const totalCoding =
+      config.easyDsa + config.mediumDsa + config.hardDsa + config.sqlCount + config.oopCount;
     if (totalCoding === 0 && config.aptitudeCount === 0) {
-      setErrorMsg('Please select at least 1 Aptitude or Coding problem to start a mock round.');
+      setErrorMsg('Select at least 1 Aptitude MCQ or Coding problem.');
       return;
     }
 
@@ -600,24 +644,39 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
           ? new Set(weaknessRadar.weakTopics.map((w) => w.topic))
           : undefined;
 
-      // Build coding problem lineup (shuffle order lightly within tiers while keeping DSA -> SQL/OOP logical)
-      const pickedEasy = pickRandomProblems(pools.easyDsa || [], config.easyDsa, chosenIds, seenSet, preferredTopicSet);
-      const pickedMed = pickRandomProblems(pools.mediumDsa || [], config.mediumDsa, chosenIds, seenSet, preferredTopicSet);
-      const pickedHard = pickRandomProblems(pools.hardDsa || [], config.hardDsa, chosenIds, seenSet, preferredTopicSet);
+      const pickedEasy = pickRandomProblems(
+        pools.easyDsa || [],
+        config.easyDsa,
+        chosenIds,
+        seenSet,
+        preferredTopicSet
+      );
+      const pickedMed = pickRandomProblems(
+        pools.mediumDsa || [],
+        config.mediumDsa,
+        chosenIds,
+        seenSet,
+        preferredTopicSet
+      );
+      const pickedHard = pickRandomProblems(
+        pools.hardDsa || [],
+        config.hardDsa,
+        chosenIds,
+        seenSet,
+        preferredTopicSet
+      );
       const pickedSql = pickRandomProblems(pools.sql || [], config.sqlCount, chosenIds, seenSet);
       const pickedOop = pickRandomProblems(pools.oop || [], config.oopCount, chosenIds, seenSet);
 
       const dsaMixed = shuffleArray([...pickedEasy, ...pickedMed, ...pickedHard]);
       const codingProblems = [...dsaMixed, ...pickedSql, ...pickedOop];
 
-      // Record newly drawn problem IDs so the next mock picks fresh ones
       const updatedSeen = [
         ...previouslySeen.filter((id) => !chosenIds.has(id)),
         ...Array.from(chosenIds),
       ];
       saveSeenIds(updatedSeen);
 
-      // Always generate brand-new algorithmic Aptitude MCQs
       const aptitudeQuestions =
         config.aptitudeCount > 0
           ? generateAptitudeBatch(config.aptitudeFocus, config.aptitudeCount)
@@ -626,7 +685,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
       const durationSec = config.durationMinutes * 60;
       const diffParts: string[] = [];
       if (config.easyDsa > 0) diffParts.push(`${config.easyDsa} Easy`);
-      if (config.mediumDsa > 0) diffParts.push(`${config.mediumDsa} Medium`);
+      if (config.mediumDsa > 0) diffParts.push(`${config.mediumDsa} Med`);
       if (config.hardDsa > 0) diffParts.push(`${config.hardDsa} Hard`);
       if (config.sqlCount > 0) diffParts.push(`${config.sqlCount} SQL`);
       if (config.oopCount > 0) diffParts.push(`${config.oopCount} OOP`);
@@ -647,6 +706,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
         submitted: false,
       };
 
+      initialSyncReadyRef.current = true;
       persistActiveMock(newSession);
       setSession(newSession);
       setSecondsLeft(durationSec);
@@ -656,7 +716,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
       setErrorMsg(
         err instanceof Error
           ? err.message
-          : 'Could not draw problems from backend. Ensure backend server is running.'
+          : 'Could not load problems from the server.'
       );
     } finally {
       setIsGenerating(false);
@@ -767,7 +827,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
       durationSec: elapsedSec,
     };
 
-    const nextHistory = [historyEntry, ...history.filter((h) => h.id !== historyEntry.id)].slice(0, 15);
+    const nextHistory = [historyEntry, ...history.filter((h) => h.id !== historyEntry.id)].slice(
+      0,
+      15
+    );
     setHistory(nextHistory);
     saveMockHistory(nextHistory);
 
@@ -784,10 +847,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
     setSecondsLeft(0);
   };
 
-  // Computed metrics when a session exists
-  const aptitudeAnsweredCount = session
-    ? Object.keys(session.aptitudeAnswers).length
-    : 0;
+  const aptitudeAnsweredCount = session ? Object.keys(session.aptitudeAnswers).length : 0;
   const aptitudeCorrectCount = session
     ? session.aptitudeQuestions.reduce(
         (acc, q) => acc + (session.aptitudeAnswers[q.id] === q.correctIndex ? 1 : 0),
@@ -797,11 +857,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
   const codingSolvedCount = session
     ? session.codingProblems.filter((p) => p.isSolved).length
     : 0;
-
   const currentAptitudeQ = session?.aptitudeQuestions[aptitudeIndex] || null;
 
   /* ------------------------------------------------------------------------ */
-  /* RENDER ACTIVE SESSION OR RESULTS                                         */
+  /* ACTIVE TEST SESSION VIEW                                                 */
   /* ------------------------------------------------------------------------ */
   if (session) {
     const isLowTime = !session.submitted && secondsLeft <= 300;
@@ -813,43 +872,79 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
       session.codingProblems.length > 0
         ? Math.round((codingSolvedCount / session.codingProblems.length) * 100)
         : 100;
+    const effectiveSection =
+      session.aptitudeQuestions.length === 0
+        ? 'coding'
+        : session.codingProblems.length === 0
+        ? 'aptitude'
+        : activeSection;
 
     return (
       <AppLayout currentTab="mock-interview" onTabChange={onTabChange}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 space-y-6">
-          {/* Top Session Header */}
-          <div className="bg-surface border border-border-subtle rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-primary-subtle text-primary border border-primary/30">
-                  {session.trackName}
-                </span>
-                <span className="text-xs font-mono text-text-muted">
-                  {session.difficultyLabel}
-                </span>
-                {session.submitted && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-success/15 text-success border border-success/35">
-                    Submitted & Graded
+        <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 space-y-5">
+          {/* Sticky Compact Assessment Bar */}
+          <div className="bg-surface border border-border-subtle rounded-2xl px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-3 min-w-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-text-primary truncate">
+                    {session.trackName}
                   </span>
-                )}
+                  {session.submitted && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-success-subtle text-success">
+                      Submitted
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] font-mono text-text-muted">{session.difficultyLabel}</div>
               </div>
-              <h1 className="text-xl font-bold text-text-primary">
-                Aptitude + Coding Mock Assessment
-              </h1>
+
+              {session.aptitudeQuestions.length > 0 && session.codingProblems.length > 0 && (
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-subtle border border-border-subtle">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection('aptitude')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                      effectiveSection === 'aptitude'
+                        ? 'bg-surface-elevated text-text-primary border border-border-default shadow-xs'
+                        : 'text-text-secondary hover:text-text-primary'
+                    }`}
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-primary" />
+                    <span>
+                      Aptitude ({aptitudeAnsweredCount}/{session.aptitudeQuestions.length})
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection('coding')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                      effectiveSection === 'coding'
+                        ? 'bg-surface-elevated text-text-primary border border-border-default shadow-xs'
+                        : 'text-text-secondary hover:text-text-primary'
+                    }`}
+                  >
+                    <Code2 className="w-3.5 h-3.5 text-success" />
+                    <span>
+                      Coding ({codingSolvedCount}/{session.codingProblems.length})
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
               <div
-                className={`px-3.5 py-2 rounded-xl border font-mono text-sm font-bold flex items-center gap-2 ${
+                className={`px-3 py-1.5 rounded-xl border font-mono text-xs font-bold flex items-center gap-1.5 ${
                   isLowTime
-                    ? 'bg-danger/15 border-danger/45 text-danger'
-                    : 'bg-surface-subtle border-border-default text-text-primary'
+                    ? 'bg-danger-subtle border-danger/45 text-danger'
+                    : 'bg-surface-subtle border-border-subtle text-text-primary'
                 }`}
               >
-                <Clock className="w-4 h-4 text-primary" />
+                <Clock className="w-3.5 h-3.5 text-primary" />
                 <span>
                   {session.submitted
-                    ? `Elapsed: ${formatTimer(session.elapsedSecOnSubmit || 0)}`
+                    ? formatTimer(session.elapsedSecOnSubmit || 0)
                     : formatTimer(secondsLeft)}
                 </span>
               </div>
@@ -858,147 +953,94 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                 <button
                   type="button"
                   onClick={handleSubmitMock}
-                  className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-black text-xs font-semibold flex items-center gap-1.5 transition-colors"
                 >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Submit Mock Round</span>
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Finish &amp; Submit</span>
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={handleStartNewMock}
                   disabled={isGenerating}
-                  className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                  className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-black text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-60"
                 >
-                  <Shuffle className="w-4 h-4" />
-                  <span>{isGenerating ? 'Drawing Fresh Set...' : 'Start New Fresh Mock'}</span>
+                  <Shuffle className="w-3.5 h-3.5" />
+                  <span>{isGenerating ? 'Loading...' : 'New Mock'}</span>
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={handleDiscardOrReset}
-                className="px-3 py-2 rounded-xl bg-surface-elevated hover:bg-surface-high border border-border-default text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5 transition-colors"
-                title="Return to Mock Setup"
+                className="px-3 py-1.5 rounded-xl bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5 transition-colors"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Setup</span>
+                <span>Exit</span>
               </button>
             </div>
           </div>
 
-          {/* Post-Submission Scorecard */}
+          {/* Post-Submission Scorecard Strip */}
           {session.submitted && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-1.5">
-                <div className="text-xs font-mono text-text-muted flex items-center justify-between">
-                  <span>Aptitude Round Score</span>
-                  <Trophy className="w-4 h-4 text-primary" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="bg-surface border border-border-subtle rounded-2xl p-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-mono text-text-muted">Aptitude Score</div>
+                  <div className="text-xl font-bold text-text-primary font-mono mt-0.5">
+                    {aptitudeCorrectCount}/{session.aptitudeQuestions.length}{' '}
+                    <span className="text-xs font-normal text-text-secondary">
+                      ({aptitudePct}%)
+                    </span>
+                  </div>
                 </div>
-                <div className="text-2xl font-bold text-text-primary font-mono">
-                  {aptitudeCorrectCount} / {session.aptitudeQuestions.length}{' '}
-                  <span className="text-sm font-normal text-text-secondary">
-                    ({aptitudePct}%)
-                  </span>
-                </div>
-                <p className="text-xs text-text-secondary">
-                  Review full step-by-step shortcuts under the Aptitude tab below.
-                </p>
+                <Trophy className="w-5 h-5 text-primary shrink-0" />
               </div>
 
-              <div className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-1.5">
-                <div className="text-xs font-mono text-text-muted flex items-center justify-between">
-                  <span>Coding Round Status</span>
-                  <Code2 className="w-4 h-4 text-emerald-400" />
+              <div className="bg-surface border border-border-subtle rounded-2xl p-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-mono text-text-muted">Coding Solved</div>
+                  <div className="text-xl font-bold text-text-primary font-mono mt-0.5">
+                    {codingSolvedCount}/{session.codingProblems.length}{' '}
+                    <span className="text-xs font-normal text-text-secondary">({codingPct}%)</span>
+                  </div>
                 </div>
-                <div className="text-2xl font-bold text-text-primary font-mono">
-                  {codingSolvedCount} / {session.codingProblems.length}{' '}
-                  <span className="text-sm font-normal text-text-secondary">
-                    ({codingPct}%)
-                  </span>
-                </div>
-                <p className="text-xs text-text-secondary">
-                  Synced directly with accepted submissions in your workspace.
-                </p>
+                <Code2 className="w-5 h-5 text-success shrink-0" />
               </div>
 
-              <div className="bg-surface border border-border-subtle rounded-2xl p-5 flex flex-col justify-between gap-2">
-                <div className="text-xs font-mono text-text-muted flex items-center justify-between">
-                  <span>Overall Readiness</span>
-                  <Award className="w-4 h-4 text-warning" />
-                </div>
-                <div className="text-lg font-bold text-text-primary">
-                  {aptitudePct >= 70 && codingPct >= 50
-                    ? 'Strong Shortlist Signal'
-                    : 'Keep Practicing — Try a Fresh Set'}
+              <div className="bg-surface border border-border-subtle rounded-2xl p-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-mono text-text-muted">Summary</div>
+                  <div className="text-sm font-bold text-text-primary mt-0.5">
+                    {aptitudePct >= 70 && codingPct >= 50
+                      ? 'Target Passed'
+                      : 'Review Weak Questions'}
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => syncCodingSolveStatus(session)}
                   disabled={isSyncingSolveStatus}
-                  className="text-xs font-mono text-primary hover:underline inline-flex items-center gap-1 w-fit"
+                  title="Refresh submission status"
+                  className="p-2 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-text-secondary hover:text-primary transition-colors"
                 >
-                  <RefreshCw className={`w-3 h-3 ${isSyncingSolveStatus ? 'animate-spin' : ''}`} />
-                  <span>Re-sync Coding Submissions</span>
+                  <RefreshCw className={`w-4 h-4 ${isSyncingSolveStatus ? 'animate-spin' : ''}`} />
                 </button>
               </div>
             </div>
           )}
 
-          {/* Section Switcher: Part 1 Aptitude | Part 2 Coding */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle pb-3">
-            <div className="flex items-center gap-2">
-              {session.aptitudeQuestions.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveSection('aptitude')}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-colors ${
-                    activeSection === 'aptitude'
-                      ? 'bg-primary-subtle border-primary/45 text-primary'
-                      : 'bg-surface border-border-subtle text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  <span>
-                    Part A: Aptitude ({aptitudeAnsweredCount}/{session.aptitudeQuestions.length})
-                  </span>
-                </button>
-              )}
-
-              {session.codingProblems.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveSection('coding')}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-colors ${
-                    activeSection === 'coding'
-                      ? 'bg-primary-subtle border-primary/45 text-primary'
-                      : 'bg-surface border-border-subtle text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  <Code2 className="w-4 h-4" />
-                  <span>
-                    Part B: Coding Round ({codingSolvedCount}/{session.codingProblems.length} Solved)
-                  </span>
-                </button>
-              )}
-            </div>
-
-            <div className="text-xs font-mono text-text-muted">
-              Each new mock draws unseen questions & regenerates Aptitude math/visuals.
-            </div>
-          </div>
-
           {/* PART A: APTITUDE SECTION */}
-          {activeSection === 'aptitude' && currentAptitudeQ && (
+          {effectiveSection === 'aptitude' && currentAptitudeQ && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-              {/* Main MCQ Card */}
+              {/* MCQ Area */}
               <div className="lg:col-span-8 bg-surface border border-border-subtle rounded-2xl p-6 space-y-5 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border-subtle">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-surface-elevated border border-border-subtle text-text-primary">
-                      Q{aptitudeIndex + 1} of {session.aptitudeQuestions.length}
+                      Q{aptitudeIndex + 1}/{session.aptitudeQuestions.length}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-primary-subtle text-primary border border-primary/30">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-primary-subtle text-primary">
                       {currentAptitudeQ.category}
                     </span>
                     <span className="text-xs font-mono text-text-muted">
@@ -1012,7 +1054,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                       onClick={() => handleToggleFlag(currentAptitudeQ.id)}
                       className={`px-2.5 py-1 rounded-lg border text-xs font-mono flex items-center gap-1.5 transition-colors ${
                         session.flaggedIds.includes(currentAptitudeQ.id)
-                          ? 'bg-warning/15 border-warning/45 text-warning'
+                          ? 'bg-warning-subtle border-warning/45 text-warning'
                           : 'bg-surface-subtle border-border-subtle text-text-muted hover:text-text-primary'
                       }`}
                     >
@@ -1024,7 +1066,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                   )}
                 </div>
 
-                <h2 className="text-base sm:text-lg font-semibold text-text-primary leading-relaxed whitespace-pre-line">
+                <h2 className="text-base font-semibold text-text-primary leading-relaxed whitespace-pre-line">
                   {currentAptitudeQ.question}
                 </h2>
 
@@ -1047,12 +1089,11 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
 
                     if (session.submitted) {
                       if (idx === currentAptitudeQ.correctIndex) {
-                        style = 'bg-success/15 border border-success/45 text-success font-semibold';
+                        style = 'bg-success-subtle border border-success/45 text-success font-semibold';
                       } else if (isSelected) {
-                        style = 'bg-danger/15 border border-danger/45 text-danger';
+                        style = 'bg-danger-subtle border border-danger/45 text-danger';
                       } else {
-                        style =
-                          'bg-surface-subtle border border-border-subtle opacity-50 text-text-muted';
+                        style = 'bg-surface-subtle border border-border-subtle opacity-50 text-text-muted';
                       }
                     } else if (isSelected) {
                       style = 'bg-primary-subtle border border-primary/50 text-primary font-semibold';
@@ -1089,29 +1130,27 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                   })}
                 </div>
 
-                {/* Explanation shown after submit */}
                 {session.submitted && (
                   <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle space-y-2 text-sm">
                     <div className="flex items-center gap-2 font-semibold text-text-primary">
                       <Lightbulb className="w-4 h-4 text-warning" />
-                      <span>Solution & Shortcut</span>
+                      <span>Explanation</span>
                     </div>
                     <p className="text-text-secondary text-[13px] leading-relaxed">
                       {currentAptitudeQ.explanation}
                     </p>
                     <div className="pt-2 border-t border-border-subtle text-xs font-mono text-primary">
-                      Shortcut: <span className="text-text-secondary">{currentAptitudeQ.shortcutTip}</span>
+                      Tip: <span className="text-text-secondary">{currentAptitudeQ.shortcutTip}</span>
                     </div>
                   </div>
                 )}
 
-                {/* Navigation Footer */}
                 <div className="flex items-center justify-between pt-3 border-t border-border-subtle">
                   <button
                     type="button"
                     disabled={aptitudeIndex === 0}
                     onClick={() => setAptitudeIndex((i) => Math.max(0, i - 1))}
-                    className="px-3.5 py-1.5 rounded-lg bg-surface-elevated border border-border-default text-xs text-text-secondary hover:text-text-primary disabled:opacity-40"
+                    className="px-3.5 py-1.5 rounded-lg bg-surface-elevated border border-border-subtle text-xs text-text-secondary hover:text-text-primary disabled:opacity-40"
                   >
                     Previous
                   </button>
@@ -1124,32 +1163,32 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                           Math.min(session.aptitudeQuestions.length - 1, i + 1)
                         )
                       }
-                      className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold flex items-center gap-1.5"
+                      className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-black text-xs font-semibold flex items-center gap-1.5"
                     >
-                      <span>Next Question</span>
+                      <span>Next</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   ) : session.codingProblems.length > 0 ? (
                     <button
                       type="button"
                       onClick={() => setActiveSection('coding')}
-                      className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                      className="px-4 py-1.5 rounded-lg bg-success text-black text-xs font-semibold flex items-center gap-1.5"
                     >
-                      <span>Proceed to Coding Round</span>
+                      <span>Go to Coding</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   ) : null}
                 </div>
               </div>
 
-              {/* Right Question Palette */}
+              {/* Compact Navigator */}
               <div className="lg:col-span-4 bg-surface border border-border-subtle rounded-2xl p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-text-muted">
-                    Question Palette
+                    Questions
                   </h3>
                   <span className="text-xs font-mono text-text-secondary">
-                    {aptitudeAnsweredCount}/{session.aptitudeQuestions.length} Done
+                    {aptitudeAnsweredCount}/{session.aptitudeQuestions.length}
                   </span>
                 </div>
 
@@ -1165,10 +1204,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                     if (session.submitted) {
                       pillStyle =
                         ans === q.correctIndex
-                          ? 'bg-success/15 border-success/45 text-success'
-                          : 'bg-danger/15 border-danger/45 text-danger';
+                          ? 'bg-success-subtle border-success/45 text-success'
+                          : 'bg-danger-subtle border-danger/45 text-danger';
                     } else if (isFlagged) {
-                      pillStyle = 'bg-warning/15 border-warning/50 text-warning';
+                      pillStyle = 'bg-warning-subtle border-warning/50 text-warning';
                     } else if (isAnswered) {
                       pillStyle = 'bg-primary-subtle border-primary/45 text-primary';
                     }
@@ -1188,33 +1227,21 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                   })}
                 </div>
 
-                <div className="pt-3 border-t border-border-subtle space-y-2 text-[11px] font-mono text-text-muted">
-                  <div className="flex items-center justify-between">
-                    <span>Answered</span>
-                    <span className="text-primary">{aptitudeAnsweredCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Flagged for Review</span>
-                    <span className="text-warning">{session.flaggedIds.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Coding Problems</span>
-                    <span className="text-emerald-400">
-                      {codingSolvedCount}/{session.codingProblems.length} Solved
-                    </span>
-                  </div>
+                <div className="pt-3 border-t border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
+                  <span>Answered: {aptitudeAnsweredCount}</span>
+                  <span>Flagged: {session.flaggedIds.length}</span>
                 </div>
               </div>
             </div>
           )}
 
           {/* PART B: CODING ROUND SECTION */}
-          {activeSection === 'coding' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-surface border border-border-subtle rounded-2xl px-5 py-3.5">
-                <div className="text-xs text-text-secondary">
-                  Click <strong className="text-text-primary">Open in Compiler</strong> to solve in the full workspace. Your timer & session stay active while you code!
-                </div>
+          {effectiveSection === 'coding' && (
+            <div className="space-y-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-surface border border-border-subtle rounded-2xl px-5 py-3">
+                <span className="text-xs text-text-secondary">
+                  Solve problems in the editor — status updates automatically when you return.
+                </span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1224,12 +1251,12 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                     {session.revealTopics ? (
                       <>
                         <EyeOff className="w-3.5 h-3.5" />
-                        <span>Hide Pattern Hints</span>
+                        <span>Hide Topics</span>
                       </>
                     ) : (
                       <>
                         <Eye className="w-3.5 h-3.5" />
-                        <span>Show Topic Hints</span>
+                        <span>Show Topics</span>
                       </>
                     )}
                   </button>
@@ -1238,97 +1265,87 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                     type="button"
                     onClick={() => syncCodingSolveStatus(session)}
                     disabled={isSyncingSolveStatus}
-                    className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-default text-xs font-mono text-primary flex items-center gap-1.5"
+                    className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs font-mono text-text-secondary hover:text-text-primary flex items-center gap-1.5"
+                    title="Refresh solve status"
                   >
                     <RefreshCw
                       className={`w-3.5 h-3.5 ${isSyncingSolveStatus ? 'animate-spin' : ''}`}
                     />
-                    <span>Sync Solve Status</span>
+                    <span>Refresh</span>
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-surface border border-border-subtle rounded-2xl divide-y divide-border-subtle overflow-hidden">
                 {session.codingProblems.map((prob, idx) => {
                   const diffBadge =
                     prob.difficulty === 'Easy'
-                      ? 'bg-success/15 text-success border-success/35'
+                      ? 'bg-success-subtle text-success'
                       : prob.difficulty === 'Medium'
-                      ? 'bg-warning/15 text-warning border-warning/35'
-                      : 'bg-danger/15 text-danger border-danger/35';
+                      ? 'bg-warning-subtle text-warning'
+                      : 'bg-danger-subtle text-danger';
 
                   return (
                     <div
                       key={`${prob.id}-${idx}`}
-                      className="bg-surface border border-border-subtle rounded-2xl p-5 flex flex-col justify-between gap-4 hover:border-border-default transition-colors"
+                      className="p-4 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-surface-subtle transition-colors"
                     >
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono font-bold text-text-muted">
-                              Problem {idx + 1} · #{prob.id}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold border ${diffBadge}`}
-                            >
-                              {prob.difficulty}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-surface-elevated border border-border-subtle text-text-secondary">
-                              {prob.category === 'SQL'
-                                ? 'SQL'
-                                : prob.category === 'OOP'
-                                ? 'OOP / C++'
-                                : 'DSA'}
-                            </span>
-                          </div>
-
-                          {prob.isSolved ? (
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-mono text-text-muted">#{prob.id}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold ${diffBadge}`}
+                          >
+                            {prob.difficulty}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-surface-elevated border border-border-subtle text-text-secondary">
+                            {prob.category === 'SQL'
+                              ? 'SQL'
+                              : prob.category === 'OOP'
+                              ? 'OOP / C++'
+                              : 'DSA'}
+                          </span>
+                          {prob.isSolved && (
                             <span className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-success">
-                              <CheckCircle2 className="w-4 h-4" />
+                              <CheckCircle2 className="w-3.5 h-3.5" />
                               Solved
                             </span>
-                          ) : (
-                            <span className="text-xs font-mono text-text-muted">Pending</span>
                           )}
                         </div>
 
-                        <h3 className="text-base font-bold text-text-primary leading-snug">
+                        <h3 className="text-sm sm:text-base font-semibold text-text-primary truncate">
                           {prob.title}
                         </h3>
 
-                        {session.revealTopics ? (
+                        {session.revealTopics && (
                           <p className="text-xs font-mono text-primary">
-                            Topic: {prob.topic}
-                            {prob.pattern ? ` · Pattern: ${prob.pattern}` : ''}
-                          </p>
-                        ) : (
-                          <p className="text-xs font-mono text-text-muted">
-                            Topic hidden (interview blind mode)
+                            {prob.topic}
+                            {prob.pattern ? ` · ${prob.pattern}` : ''}
                           </p>
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 pt-3 border-t border-border-subtle">
+                      <div className="flex items-center gap-2 shrink-0">
                         {!session.submitted && (
                           <button
                             type="button"
                             onClick={() => handleSwapCodingProblem(idx)}
                             disabled={isSyncingSolveStatus}
-                            className="px-3 py-1.5 rounded-lg bg-surface-subtle hover:bg-surface-high border border-border-subtle text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5 transition-colors"
-                            title="Draw a different random problem for this slot"
+                            className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5 transition-colors"
+                            title="Replace with another problem"
                           >
                             <Shuffle className="w-3.5 h-3.5" />
-                            <span>Swap Problem</span>
+                            <span>Swap</span>
                           </button>
                         )}
 
                         <button
                           type="button"
                           onClick={() => onSelectProblem(prob.id)}
-                          className="ml-auto px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-black text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Open in Compiler</span>
+                          <span>{prob.isSolved ? 'Review' : 'Solve'}</span>
                         </button>
                       </div>
                     </div>
@@ -1343,392 +1360,264 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
   }
 
   /* ------------------------------------------------------------------------ */
-  /* RENDER MOCK SETUP & COMPANY PATTERN HUB                                  */
+  /* SETUP HUB VIEW (Clean 2-Column Assessment Builder)                       */
   /* ------------------------------------------------------------------------ */
   const totalCodingCount =
     config.easyDsa + config.mediumDsa + config.hardDsa + config.sqlCount + config.oopCount;
 
   return (
     <AppLayout currentTab="mock-interview" onTabChange={onTabChange}>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-        {/* Hero Header */}
-        <div className="bg-surface border border-border-subtle rounded-2xl p-6 sm:p-7 flex flex-col lg:flex-row lg:items-center justify-between gap-6 shadow-sm">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-subtle border border-primary/30 text-primary text-xs font-mono font-semibold">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Fresh Randomized Aptitude + Coding Assessment</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-text-primary tracking-tight">
-              Mock Interview Simulator
+      <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-7 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-b border-border-subtle pb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-text-primary tracking-tight">
+              Mock Interview
             </h1>
-            <p className="text-sm text-text-secondary leading-relaxed">
-              Simulates real Online Assessments & technical rounds by pairing freshly generated
-              Aptitude MCQs with randomized DSA, SQL, and OOP coding problems. Prioritizes unseen
-              problems every time you generate a round.
+            <p className="text-xs sm:text-sm text-text-secondary mt-1">
+              Timed Aptitude MCQs and unseen DSA, SQL, and C++ OOP coding questions in one assessment.
             </p>
           </div>
-
-          <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={handleStartNewMock}
-              disabled={isGenerating}
-              className="px-5 py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer disabled:opacity-60"
-            >
-              <Play className="w-4 h-4 fill-current" />
-              <span>
-                {isGenerating ? 'Drawing Fresh Problems...' : 'Start New Mock Interview'}
-              </span>
-            </button>
-            <span className="text-[11px] font-mono text-text-muted text-center lg:text-right">
-              {config.aptitudeCount} Aptitude MCQ + {totalCodingCount} Coding ·{' '}
-              {config.durationMinutes} min
-            </span>
-          </div>
+          <span className="text-xs font-mono text-text-muted">
+            Prioritizes unsolved problems automatically
+          </span>
         </div>
 
         {errorMsg && (
-          <div className="p-4 rounded-xl bg-danger/15 border border-danger/40 text-xs text-danger font-mono">
+          <div className="p-3.5 rounded-xl bg-danger-subtle border border-danger/35 text-xs text-danger font-mono">
             {errorMsg}
           </div>
         )}
 
-        {/* Adaptive Weakness-Targeted Mock Banner */}
-        {(weaknessRadar.weakTopics.length > 0 || weaknessRadar.weakAptitudeCategory) && (
-          <div className="bg-surface border border-primary/35 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs font-mono font-semibold text-primary">
-                <Target className="w-4 h-4" />
-                <span>Adaptive Weakness Targeting</span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Track Selection + Mix Steppers */}
+          <div className="lg:col-span-7 space-y-5">
+            {/* Format Presets */}
+            <div className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-xs font-mono font-semibold uppercase tracking-wider text-text-muted">
+                  Interview Format
+                </h2>
               </div>
-              <p className="text-xs text-text-secondary leading-relaxed">
-                {weaknessRadar.weakTopics.length > 0 && (
-                  <>
-                    Lowest DSA topics:{' '}
-                    <strong className="text-text-primary">
-                      {weaknessRadar.weakTopics.map((w) => `${w.topic} (${w.solved}/${w.total})`).join(', ')}
-                    </strong>
-                    {weaknessRadar.weakAptitudeCategory ? ' · ' : ''}
-                  </>
-                )}
-                {weaknessRadar.weakAptitudeCategory && (
-                  <>
-                    Lowest Aptitude accuracy:{' '}
-                    <strong className="text-text-primary">
-                      {weaknessRadar.weakAptitudeCategory} ({weaknessRadar.weakAptitudeAccuracy}%)
-                    </strong>
-                  </>
-                )}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setConfig((prev) => {
-                  const nextTargeted = !prev.targetWeakTopics;
-                  return {
-                    ...prev,
-                    targetWeakTopics: nextTargeted,
-                    aptitudeFocus:
-                      nextTargeted && weaknessRadar.weakAptitudeCategory
-                        ? weaknessRadar.weakAptitudeCategory
-                        : prev.aptitudeFocus,
-                  };
-                });
-              }}
-              aria-pressed={Boolean(config.targetWeakTopics)}
-              className={`px-4 py-2 rounded-xl border text-xs font-semibold shrink-0 transition-colors cursor-pointer ${
-                config.targetWeakTopics
-                  ? 'bg-primary text-white border-primary'
-                  : 'bg-primary-subtle text-primary border-primary/40 hover:bg-primary/20'
-              }`}
-            >
-              {config.targetWeakTopics ? 'Weak-Topic Boost: ON ✓' : 'Target My Weakest Topics'}
-            </button>
-          </div>
-        )}
 
-        {/* Step 1: Company Track Blueprint */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-mono font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-primary" />
-              <span>1. Choose Target Company Format (What Companies Ask)</span>
-            </h2>
-          </div>
+              <div className="flex flex-wrap gap-2">
+                {COMPANY_PROFILES.map((profile) => {
+                  const isSelected = config.trackId === profile.id;
+                  return (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      onClick={() => handleSelectProfile(profile)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                        isSelected
+                          ? 'bg-primary-subtle border-primary/50 text-primary font-semibold'
+                          : 'bg-surface-subtle border-border-subtle text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
+                      }`}
+                    >
+                      {profile.shortLabel}
+                    </button>
+                  );
+                })}
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {COMPANY_PROFILES.map((profile) => {
-              const isSelected = config.trackId === profile.id;
-              return (
-                <button
-                  key={profile.id}
-                  type="button"
-                  onClick={() => handleSelectProfile(profile)}
-                  className={`text-left p-5 rounded-2xl border transition-all flex flex-col justify-between gap-3 cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary-subtle/35 border-primary/55 shadow-sm'
-                      : 'bg-surface border-border-subtle hover:border-border-default'
-                  }`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-base font-bold text-text-primary">{profile.name}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-surface-elevated border border-border-subtle text-primary">
-                        {profile.badge}
-                      </span>
-                    </div>
-                    <p className="text-xs text-text-secondary leading-relaxed">{profile.tagline}</p>
-                    <ul className="space-y-1 pt-1">
-                      {profile.whatTheyAsk.map((point, idx) => (
-                        <li
-                          key={idx}
-                          className="text-[11px] text-text-muted flex items-start gap-1.5 leading-snug"
-                        >
-                          <span className="text-primary mt-0.5">•</span>
-                          <span>{point}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="pt-2.5 border-t border-border-subtle flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-text-secondary">{profile.typicalSplit}</span>
-                    {isSelected && (
-                      <span className="text-primary font-semibold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Selected
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Step 2: Difficulty Mix & Round Configuration */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          <div className="lg:col-span-8 bg-surface border border-border-subtle rounded-2xl p-6 space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-mono font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-                <Target className="w-4 h-4 text-primary" />
-                <span>2. Difficulty Mix & Question Count</span>
-              </h2>
-              <span className="text-xs font-mono text-text-secondary">
-                Recommended for practice: Easy–Medium or Medium-heavy
-              </span>
+              <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle space-y-2">
+                <div className="text-sm font-semibold text-text-primary">{selectedProfile.name}</div>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  {selectedProfile.tagline}
+                </p>
+                <ul className="space-y-1 pt-0.5">
+                  {selectedProfile.highlights.map((pt, i) => (
+                    <li key={i} className="text-xs text-text-muted flex items-start gap-2">
+                      <span className="text-primary">•</span>
+                      <span>{pt}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
-            {/* Difficulty Presets */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-              {[
-                {
-                  id: 'easy-medium' as DifficultyMixPreset,
-                  label: 'Easy + Medium',
-                  sub: '1 Easy · 2 Med',
-                },
-                {
-                  id: 'medium-heavy' as DifficultyMixPreset,
-                  label: 'Medium Focus',
-                  sub: '3 Medium DSA',
-                },
-                {
-                  id: 'mixed-combo' as DifficultyMixPreset,
-                  label: 'Mixed Ladder',
-                  sub: '1 Easy · 1 Med · 1 Hard',
-                },
-                {
-                  id: 'custom' as DifficultyMixPreset,
-                  label: 'Custom Mix',
-                  sub: 'Adjust sliders below',
-                },
-              ].map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleApplyMixPreset(preset.id)}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    config.mixPreset === preset.id
-                      ? 'bg-primary-subtle border-primary/50 text-primary'
-                      : 'bg-surface-subtle border-border-subtle text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  <div className="text-xs font-bold">{preset.label}</div>
-                  <div className="text-[11px] font-mono opacity-80 mt-0.5">{preset.sub}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Granular Sliders / Selectors */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
-              <label className="space-y-1.5 text-xs">
-                <span className="font-mono text-success font-semibold block">
-                  Easy DSA ({config.easyDsa})
+            {/* Question Count & Topic Settings */}
+            <div className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-mono font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-primary" />
+                  <span>Round Mix</span>
+                </h2>
+                <span className="text-xs font-mono text-text-muted">
+                  {totalCodingCount} Coding · {config.aptitudeCount} MCQ
                 </span>
-                <input
-                  type="range"
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <CounterControl
+                  label="Easy DSA"
+                  badgeColor="text-success"
+                  value={config.easyDsa}
                   min={0}
                   max={3}
-                  value={config.easyDsa}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      mixPreset: 'custom',
-                      easyDsa: Number(e.target.value),
-                    }))
-                  }
-                  className="w-full accent-emerald-500"
+                  onChange={(easyDsa) => setConfig((p) => ({ ...p, easyDsa }))}
                 />
-              </label>
-
-              <label className="space-y-1.5 text-xs">
-                <span className="font-mono text-warning font-semibold block">
-                  Medium DSA ({config.mediumDsa})
-                </span>
-                <input
-                  type="range"
+                <CounterControl
+                  label="Medium DSA"
+                  badgeColor="text-warning"
+                  value={config.mediumDsa}
                   min={0}
                   max={4}
-                  value={config.mediumDsa}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      mixPreset: 'custom',
-                      mediumDsa: Number(e.target.value),
-                    }))
-                  }
-                  className="w-full accent-amber-500"
+                  onChange={(mediumDsa) => setConfig((p) => ({ ...p, mediumDsa }))}
                 />
-              </label>
-
-              <label className="space-y-1.5 text-xs">
-                <span className="font-mono text-danger font-semibold block">
-                  Hard DSA ({config.hardDsa})
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
+                <CounterControl
+                  label="Hard DSA"
+                  badgeColor="text-danger"
                   value={config.hardDsa}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      mixPreset: 'custom',
-                      hardDsa: Number(e.target.value),
-                    }))
-                  }
-                  className="w-full accent-rose-500"
-                />
-              </label>
-
-              <label className="space-y-1.5 text-xs">
-                <span className="font-mono text-text-primary flex items-center gap-1.5">
-                  <Database className="w-3.5 h-3.5 text-primary" />
-                  SQL Queries ({config.sqlCount})
-                </span>
-                <input
-                  type="range"
                   min={0}
                   max={2}
+                  onChange={(hardDsa) => setConfig((p) => ({ ...p, hardDsa }))}
+                />
+                <CounterControl
+                  label="SQL Queries"
                   value={config.sqlCount}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, sqlCount: Number(e.target.value) }))
-                  }
-                  className="w-full accent-indigo-500"
-                />
-              </label>
-
-              <label className="space-y-1.5 text-xs">
-                <span className="font-mono text-text-primary flex items-center gap-1.5">
-                  <Code2 className="w-3.5 h-3.5 text-primary" />
-                  OOP / C++ ({config.oopCount})
-                </span>
-                <input
-                  type="range"
                   min={0}
                   max={2}
-                  value={config.oopCount}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, oopCount: Number(e.target.value) }))
-                  }
-                  className="w-full accent-indigo-500"
+                  onChange={(sqlCount) => setConfig((p) => ({ ...p, sqlCount }))}
                 />
-              </label>
-
-              <label className="space-y-1.5 text-xs">
-                <span className="font-mono text-text-primary block">
-                  Aptitude MCQs ({config.aptitudeCount})
-                </span>
-                <input
-                  type="range"
+                <CounterControl
+                  label="OOP / C++"
+                  value={config.oopCount}
+                  min={0}
+                  max={2}
+                  onChange={(oopCount) => setConfig((p) => ({ ...p, oopCount }))}
+                />
+                <CounterControl
+                  label="Aptitude MCQs"
+                  value={config.aptitudeCount}
                   min={0}
                   max={15}
-                  step={1}
-                  value={config.aptitudeCount}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, aptitudeCount: Number(e.target.value) }))
-                  }
-                  className="w-full accent-indigo-500"
+                  onChange={(aptitudeCount) => setConfig((p) => ({ ...p, aptitudeCount }))}
                 />
-              </label>
-            </div>
-
-            {/* Aptitude Focus & Timer */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-border-subtle">
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono text-text-muted block">
-                  Aptitude Category Mix
-                </label>
-                <select
-                  value={config.aptitudeFocus}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      aptitudeFocus: e.target.value as AptitudeCategory | 'Mixed',
-                    }))
-                  }
-                  className="w-full bg-surface-subtle border border-border-default rounded-xl px-3 py-2 text-xs text-text-primary"
-                >
-                  <option value="Mixed">Mixed (Quant, DI, Reasoning, Puzzles, OOP)</option>
-                  <option value="Arithmetic Aptitude">Arithmetic Aptitude</option>
-                  <option value="Data Interpretation">Data Interpretation (Charts & Tables)</option>
-                  <option value="Logical Reasoning">Logical Reasoning</option>
-                  <option value="Verbal Ability">Verbal Ability</option>
-                  <option value="Verbal Reasoning">Verbal Reasoning</option>
-                  <option value="Nonverbal Reasoning">Nonverbal Reasoning (SVG Visuals)</option>
-                  <option value="Interview Puzzles">Interview Puzzles</option>
-                  <option value="OOPs & C++ Design">OOPs & C++ Design</option>
-                </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono text-text-muted block">
-                  Round Time Limit
-                </label>
-                <select
-                  value={config.durationMinutes}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, durationMinutes: Number(e.target.value) }))
-                  }
-                  className="w-full bg-surface-subtle border border-border-default rounded-xl px-3 py-2 text-xs text-text-primary"
-                >
-                  <option value={30}>30 Minutes (Quick Sprint)</option>
-                  <option value={45}>45 Minutes (Focused Round)</option>
-                  <option value={60}>60 Minutes (Standard OA)</option>
-                  <option value={75}>75 Minutes (Product OA)</option>
-                  <option value={90}>90 Minutes (Full Drive)</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border-subtle">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-mono text-text-muted block">
+                    Aptitude Focus
+                  </label>
+                  <select
+                    value={config.aptitudeFocus}
+                    onChange={(e) =>
+                      setConfig((p) => ({
+                        ...p,
+                        aptitudeFocus: e.target.value as AptitudeCategory | 'Mixed',
+                      }))
+                    }
+                    className="w-full bg-surface-subtle border border-border-subtle rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-primary"
+                  >
+                    <option value="Mixed">Mixed Categories</option>
+                    <option value="Arithmetic Aptitude">Arithmetic Aptitude</option>
+                    <option value="Data Interpretation">Data Interpretation</option>
+                    <option value="Logical Reasoning">Logical Reasoning</option>
+                    <option value="Verbal Ability">Verbal Ability</option>
+                    <option value="Verbal Reasoning">Verbal Reasoning</option>
+                    <option value="Nonverbal Reasoning">Nonverbal Reasoning</option>
+                    <option value="Interview Puzzles">Interview Puzzles</option>
+                    <option value="OOPs & C++ Design">OOPs &amp; C++ Design</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-mono text-text-muted block">Time Limit</label>
+                  <select
+                    value={config.durationMinutes}
+                    onChange={(e) =>
+                      setConfig((p) => ({ ...p, durationMinutes: Number(e.target.value) }))
+                    }
+                    className="w-full bg-surface-subtle border border-border-subtle rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-primary"
+                  >
+                    <option value={30}>30 Minutes</option>
+                    <option value={45}>45 Minutes</option>
+                    <option value={60}>60 Minutes</option>
+                    <option value={75}>75 Minutes</option>
+                    <option value={90}>90 Minutes</option>
+                  </select>
+                </div>
               </div>
+
+              {(weaknessRadar.weakTopics.length > 0 || weaknessRadar.weakAptitudeCategory) && (
+                <label className="flex items-start justify-between gap-3 pt-2 border-t border-border-subtle cursor-pointer">
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-medium text-text-primary">
+                      Prioritize weak topics
+                    </div>
+                    <div className="text-[11px] text-text-muted">
+                      {weaknessRadar.weakTopics.length > 0
+                        ? `Low solve rate: ${weaknessRadar.weakTopics.map((w) => w.topic).join(', ')}`
+                        : `Weak aptitude: ${weaknessRadar.weakAptitudeCategory} (${weaknessRadar.weakAptitudeAccuracy}%)`}
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(config.targetWeakTopics)}
+                    onChange={(e) => {
+                      const nextTargeted = e.target.checked;
+                      setConfig((prev) => ({
+                        ...prev,
+                        targetWeakTopics: nextTargeted,
+                        aptitudeFocus:
+                          nextTargeted && weaknessRadar.weakAptitudeCategory
+                            ? weaknessRadar.weakAptitudeCategory
+                            : prev.aptitudeFocus,
+                      }));
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded accent-primary"
+                  />
+                </label>
+              )}
             </div>
           </div>
 
-          {/* Recent Mock Attempts & Quick Summary */}
-          <div className="lg:col-span-4 bg-surface border border-border-subtle rounded-2xl p-6 flex flex-col justify-between gap-4">
-            <div className="space-y-3">
+          {/* Right Column: Launch Summary + History */}
+          <div className="lg:col-span-5 space-y-5">
+            <div className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-4 shadow-sm">
+              <h2 className="text-xs font-mono font-semibold uppercase tracking-wider text-text-muted">
+                Round Summary
+              </h2>
+
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1.5 border-b border-border-subtle">
+                  <span className="text-text-muted">Track</span>
+                  <span className="font-semibold text-text-primary">{selectedProfile.shortLabel}</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-border-subtle">
+                  <span className="text-text-muted">Coding Problems</span>
+                  <span className="font-mono text-text-primary">{totalCodingCount}</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-border-subtle">
+                  <span className="text-text-muted">Aptitude MCQs</span>
+                  <span className="font-mono text-text-primary">
+                    {config.aptitudeCount} ({config.aptitudeFocus === 'Mixed' ? 'Mixed' : config.aptitudeFocus})
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-text-muted">Duration</span>
+                  <span className="font-mono text-text-primary">{config.durationMinutes} min</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleStartNewMock}
+                disabled={isGenerating}
+                className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-black font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                <span>{isGenerating ? 'Preparing Assessment...' : 'Start Mock Interview'}</span>
+              </button>
+            </div>
+
+            {/* Past Attempts */}
+            <div className="bg-surface border border-border-subtle rounded-2xl p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-mono font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-                  <History className="w-4 h-4 text-primary" />
-                  <span>Recent Mocks</span>
+                <h2 className="text-xs font-mono font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
+                  <History className="w-3.5 h-3.5 text-primary" />
+                  <span>Past Attempts</span>
                 </h2>
                 {history.length > 0 && (
                   <button
@@ -1745,13 +1634,11 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
               </div>
 
               {history.length === 0 ? (
-                <div className="p-4 rounded-xl bg-surface-subtle border border-border-subtle text-xs text-text-muted leading-relaxed">
-                  No completed mock rounds yet. Click{' '}
-                  <strong className="text-text-primary">Start New Mock Interview</strong> to
-                  draw a fresh set of questions and track your score progression here.
-                </div>
+                <p className="text-xs text-text-muted py-2">
+                  Completed rounds will appear here with your score and time.
+                </p>
               ) : (
-                <div className="space-y-2.5 max-h-[290px] overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
                   {history.map((item) => (
                     <div
                       key={item.id}
@@ -1763,15 +1650,11 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                           {formatTimer(item.durationSec)}
                         </span>
                       </div>
-                      <div className="text-[11px] font-mono text-text-muted truncate">
-                        {item.difficultyLabel}
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] font-mono pt-1">
-                        <span className="text-primary">
-                          Apt: {item.aptitudeScore}/{item.aptitudeTotal}
-                        </span>
-                        <span className="text-emerald-400">
-                          Code: {item.codingSolved}/{item.codingTotal}
+                      <div className="flex items-center justify-between text-[11px] font-mono text-text-muted">
+                        <span className="truncate">{item.difficultyLabel}</span>
+                        <span className="shrink-0 text-text-secondary">
+                          MCQ {item.aptitudeScore}/{item.aptitudeTotal} · Code {item.codingSolved}/
+                          {item.codingTotal}
                         </span>
                       </div>
                     </div>
@@ -1779,16 +1662,6 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={handleStartNewMock}
-              disabled={isGenerating}
-              className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60"
-            >
-              <Shuffle className="w-4 h-4" />
-              <span>{isGenerating ? 'Drawing Questions...' : 'Generate & Launch Round'}</span>
-            </button>
           </div>
         </div>
       </div>

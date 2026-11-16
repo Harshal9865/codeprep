@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Code2, Search, Flame, Menu, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { apiRequest } from '../../services/api';
+import { fetchDashboardAnalytics } from '../../services/analyticsCache';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { LeetCodeUserDropdown } from './LeetCodeUserDropdown';
 
@@ -25,22 +25,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchStreak = useCallback(async () => {
+  const fetchStreak = useCallback(async (force = false) => {
     if (!user) return;
     try {
-      const res = await apiRequest<{
-        analytics?: {
-          currentStreak?: number;
-          potd?: { id: number; solvedToday: boolean };
-        };
-      }>('/analytics/dashboard');
+      const payload = await fetchDashboardAnalytics<{
+        currentStreak?: number;
+        potd?: { id: number; solvedToday: boolean };
+      }>(force);
       if (propStreak === undefined) {
-        setFetchedStreak(res.analytics?.currentStreak ?? 0);
+        setFetchedStreak(payload?.currentStreak ?? 0);
       }
-      if (res.analytics?.potd?.id) {
+      if (payload?.potd?.id) {
         setPotdStatus({
-          id: res.analytics.potd.id,
-          solvedToday: Boolean(res.analytics.potd.solvedToday),
+          id: payload.potd.id,
+          solvedToday: Boolean(payload.potd.solvedToday),
         });
       }
     } catch {
@@ -49,18 +47,18 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, [user, propStreak]);
 
   useEffect(() => {
-    fetchStreak();
+    void fetchStreak();
   }, [fetchStreak]);
 
   useEffect(() => {
     const handleProgressUpdated = () => {
-      fetchStreak();
+      void fetchStreak(true);
     };
     window.addEventListener('codeprep:progress-updated', handleProgressUpdated);
     return () => window.removeEventListener('codeprep:progress-updated', handleProgressUpdated);
   }, [fetchStreak]);
 
-  // Global keyboard shortcut (Ctrl/Cmd + K or '/') to jump to problem search
+  // Global '/' keyboard shortcut to jump to inline problem search (Ctrl/Cmd+K belongs to CommandPalette)
   useEffect(() => {
     if (!user) return;
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -73,10 +71,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         target.isContentEditable ||
         Boolean(target.closest('.monaco-editor'));
 
-      const isCmdK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k';
       const isSlash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditable;
 
-      if (isCmdK || isSlash) {
+      if (isSlash) {
         e.preventDefault();
         if (searchInputRef.current && searchInputRef.current.offsetParent !== null) {
           searchInputRef.current.focus();
@@ -222,8 +219,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <X className="w-3 h-3" />
                 </button>
               ) : (
-                <kbd className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded bg-surface border border-border-subtle text-[10px] font-mono text-text-muted">
-                  Ctrl K
+                <kbd
+                  title="Press / to search problems"
+                  className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded bg-surface border border-border-subtle text-[10px] font-mono text-text-muted"
+                >
+                  /
                 </kbd>
               )}
             </form>

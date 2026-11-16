@@ -238,7 +238,7 @@ export const LoginForm: React.FC = () => {
             )}
           </div>
           <p className="text-xs text-center text-text-muted">
-            Instant isolated guest sandbox or private personal account
+            Sign in with guest access or your own account
           </p>
         </div>
       </div>
@@ -311,7 +311,7 @@ export const LoginForm: React.FC = () => {
               label="DISPLAY NAME"
               type="text"
               required
-              placeholder="e.g. Alex Rivera"
+              placeholder="Your name"
               value={displayName}
               onChange={(e) => {
                 setDisplayName(e.target.value);
@@ -322,11 +322,11 @@ export const LoginForm: React.FC = () => {
           )}
 
           <Input
-            label="DEVELOPER EMAIL"
+            label="EMAIL"
             type="email"
             required
             autoComplete="email"
-            placeholder="developer@codeprep.dev"
+            placeholder="you@example.com"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
@@ -336,7 +336,7 @@ export const LoginForm: React.FC = () => {
           />
 
           <Input
-            label="PASSPHRASE"
+            label="PASSWORD"
             type={showPassword ? 'text' : 'password'}
             required
             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}

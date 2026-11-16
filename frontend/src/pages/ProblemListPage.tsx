@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Problem } from '../types/problem';
 import { AppLayout } from '../components/layout/AppLayout';
 import { apiRequest } from '../services/api';
+import { fetchDashboardAnalytics } from '../services/analyticsCache';
 import { ProblemLeftSidebar } from '../components/problems/ProblemLeftSidebar';
 import { ProblemRightSidebar } from '../components/problems/ProblemRightSidebar';
 import { ProblemBannersRow, Core600Meta } from '../components/problems/ProblemBannersRow';
@@ -15,18 +16,10 @@ import {
   Check,
   Shuffle,
   Dices,
-  ArrowUpDown,
-  Database,
-  Code2,
-  Bookmark,
-  Layers,
-  GraduationCap,
   ChevronDown,
   ArrowRight,
   X,
   Flame,
-  Sparkles,
-  Boxes,
   Play,
 } from 'lucide-react';
 
@@ -181,21 +174,14 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    apiRequest<{
-      analytics?: {
-        currentStreak?: number;
-        longestStreak?: number;
-        heatmap?: HeatmapDay[];
-        potd?: PotdSummary;
-      };
+    fetchDashboardAnalytics<{
       currentStreak?: number;
       longestStreak?: number;
       heatmap?: HeatmapDay[];
       potd?: PotdSummary;
-    }>('/analytics/dashboard')
-      .then((res) => {
-        if (!cancelled && res) {
-          const payload = res.analytics || res;
+    }>()
+      .then((payload) => {
+        if (!cancelled && payload) {
           setCurrentStreak(payload.currentStreak ?? 0);
           setLongestStreak(payload.longestStreak ?? 0);
           setHeatmap(payload.heatmap ?? []);
@@ -437,7 +423,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                   </h2>
                   <p className="text-xs text-text-secondary">
                     {isCoreTrackActive
-                      ? 'Showing only your original 600 problems (500 DSA + 100 SQL), isolated from the 2,400 extended problems.'
+                      ? 'Core 600 track: 500 DSA (#1–#500) and 100 SQL (#501–#600).'
                       : activePrepSet?.description}
                   </p>
 
@@ -565,186 +551,6 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               </div>
             </div>
 
-            {/* Category & Bookmark Pills Row */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 select-none scrollbar-none">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPrepSetId(null);
-                  setSelectedCategory('all');
-                  setStatusFilter('All');
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'all' && !selectedPrepSetId && statusFilter === 'All'
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <span>All {totalProblems}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCategory('all');
-                  setSelectedPrepSetId('core-600');
-                  setStatusFilter('All');
-                  setIsShuffled(false);
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  isCoreTrackActive
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5 text-primary" />
-                <span>Core 600 (#1–#600)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPrepSetId(null);
-                  setSelectedCategory('extended');
-                  setStatusFilter('All');
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'extended'
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <span>Extended ({Math.max(0, totalProblems - 600)})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPrepSetId(null);
-                  setSelectedCategory('logic-easy');
-                  setStatusFilter('All');
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'logic-easy' && !selectedPrepSetId
-                    ? 'bg-success-subtle text-success border-success/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-success" />
-                <span>Logic Building (Very Easy)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPrepSetId(null);
-                  setSelectedCategory('algorithms');
-                  setStatusFilter('All');
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'algorithms' && !selectedPrepSetId
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <Code2 className="w-3.5 h-3.5 text-primary" />
-                <span>DSA {dsaTotal}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPrepSetId(null);
-                  setSelectedCategory('database');
-                  setStatusFilter('All');
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'database' && !selectedPrepSetId
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <Database className="w-3.5 h-3.5 text-sky-400" />
-                <span>SQL {sqlTotal}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPrepSetId(null);
-                  setSelectedCategory('oop');
-                  setStatusFilter('All');
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'oop' && !selectedPrepSetId
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <Boxes className="w-3.5 h-3.5 text-purple-400" />
-                <span>OOPs {oopTotal}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setStatusFilter((prev) => (prev === 'Bookmarked' ? 'All' : 'Bookmarked'));
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  statusFilter === 'Bookmarked'
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <Bookmark className="w-3.5 h-3.5 text-primary" />
-                <span>Saved</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPrepSetId(null);
-                  setSelectedCategory('neetcode150');
-                  setStatusFilter('All');
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'neetcode150' && !selectedPrepSetId
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5 text-sky-400" />
-                <span>NeetCode 150</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedPrepSetId(null);
-                  setSelectedCategory('gfg');
-                  setStatusFilter('All');
-                  setCurrentPage(1);
-                }}
-                className={`px-4 py-2 rounded-full text-xs transition-colors shrink-0 flex items-center gap-2 border ${
-                  selectedCategory === 'gfg' && !selectedPrepSetId
-                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                }`}
-              >
-                <GraduationCap className="w-3.5 h-3.5 text-success" />
-                <span>GFG SDE Sheet</span>
-              </button>
-            </div>
-
             {/* Compact POTD Strip (shown on viewports < 2xl where right sidebar hides) */}
             {potd && (
               <button
@@ -851,29 +657,12 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                   }`}
                   title={
                     isShuffled
-                      ? 'Shuffle is ON — click again to turn off and restore #ID order'
+                      ? 'Showing shuffled order — click to restore #ID order'
                       : 'Shuffle problem list order'
                   }
                 >
                   <Shuffle className="w-3.5 h-3.5" />
-                  <span>{isShuffled ? 'Shuffle ON' : 'Shuffle'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsShuffled((prev) => !prev);
-                    setCurrentPage(1);
-                  }}
-                  className={`px-2.5 py-1.5 rounded-full text-xs font-mono border transition-colors flex items-center gap-1 ${
-                    !isShuffled
-                      ? 'bg-surface-high text-text-primary border-border-default font-semibold'
-                      : 'bg-surface-elevated text-text-muted hover:text-text-primary border-border-subtle'
-                  }`}
-                  title={isShuffled ? 'Switch to ordered #1..N list' : 'Switch to shuffled list'}
-                >
-                  <ArrowUpDown className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{isShuffled ? '# Order' : 'Ordered'}</span>
+                  <span>{isShuffled ? 'Shuffled' : 'Shuffle'}</span>
                 </button>
 
                 <button
@@ -906,8 +695,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                         <CodePrepLoader
                           variant="section"
                           className="min-h-[180px]"
-                          label="Loading Problem Catalog"
-                          sublabel={`Fetching page ${currentPage} of ${totalProblems} DSA, Logic Building, OOPs & SQL challenges...`}
+                          label="Loading Problems"
+                          sublabel={`Loading page ${currentPage}...`}
                         />
                       </td>
                     </tr>

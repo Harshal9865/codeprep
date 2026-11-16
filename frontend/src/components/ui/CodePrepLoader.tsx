@@ -11,8 +11,8 @@ interface CodePrepLoaderProps {
 
 export const CodePrepLoader: React.FC<CodePrepLoaderProps> = ({
   variant = 'section',
-  label = 'Loading Workspace',
-  sublabel = 'Syncing modules & local database...',
+  label = 'Loading',
+  sublabel = 'Fetching problems & progress...',
   className = '',
   tone = 'default',
 }) => {

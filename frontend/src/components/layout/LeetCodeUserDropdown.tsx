@@ -44,8 +44,8 @@ export const LeetCodeUserDropdown: React.FC<LeetCodeUserDropdownProps> = ({ onNa
     };
   }, [isOpen]);
 
-  const username = user?.displayName || 'Harshal Patel';
-  const email = user?.email || 'admin@codeprep.dev';
+  const username = user?.displayName || 'Developer';
+  const email = user?.email || 'user@codeprep.dev';
 
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
@@ -83,7 +83,7 @@ export const LeetCodeUserDropdown: React.FC<LeetCodeUserDropdownProps> = ({ onNa
               </p>
               <div className="flex items-center gap-1.5 text-[11px] text-success mt-1 font-mono">
                 <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">B.Tech ICT • Dhirubhai Ambani Univ.</span>
+                <span className="truncate">Signed In</span>
               </div>
             </div>
           </div>

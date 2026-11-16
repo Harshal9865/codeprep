@@ -87,10 +87,10 @@ export const ProblemBannersRow: React.FC<ProblemBannersRowProps> = ({
 
           <div>
             <h3 className="text-base sm:text-lg font-bold tracking-tight text-text-primary group-hover:text-primary transition-colors">
-              Original 600 Problems — Curated 500 DSA + 100 SQL
+              Core 600 — 500 DSA + 100 SQL
             </h3>
             <p className="text-xs text-text-secondary mt-0.5">
-              Isolated from the 2,400 extended problems. Click the card to view only #1–#600, or launch right into your next problem.
+              Foundational #1–#600 track. Filter this set or jump straight into your next unsolved problem.
             </p>
           </div>
 

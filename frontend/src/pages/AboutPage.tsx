@@ -15,9 +15,7 @@ import {
   CheckCircle2,
   Bookmark,
   Boxes,
-  Users,
   Wrench,
-  GitBranch,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,31 +28,31 @@ interface AboutPageProps {
 const ARCHITECTURE_PILLARS = [
   {
     icon: Cpu,
-    title: 'Isolated C++17 Judge',
-    subtitle: 'Local Compilation & Harness Execution',
+    title: 'C++17 Sandbox Judge',
+    subtitle: 'g++ compilation with timed execution',
     description:
-      'Compiles candidate DSA and OOP C++17 solutions locally with g++ and runs multi-case input/output drivers with memory guards, execution timeouts, and line-level compiler diagnostics.',
+      'Compiles DSA and OOP C++17 solutions with g++ and runs test cases in isolated subprocesses with timeout guards and clean line-number error reporting.',
   },
   {
     icon: Database,
-    title: 'SQLite Query Sandbox',
-    subtitle: '400 Schema-Isolated Relational Tasks',
+    title: 'SQLite Query Lab',
+    subtitle: '400 SQL query problems',
     description:
-      'Seeds clean relational schemas per execution inside an isolated SQLite context, normalizes common SQL idioms, and verifies result sets deterministically.',
+      'Sets up isolated table schemas per problem in SQLite, runs read-only queries, and compares result rows against expected output.',
   },
   {
     icon: Layers,
-    title: 'Persistent Study State',
-    subtitle: 'Prisma ORM + SQLite WAL Storage',
+    title: 'Persistent Progress',
+    subtitle: 'SQLite + Prisma storage',
     description:
-      'Stores all 3,000 curriculum questions (2,500 DSA + 400 SQL + 100 OOPs C++ Design), autosaved editor drafts, active study timers, earned badges, timezone-accurate streak heatmaps, and full JSON exports.',
+      'Saves your submissions, code drafts, study notes, bookmarks, badges, and daily streaks locally with one-click JSON export/import backups.',
   },
   {
     icon: Sliders,
-    title: 'Crafted Multi-Theme UI',
-    subtitle: '6 Tokenized Developer Colorways',
+    title: 'Customizable Editor',
+    subtitle: '6 themes & keyboard shortcuts',
     description:
-      'Engineered with CSS custom-property theme tokens across Pitch Dark, Day, LeetCode, VS Code, Tokyo Night, and Monokai palettes with keyboard-first shortcuts.',
+      'Switch between Pitch Dark, Light, LeetCode, VS Code, Tokyo Night, and Monokai themes with persistent editor layouts and shortcuts.',
   },
 ];
 
@@ -117,113 +115,37 @@ const TECH_STACK = [
   { group: 'Execution', items: ['g++ C++17 Runner', 'SQLite Query Engine', 'Timed Subprocess Guard'] },
 ];
 
-type BuildSectionTab = 'journey' | 'team' | 'schema' | 'ownership';
-
-const HOW_I_BUILT_STEPS = [
-  {
-    phase: '01 · Planning & Requirements',
-    title: 'Scoped a Unified Interview Workbench',
-    summary:
-      'Mapped out candidate pain points across DSA, OOPs, SQL, and Aptitude so practice notes, active focus timers, and submissions live in one place rather than four scattered tabs.',
-    artifact: 'docs/REQUIREMENTS.md',
-  },
-  {
-    phase: '02 · Schema & 3,000-Problem Scaling',
-    title: '9 Prisma Tables + Metadata Caching',
-    summary:
-      'Separated per-user progress into UserProblemState so bookmarks, notes, drafts, and timers stay isolated across accounts while catalogMetaCache + 50-row chunked seeding handle 3,000 problems smoothly.',
-    artifact: 'docs/DATABASE_SCHEMA.md',
-  },
-  {
-    phase: '03 · C++17 & SQLite Sandboxes',
-    title: 'Precompiled Headers + Anti-Spoof Markers',
-    summary:
-      'Pre-built C++17 .gch headers inside Docker to cut compile times, remapped g++ stderr lines back to user code, injected randomized hex stdout delimiters, and locked SQL runs to read-only queries.',
-    artifact: 'backend/src/judge/',
-  },
-  {
-    phase: '04 · Honest AI & Study Engine',
-    title: 'Static Analysis Before LLM Prompting',
-    summary:
-      'After spotting broken code receiving generic AI praise, engineered CodeAnalyzerService to evaluate syntax smells, nested loops, stub returns, and failed test assertions before calling Gemini.',
-    artifact: 'codeAnalyzer.service.ts',
-  },
-  {
-    phase: '05 · Render Container Persistence',
-    title: 'Non-Blocking Boot & /data Colocation',
-    summary:
-      'Moved compiler warmup and problem seeding asynchronous after app.listen() so /health passes fast, colocated codeprep.db and /uploads onto /data, and enabled 1-click Guest Demo for interviewers.',
-    artifact: 'render.yaml + Dockerfile',
-  },
-];
-
-const TEAM_HAT_PERSPECTIVES = [
-  {
-    role: 'Product & Requirements',
-    focus: 'Balanced 3,000-problem curriculum (2,500 DSA, 400 SQL, 100 OOPs), OOPs & Aptitude hubs, and friction-free Guest Demo access for reviewers.',
-    ref: 'docs/REQUIREMENTS.md',
-  },
-  {
-    role: 'Database & Backend Architect',
-    focus: '9-model relational Prisma schema, WAL concurrency, startup auto-DDL verification, MAX_USERS = 100 isolation, and JSON export/import snapshots.',
-    ref: 'docs/DATABASE_SCHEMA.md',
-  },
-  {
-    role: 'Systems & Judge Engineer',
-    focus: 'g++ -O2 -std=c++17 runner, .gch PCH warmup, 1500ms execution queue deduplication, 2000ms timeout guard, and read-only SQLite DDL blocking.',
-    ref: 'sandboxRunner.ts + sqlRunner.ts',
-  },
-  {
-    role: 'AI & Learning Experience',
-    focus: 'Deterministic AST/heuristic checks paired with live failed-case telemetry in StudyGuideService, 5s server focus heartbeats, and Big-O curve fitting.',
-    ref: 'aiTeacher.service.ts',
-  },
-  {
-    role: 'Frontend & UI Systems',
-    focus: '6 CSS-variable themes with flash-free <head> initialization, paginated + shuffled 3,000-problem tables, pixel SVG avatars, and streak animations.',
-    ref: 'frontend/src/',
-  },
-  {
-    role: 'QA, Security & DevOps',
-    focus: 'Magic-byte JPEG/PNG/WEBP image checks (blocking SVG XSS), HttpOnly rotating SHA-256 refresh cookies, rate limiters, and Render /data volume persistence.',
-    ref: 'docs/TEAM_PERSPECTIVES_REPORT.md',
-  },
-];
+type BuildSectionTab = 'architecture' | 'schema';
 
 const DATABASE_MODELS_SUMMARY = [
-  { name: 'User', role: 'Credentials (bcrypt 12r), theme preference, timezone, and avatar path.' },
-  { name: 'RefreshToken', role: '30-day rolling SHA-256 hashed tokens revocable per session.' },
-  { name: 'Problem', role: '3,000 DSA, OOPs (#631–#730), and SQL problems with examples & stubs.' },
-  { name: 'UserProblemState', role: 'Composite (problemId, userId) bookmarks, notes, and AI unlock flags.' },
-  { name: 'ProblemDraft', role: 'Auto-saved in-progress editor code keyed per user and problem.' },
-  { name: 'ProblemActiveTimer', role: 'Server-synced active solve duration updated by 5s tab heartbeats.' },
-  { name: 'Submission', role: 'Full run/submit verdict history, runtime, stderr, and failed test case.' },
-  { name: 'AiLesson', role: '1:1 structured technique walkthroughs, trace states, and brute-to-optimal guides.' },
-  { name: 'UserBadge', role: 'Unlocked streak, milestone, and topic mastery achievements per user.' },
+  { name: 'User', role: 'Account credentials, theme preference, timezone, and avatar.' },
+  { name: 'RefreshToken', role: '30-day rolling hashed refresh tokens revocable per session.' },
+  { name: 'Problem', role: '3,000 DSA, OOPs, and SQL problems with examples & starter code.' },
+  { name: 'UserProblemState', role: 'Per-user bookmarks, notes, and solution unlock state.' },
+  { name: 'ProblemDraft', role: 'Auto-saved editor drafts keyed per user and problem.' },
+  { name: 'ProblemActiveTimer', role: 'Synced solve duration updated while practicing.' },
+  { name: 'Submission', role: 'Run/submit verdict history, runtime, stderr, and failed test case.' },
+  { name: 'AiLesson', role: 'Structured solution explanations, traces, and reference implementations.' },
+  { name: 'UserBadge', role: 'Unlocked streak, milestone, and topic mastery achievements.' },
 ];
 
-const HowIBuiltSection: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<BuildSectionTab>('journey');
+const ArchitectureNotesSection: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<BuildSectionTab>('architecture');
 
   const tabs: Array<{ id: BuildSectionTab; label: string; icon: React.ReactNode }> = [
-    { id: 'journey', label: 'How I Built It', icon: <Wrench className="w-3.5 h-3.5" /> },
-    { id: 'team', label: 'Team-Hat Reports', icon: <Users className="w-3.5 h-3.5" /> },
-    { id: 'schema', label: 'Database Design', icon: <Database className="w-3.5 h-3.5" /> },
-    { id: 'ownership', label: 'Testing & Verification', icon: <GitBranch className="w-3.5 h-3.5" /> },
+    { id: 'architecture', label: 'How It Works', icon: <Wrench className="w-3.5 h-3.5" /> },
+    { id: 'schema', label: 'Database Models', icon: <Database className="w-3.5 h-3.5" /> },
   ];
 
   return (
     <section className="rounded-xl bg-surface border border-border-subtle p-6 space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-border-subtle pb-4">
         <div>
-          <span className="text-[11px] font-mono uppercase tracking-wider text-blue-500 font-semibold">
-            Engineering Case Study · For Reviewers &amp; Interviewers
-          </span>
-          <h2 className="text-lg font-semibold text-text-primary mt-1">
-            How I Planned, Designed &amp; Engineered CodePrep
+          <h2 className="text-lg font-semibold text-text-primary">
+            System Architecture &amp; Storage
           </h2>
           <p className="text-xs text-text-secondary mt-1 max-w-2xl">
-            From database schema design and judge security to scaling 3,000 problems and shipping on Render — inspect the architectural decisions behind this workspace.
+            How C++ compilation, SQL query execution, and local progress persistence are structured under the hood.
           </p>
         </div>
 
@@ -249,45 +171,26 @@ const HowIBuiltSection: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'journey' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {HOW_I_BUILT_STEPS.map((step) => (
-            <div
-              key={step.phase}
-              className="rounded-lg bg-surface-subtle border border-border-subtle p-4 flex flex-col justify-between gap-3"
-            >
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-mono text-emerald-500 font-medium">
-                  {step.phase}
-                </span>
-                <h3 className="text-sm font-semibold text-text-primary">{step.title}</h3>
-                <p className="text-xs text-text-secondary leading-relaxed">{step.summary}</p>
-              </div>
-              <div className="pt-2 border-t border-border-subtle/70 flex items-center justify-between text-[11px] font-mono text-text-muted">
-                <span>Artifact</span>
-                <span className="text-text-secondary">{step.artifact}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {activeTab === 'team' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {TEAM_HAT_PERSPECTIVES.map((item) => (
-            <div
-              key={item.role}
-              className="rounded-lg bg-surface-subtle border border-border-subtle p-4 space-y-2"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-text-primary">{item.role}</h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-elevated border border-border-subtle text-text-muted">
-                  {item.ref}
-                </span>
-              </div>
-              <p className="text-xs text-text-secondary leading-relaxed">{item.focus}</p>
-            </div>
-          ))}
+      {activeTab === 'architecture' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          <div className="rounded-lg bg-surface-subtle border border-border-subtle p-4 space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">C++17 Compilation &amp; Sandbox</h3>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Pre-compiled headers speed up g++ builds. Compiler errors are mapped back to your editor lines, and test drivers verify output cleanly inside timed subprocesses.
+            </p>
+          </div>
+          <div className="rounded-lg bg-surface-subtle border border-border-subtle p-4 space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Read-Only SQL Runner</h3>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Each SQL problem loads fresh tables inside an isolated SQLite session, runs your query, and diffs rows and column ordering against expected output.
+            </p>
+          </div>
+          <div className="rounded-lg bg-surface-subtle border border-border-subtle p-4 space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Offline-Friendly Persistence</h3>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              SQLite in WAL mode stores problems, drafts, timers, and submissions on disk, alongside portable JSON export/import and automatic browser snapshots.
+            </p>
+          </div>
         </div>
       )}
 
@@ -295,9 +198,9 @@ const HowIBuiltSection: React.FC = () => {
         <div className="space-y-3">
           <div className="rounded-lg bg-surface-subtle border border-border-subtle p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="text-text-secondary">
-              Embedded <strong className="text-text-primary">SQLite WAL</strong> (<code className="font-mono text-text-primary">file:/data/codeprep.db</code> in production) with runtime auto-DDL verification and Postgres compatibility schema.
+              Embedded <strong className="text-text-primary">SQLite WAL</strong> with Prisma ORM and PostgreSQL schema support.
             </span>
-            <span className="font-mono text-[11px] text-blue-500">9 Prisma Models · 100-User Isolation</span>
+            <span className="font-mono text-[11px] text-primary">9 Prisma Models</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {DATABASE_MODELS_SUMMARY.map((model) => (
@@ -311,39 +214,6 @@ const HowIBuiltSection: React.FC = () => {
                 <p className="text-xs text-text-secondary leading-relaxed">{model.role}</p>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'ownership' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="rounded-lg bg-surface-subtle border border-border-subtle p-4 space-y-2.5">
-            <h3 className="text-sm font-semibold text-text-primary">
-              What I Planned, Architected &amp; Debugged Myself
-            </h3>
-            <ul className="space-y-2 text-xs text-text-secondary leading-relaxed list-disc pl-4">
-              <li>
-                Defined product requirements, navigation structure, 3,000-problem curriculum split (DSA / OOPs / SQL), and Guest Demo mode for interviewers.
-              </li>
-              <li>
-                Designed the 9-table Prisma schema (<code className="font-mono text-text-primary">UserProblemState</code> user isolation, server heartbeats, rolling refresh tokens) and <code className="font-mono text-text-primary">/data</code> persistent disk strategy for Render.
-              </li>
-              <li>
-                Caught real production bugs through testing: Render startup <code className="font-mono text-text-primary">/health</code> timeouts, false <code className="font-mono text-text-primary">O(1)</code> AI praise on broken code (fixed via <code className="font-mono text-text-primary">CodeAnalyzerService</code>), and stale static catalog counters.
-              </li>
-            </ul>
-          </div>
-
-          <div className="rounded-lg bg-surface-subtle border border-border-subtle p-4 space-y-2.5">
-            <h3 className="text-sm font-semibold text-text-primary">
-              End-to-End Verification &amp; Pre-Deploy Testing
-            </h3>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              Before deployment, the platform was verified across automated Node.js test suites covering C++ judge boundary markers, line-number remapping, SQL read-only guardrails, and 365-day activity calculations.
-            </p>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              Architectural tradeoffs, security checks (magic-byte file validation, UUID judge delimiters, SQL DDL blocking), and schema details are documented in <span className="font-mono text-text-primary">docs/REQUIREMENTS.md</span>, <span className="font-mono text-text-primary">docs/DATABASE_SCHEMA.md</span>, <span className="font-mono text-text-primary">docs/TEAM_PERSPECTIVES_REPORT.md</span>, and <span className="font-mono text-text-primary">DECISIONS.md</span>.
-            </p>
           </div>
         </div>
       )}
@@ -416,31 +286,29 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate }) => {
                 onClick={() => onNavigate('profile')}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-surface-elevated border border-border-subtle text-text-primary text-xs font-medium hover:bg-surface-high transition-colors"
               >
-                Customize Pixel Character
+                Edit Profile
               </button>
             </div>
           </div>
         </section>
 
-        {/* Why CodePrep Was Built */}
+        {/* Overview */}
         <section className="rounded-xl border border-border-subtle bg-surface p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <Terminal className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
-              Project Motivation &amp; Engineering Notes
+              Overview
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm text-text-secondary leading-relaxed">
             <p>
-              CodePrep was engineered as a self-hosted technical interview workbench to practice C++ data
-              structures, relational SQL queries, and aptitude fundamentals in one fast local environment
-              without third-party rate limits, scattered notes, or lost progress.
+              CodePrep is a self-hosted coding interview practice platform for C++ data structures,
+              OOP design, SQL queries, and aptitude drills without external rate limits or scattered tools.
             </p>
             <p>
-              Every core workflow runs end-to-end against local infrastructure: Prisma models persist
-              submissions and streak heatmaps to SQLite in WAL mode, a dedicated runner compiles C++17
-              solutions against structured test suites, and timed study locks encourage independent
-              problem solving before inspecting reference solutions.
+              Everything runs against your local backend: SQLite stores submissions and streak history,
+              g++ compiles and runs C++17 solutions against test suites, and timed study controls keep
+              practice focused.
             </p>
           </div>
         </section>
@@ -467,16 +335,15 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate }) => {
         })}
       </section>
 
-      {/* Workspace Value & Non-Redundant Design Map */}
+      {/* Workspace Sections */}
       <section className="rounded-xl border border-border-subtle bg-surface p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-success" />
             <h2 className="text-sm font-semibold text-text-primary">
-              Focused Workspace Structure
+              Workspace Sections
             </h2>
           </div>
-          <span className="text-xs text-text-muted font-mono">Each route owns one distinct job</span>
         </div>
 
         <div className="divide-y divide-border-subtle">
@@ -513,11 +380,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* Tech Stack Matrix */}
+      {/* Tech Stack */}
       <section className="rounded-xl border border-border-subtle bg-surface p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-4">
           <Server className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-semibold text-text-primary">Implementation Stack</h2>
+          <h2 className="text-sm font-semibold text-text-primary">Tech Stack</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -542,8 +409,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* How I Planned & Built CodePrep (Interactive Engineering Case Study) */}
-      <HowIBuiltSection />
+      <ArchitectureNotesSection />
       </div>
     </AppLayout>
   );

@@ -1,20 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './contexts/AuthContext';
-import { LoginPage } from './pages/LoginPage';
-import { StreakSplashScreen } from './components/auth/StreakSplashScreen';
-import { DashboardPage } from './pages/DashboardPage';
-import { ProblemListPage } from './pages/ProblemListPage';
-import { ProblemWorkspacePage } from './pages/ProblemWorkspacePage';
-import { SolutionGuidePage } from './pages/SolutionGuidePage';
-import { AboutPage } from './pages/AboutPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { SqlListPage } from './pages/SqlListPage';
-import { SqlWorkspacePage } from './pages/SqlWorkspacePage';
-import { OopsPage } from './pages/OopsPage';
-import { AptitudePage } from './pages/AptitudePage';
-import { MockInterviewPage } from './pages/MockInterviewPage';
 import { ActiveMockBanner } from './components/mock/ActiveMockBanner';
-import { InterviewPrepPage } from './pages/InterviewPrepPage';
 import { CodePrepLoader } from './components/ui/CodePrepLoader';
 import { StreakCelebrationOverlay } from './components/workspace/StreakCelebrationOverlay';
 import { CommandPalette } from './components/layout/CommandPalette';
@@ -23,6 +9,43 @@ import {
   flushAutoBackup,
   scheduleAutoBackupSync,
 } from './utils/backupSync';
+
+const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
+const StreakSplashScreen = lazy(() =>
+  import('./components/auth/StreakSplashScreen').then((m) => ({ default: m.StreakSplashScreen }))
+);
+const DashboardPage = lazy(() =>
+  import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage }))
+);
+const ProblemListPage = lazy(() =>
+  import('./pages/ProblemListPage').then((m) => ({ default: m.ProblemListPage }))
+);
+const ProblemWorkspacePage = lazy(() =>
+  import('./pages/ProblemWorkspacePage').then((m) => ({ default: m.ProblemWorkspacePage }))
+);
+const SolutionGuidePage = lazy(() =>
+  import('./pages/SolutionGuidePage').then((m) => ({ default: m.SolutionGuidePage }))
+);
+const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const ProfilePage = lazy(() =>
+  import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage }))
+);
+const SqlListPage = lazy(() =>
+  import('./pages/SqlListPage').then((m) => ({ default: m.SqlListPage }))
+);
+const SqlWorkspacePage = lazy(() =>
+  import('./pages/SqlWorkspacePage').then((m) => ({ default: m.SqlWorkspacePage }))
+);
+const OopsPage = lazy(() => import('./pages/OopsPage').then((m) => ({ default: m.OopsPage })));
+const AptitudePage = lazy(() =>
+  import('./pages/AptitudePage').then((m) => ({ default: m.AptitudePage }))
+);
+const MockInterviewPage = lazy(() =>
+  import('./pages/MockInterviewPage').then((m) => ({ default: m.MockInterviewPage }))
+);
+const InterviewPrepPage = lazy(() =>
+  import('./pages/InterviewPrepPage').then((m) => ({ default: m.InterviewPrepPage }))
+);
 
 type AppView =
   | 'dashboard'
@@ -339,22 +362,28 @@ export const App: React.FC = () => {
     return (
       <CodePrepLoader
         variant="fullscreen"
-        label="Booting CodePrep"
-        sublabel="Restoring your saved workspace & local SQLite session..."
+        label="Loading CodePrep"
+        sublabel="Preparing your workspace..."
       />
     );
   }
 
   if (!user) {
-    return <LoginPage />;
+    return (
+      <Suspense fallback={<CodePrepLoader variant="fullscreen" label="Loading CodePrep" sublabel="" />}>
+        <LoginPage />
+      </Suspense>
+    );
   }
 
   if (showStreakSplash) {
     return (
-      <StreakSplashScreen
-        displayName={user.displayName}
-        onComplete={() => setShowStreakSplash(false)}
-      />
+      <Suspense fallback={<CodePrepLoader variant="fullscreen" label="Loading CodePrep" sublabel="" />}>
+        <StreakSplashScreen
+          displayName={user.displayName}
+          onComplete={() => setShowStreakSplash(false)}
+        />
+      </Suspense>
     );
   }
 
@@ -479,7 +508,9 @@ export const App: React.FC = () => {
 
   return (
     <>
-      {activePage}
+      <Suspense fallback={<CodePrepLoader variant="fullscreen" label="Loading..." sublabel="" />}>
+        {activePage}
+      </Suspense>
       <ActiveMockBanner
         isVisible={currentView === 'workspace' || currentView === 'sql-workspace'}
         onReturnToMock={() => setCurrentView('mock-interview')}

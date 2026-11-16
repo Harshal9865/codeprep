@@ -10,7 +10,7 @@ import {
   Binary,
   Database,
   Boxes,
-  Sparkles,
+  Compass,
 } from 'lucide-react';
 
 interface ProblemLeftSidebarProps {
@@ -67,7 +67,7 @@ export const ProblemLeftSidebar: React.FC<ProblemLeftSidebarProps> = ({
               : 'border-transparent hover:bg-surface-elevated hover:text-text-primary'
           }`}
         >
-          <Sparkles className="w-4 h-4 text-amber-400" />
+          <Compass className="w-4 h-4 text-amber-400" />
           <span>Extended (#601+)</span>
         </button>
 

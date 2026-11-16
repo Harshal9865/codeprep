@@ -41,10 +41,10 @@ export const LoginPage: React.FC = () => {
       <footer className="h-9 shrink-0 px-4 border-t border-border-subtle bg-surface flex items-center justify-center gap-3 text-xs font-mono text-text-muted">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-          <span>Local Workspace Ready</span>
+          <span>Server Connected</span>
         </span>
         <span className="text-border-default">•</span>
-        <span>C++17 Compiler & SQL Sandbox</span>
+        <span>C++17 &amp; SQLite Judge</span>
       </footer>
     </div>
   );

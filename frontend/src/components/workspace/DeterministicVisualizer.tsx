@@ -55,7 +55,7 @@ export const DeterministicVisualizer: React.FC<{ trace: VisualTraceData }> = ({ 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border-subtle">
         <div className="flex items-center gap-2">
           <span className="font-headline font-bold text-xs uppercase tracking-wider text-text-primary">
-            Deterministic Algorithm Trace Player
+            Algorithm Step Trace
           </span>
           <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-primary/10 text-primary border border-primary/30">
             Step {currentStepIdx + 1} of {steps.length}

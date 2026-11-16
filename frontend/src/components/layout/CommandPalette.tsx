@@ -10,7 +10,8 @@ import {
   LayoutDashboard,
   Code2,
   Database,
-  Sparkles,
+  Layers,
+  ShieldCheck,
   Bookmark,
   Palette,
   CornerDownLeft,
@@ -196,7 +197,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         group: 'Navigate',
         title: 'Core 600 Curriculum (#1-#600)',
         subtitle: '500 DSA + 100 SQL core problem set',
-        icon: <Sparkles className="w-4 h-4 text-primary" />,
+        icon: <Layers className="w-4 h-4 text-primary" />,
         run: onOpenCore600,
       },
       {
@@ -228,7 +229,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         group: 'Navigate',
         title: 'Mock Interview (Aptitude + Coding)',
         subtitle: 'Fresh randomized OA round with Aptitude & DSA/SQL/OOP',
-        icon: <Sparkles className="w-4 h-4 text-primary" />,
+        icon: <ShieldCheck className="w-4 h-4 text-primary" />,
         run: () => onNavigateTab('mock-interview'),
       },
       {

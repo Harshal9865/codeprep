@@ -528,7 +528,7 @@ export class ProblemService {
           p.title.toLowerCase().includes(searchQ) ||
           p.topic.toLowerCase().includes(searchQ) ||
           p.pattern.toLowerCase().includes(searchQ) ||
-          String(p.id).includes(cleanNumQ);
+          (cleanNumQ.length > 0 && String(p.id).includes(cleanNumQ));
         if (!hit) return false;
       }
 
