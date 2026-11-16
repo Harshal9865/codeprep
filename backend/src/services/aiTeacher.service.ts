@@ -75,6 +75,7 @@ interface StructuredCoachPayload {
     detail?: string;
     fixHint?: string;
   }>;
+  guidanceSteps?: string[];
   feedback?: string;
 }
 
@@ -166,12 +167,20 @@ export class StudyGuideService {
               ? `${timeLabel} Time · ${spaceLabel} Space`
               : timeLabel || staticAnalysis.estimatedComplexity;
 
+          const aiGuidanceSteps = Array.isArray(parsed.guidanceSteps)
+            ? parsed.guidanceSteps
+                .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+                .map((s) => s.trim())
+                .slice(0, 5)
+            : [];
+
           const enhancedAnalysis: MethodAnalysisReport & { spaceComplexity?: string } = {
             detectedMethod: parsed.detectedMethod?.trim() || staticAnalysis.detectedMethod,
             estimatedComplexity: combinedComplexity,
             targetComplexity: parsed.targetComplexity?.trim() || staticAnalysis.targetComplexity,
             mistakes: mergedMistakes,
-            guidanceSteps: staticAnalysis.guidanceSteps,
+            guidanceSteps:
+              aiGuidanceSteps.length > 0 ? aiGuidanceSteps : staticAnalysis.guidanceSteps,
             summary: parsed.verdictSummary?.trim() || staticAnalysis.summary,
             spaceComplexity: spaceLabel,
           };
@@ -500,7 +509,7 @@ Keep total output concise (under 220 words).`;
           role: 'user',
           parts: [
             {
-              text: `${req.userQuestion.trim()}\n\nRemember: return STRICT JSON matching the schema with updated complexity, exact line mistakes (if any), and concise "feedback".`,
+              text: `Candidate follow-up question: ${req.userQuestion.trim()}\n\nAnswer this exact question thoroughly with concrete trace values from their latest code, then return STRICT JSON matching the schema (including "guidanceSteps" and markdown-formatted "feedback").`,
             },
           ],
         });
@@ -512,9 +521,9 @@ Keep total output concise (under 220 words).`;
       });
     }
 
-    return this.invokeGeminiContents(contents, apiKey, 1800, {
+    return this.invokeGeminiContents(contents, apiKey, 2600, {
       jsonMode: true,
-      thinkingBudget: 1024,
+      thinkingBudget: 512,
     });
   }
 
@@ -642,10 +651,11 @@ Keep total output concise (under 220 words).`;
     isSql: boolean,
     analysis: MethodAnalysisReport
   ): string {
-    const langLabel = isSql ? 'SQLite SQL' : 'C++17';
+    const isOop = req.category === 'OOP';
+    const langLabel = isSql ? 'SQLite SQL' : isOop ? 'C++17 OOP / Class Design' : 'C++17';
     const statementSnippet = (req.problemStatement || '').slice(0, 1400);
     const schemaSnippet =
-      isSql && req.schemaDdl ? `\nDatabase Schema DDL:\n${req.schemaDdl.slice(0, 900)}\n` : '';
+      isSql && req.schemaDdl ? `\nDatabase Schema DDL:\n${req.schemaDdl.slice(0, 1000)}\n` : '';
     const examplesSnippet =
       Array.isArray(req.examples) && req.examples.length > 0
         ? `\nExamples:\n${req.examples
@@ -658,7 +668,7 @@ Keep total output concise (under 220 words).`;
       .slice(0, 140)
       .map((line, idx) => `${idx + 1}: ${line}`)
       .join('\n')
-      .slice(0, 4200);
+      .slice(0, 4400);
 
     const execResult = req.executionResult as
       | (ExecutionResult & {
@@ -678,9 +688,9 @@ Keep total output concise (under 220 words).`;
         : '';
 
     const failureDetails = execResult?.compileError
-      ? `${progressLine}Compiler/Syntax Error:\n${execResult.compileError.slice(0, 650)}`
+      ? `${progressLine}Compiler/Syntax Error:\n${execResult.compileError.slice(0, 700)}`
       : execResult?.error
-        ? `${progressLine}Execution / SQL Error:\n${execResult.error.slice(0, 650)}`
+        ? `${progressLine}Execution / SQL Error:\n${execResult.error.slice(0, 700)}`
         : execResult?.failedTestCase
           ? `${progressLine}Failed Test Case (${req.verdict}):\nInput: ${execResult.failedTestCase.input}\nExpected: ${execResult.failedTestCase.expected}\nActual: ${execResult.failedTestCase.actual}`
           : execResult?.rows && execResult?.expectedRows && req.verdict === 'Wrong Answer'
@@ -696,33 +706,46 @@ Keep total output concise (under 220 words).`;
             .join('\n')
         : 'None caught by regex pre-check; inspect semantics line-by-line.';
 
-    const roleDirective =
-      mode === 'analyze' || mode === 'coach'
-        ? `Perform a strict real-time code audit. Pinpoint EVERY logical mistake, off-by-one bug, wrong data structure invariant, overflow risk, or SQL join/NULL/group bug by exact line number. If execution failed, trace their exact code step-by-step on the failing input to explain why Actual != Expected. State true Time & Space complexity honestly.`
+    const domainNotes = isSql
+      ? 'Check JOIN grain (INNER vs LEFT JOIN preserving zeros), NULL traps (NOT IN, COALESCE), WHERE vs HAVING filter placement, integer division (`1.0 * a / b`), deterministic ORDER BY, and exact column aliases.'
+      : isOop
+        ? 'Check class invariants, const-correctness, virtual destructors/overrides, object slicing, Rule of 3/5 move safety, edge inputs, and integer overflow.'
+        : 'Check loop boundaries, off-by-one indices, overflow (`long long`), visited/base cases, container aliasing/invalidation, and true worst-case time & auxiliary space.';
+
+    const roleDirective = req.userQuestion?.trim()
+      ? `The candidate asked a direct question: "${req.userQuestion.trim()}". Answer this question directly first with a concrete trace using their exact variables/columns/lines, then update mistakes and guidanceSteps to reflect their current code.`
+      : mode === 'analyze' || mode === 'coach'
+        ? `Perform a sharp line-by-line engineering audit. If execution failed, walk through a short concrete trace on the failing test case showing exactly where Actual diverges from Expected. Pinpoint every bug by line number in "mistakes". In "feedback", structure cleanly with **Root Diagnosis**, **Trace / Evidence**, and **How to Fix** (include a tiny 3-6 line fenced patch snippet ONLY for the broken fragment, never a full rewrite).`
         : mode === 'optimizer'
-          ? `The code passed all tests (Accepted). Compute exact Time & Space complexity, verify whether it matches optimal constraints (${req.constraints || 'standard'}), and suggest 1-2 concrete algorithmic or C++/SQL optimizations.`
+          ? `The code passed all tests (Accepted). Compute exact Time & Auxiliary Space complexity, compare directly against optimal constraints (${req.constraints || 'standard'}), and give 1-2 concrete C++/SQL refinements (constant-factor memory, STL/index usage, or cleaner invariant).`
           : hintLevel === 1
-            ? `Give Hint 1: high-level pattern/intuition nudge tailored to their current draft without revealing code.`
+            ? `Give Hint 1 (Pattern Nudge): 2-4 crisp sentences identifying the bottleneck or missing invariant in their current draft and pointing them toward the right data structure or SQL clause WITHOUT revealing code.`
             : hintLevel === 2
-              ? `Give Hint 2: key invariant, data structure, or SQL clause strategy + point out any mistake in their current draft without giving full solution.`
-              : `Give Hint 3: clear numbered algorithm steps and edge cases tailored to their current draft.`;
+              ? `Give Hint 2 (Core Invariant & Bug Spotter): explain the exact state/invariant or JOIN/window partition strategy needed, call out any bug in their current draft by line number, and outline the transformation without giving a complete solution.`
+              : `Give Hint 3 (Implementation Blueprint): provide a clear numbered 3-5 step plan mapped to their exact signature/tables plus critical boundary edge cases.`;
 
-    return `You are a senior software engineer coaching a candidate on a ${langLabel} coding problem.
+    return `You are a Principal Engineer mentoring a candidate live in an IDE on a ${langLabel} problem.
 
-RULES:
-1. NEVER falsely praise broken, failing, or incomplete/stubbed code. Never report "O(1)" for empty stubs or failing drafts.
-2. Inspect the candidate's actual code line by line, citing exact line numbers and variable/column names.
-3. Return STRICT JSON ONLY (no markdown fences) with this exact schema:
+QUALITY BAR (CRITICAL):
+1. Be concrete and evidence-driven. Reference exact line numbers, variable/column names, and failing input/row values. Never use generic filler ("check edge cases", "consider optimizing").
+2. NEVER falsely praise empty stubs or broken code, and never label an incomplete draft as O(1).
+3. ${domainNotes}
+4. Format "feedback" as crisp, readable GitHub Markdown (short bold section titles, inline \`code\` tokens, concise bullets, and at most one tiny targeted snippet when fixing a concrete bug; keep under 260 words).
+5. Return STRICT JSON ONLY (no markdown wrapper around the JSON) matching this schema:
 {
-  "verdictSummary": "1 crisp sentence summarizing current correctness & status",
-  "detectedMethod": "Specific algorithm/approach detected in user's code",
-  "timeComplexity": "Exact Big-O time complexity of user's current code",
-  "spaceComplexity": "Exact auxiliary Big-O space complexity of user's current code",
+  "verdictSummary": "1 crisp headline summarizing current status & main insight",
+  "detectedMethod": "Specific algorithm, class design, or SQL pattern used in code",
+  "timeComplexity": "Exact Big-O time complexity or SQL query plan complexity",
+  "spaceComplexity": "Exact auxiliary space Big-O (e.g. O(N) hash map, O(1) extra)",
   "targetComplexity": "Optimal Big-O time & space for problem constraints",
   "mistakes": [
-    { "line": 12, "title": "Short bug title", "detail": "Why it fails on specific input/edge case", "fixHint": "Exact change needed" }
+    { "line": 12, "title": "Concise bug title", "detail": "Exact reason it fails with input/column details", "fixHint": "Concrete fix" }
   ],
-  "feedback": "Concise markdown explanation (under 220 words): failure trace or optimization advice or progressive hint"
+  "guidanceSteps": [
+    "Actionable next step 1",
+    "Actionable next step 2"
+  ],
+  "feedback": "Clean Markdown coaching response tailored to mode/question"
 }
 
 Problem: #${req.problemId} ${req.problemTitle}
@@ -730,7 +753,7 @@ Category: ${req.category || 'DSA'} | Topic: ${req.topic || 'General'} | Pattern:
 ${req.functionSignature ? `Signature: ${req.functionSignature}\n` : ''}Constraints: ${req.constraints || 'Standard limits'}
 Statement: ${statementSnippet}
 ${examplesSnippet}${schemaSnippet}
-Candidate's current ${langLabel} code (with line numbers):
+Candidate's current ${langLabel} code (numbered lines):
 ${numberedCode || '(empty editor)'}
 
 Static pre-check notes:
@@ -738,7 +761,7 @@ ${staticFindings}
 
 Execution status:
 ${failureDetails}
-${req.userQuestion?.trim() ? `\nCandidate question: ${req.userQuestion.trim()}\n` : ''}
+
 Task:
 ${roleDirective}`;
   }
@@ -751,35 +774,101 @@ ${roleDirective}`;
   ): TeacherFeedbackResponse {
     const isCurrentAccepted = req.verdict === 'Accepted';
     const hasFailureVerdict = Boolean(req.verdict && req.verdict !== 'Accepted');
+    const isSql = req.category === 'SQL';
+    const isOop = req.category === 'OOP';
+    const execResult = req.executionResult as
+      | (ExecutionResult & {
+          error?: string;
+          columns?: string[];
+          expectedColumns?: string[];
+          rows?: Array<Record<string, unknown>>;
+          expectedRows?: Array<Record<string, unknown>>;
+        })
+      | undefined;
 
-    if (mode === 'analyze' || hasFailureVerdict || analysis.mistakes.length > 0) {
+    if (req.userQuestion?.trim()) {
+      const q = req.userQuestion.trim();
+      const firstBug = analysis.mistakes[0];
+      const traceNote = execResult?.failedTestCase
+        ? `\n\n**Failing Test Trace**\n- Input: \`${execResult.failedTestCase.input}\`\n- Expected: \`${execResult.failedTestCase.expected}\`\n- Actual: \`${execResult.failedTestCase.actual}\``
+        : '';
       return {
-        message: analysis.summary,
+        message: [
+          `**Offline Analysis for:** _"${q}"_`,
+          `- **Detected Approach:** ${analysis.detectedMethod} (\`${analysis.estimatedComplexity}\` vs target \`${analysis.targetComplexity}\`)`,
+          firstBug
+            ? `- **Primary Signal${firstBug.line ? ` (Line ${firstBug.line})` : ''}:** **${firstBug.title}** — ${firstBug.detail}\n- **Fix:** ${firstBug.fixHint}`
+            : `- **Next Check:** ${analysis.guidanceSteps[0] || 'Trace one concrete example line-by-line against the Loop/Join invariant.'}`,
+        ].join('\n') + traceNote,
         hintLevel,
         mode: hasFailureVerdict ? 'coach' : 'analyze',
       };
     }
 
-    const isSql = req.category === 'SQL';
+    if (mode === 'analyze' || hasFailureVerdict || analysis.mistakes.length > 0) {
+      const lines: string[] = [
+        `**Detected Method:** ${analysis.detectedMethod}`,
+      ];
+      if (execResult?.compileError) {
+        lines.push(`\n**Compiler / Syntax Error**\n\`\`\`\n${execResult.compileError.slice(0, 320)}\n\`\`\``);
+      } else if (execResult?.error) {
+        lines.push(`\n**Execution Error**\n\`${execResult.error.slice(0, 260)}\``);
+      } else if (execResult?.failedTestCase) {
+        lines.push(
+          `\n**Failing Case (${req.verdict})**\n- Input: \`${execResult.failedTestCase.input}\`\n- Expected: \`${execResult.failedTestCase.expected}\` | Actual: \`${execResult.failedTestCase.actual}\``
+        );
+      } else if (isSql && req.verdict === 'Wrong Answer' && execResult?.columns) {
+        lines.push(
+          `\n**Query Output Diff**\n- Columns got: \`[${execResult.columns.join(', ')}]\` vs expected: \`[${(execResult.expectedColumns || []).join(', ')}]\`\n- Rows got: \`${execResult.rows?.length ?? 0}\` vs expected: \`${execResult.expectedRows?.length ?? '?'}\``
+        );
+      }
+
+      if (analysis.mistakes.length > 0) {
+        lines.push(
+          `\n**Key Issues (${analysis.mistakes.length})**\n` +
+            analysis.mistakes
+              .slice(0, 4)
+              .map(
+                (m, i) =>
+                  `${i + 1}. ${m.line ? `\`Line ${m.line}\` ` : ''}**${m.title}:** ${m.detail} → _${m.fixHint}_`
+              )
+              .join('\n')
+        );
+      }
+
+      if (analysis.guidanceSteps.length > 0) {
+        lines.push(
+          `\n**Next Steps**\n${analysis.guidanceSteps.map((s) => `- ${s}`).join('\n')}`
+        );
+      }
+
+      return {
+        message: lines.join('\n'),
+        hintLevel,
+        mode: hasFailureVerdict ? 'coach' : 'analyze',
+      };
+    }
 
     if (mode === 'optimizer' && isCurrentAccepted) {
       return {
         message: isSql
-          ? `${analysis.detectedMethod} passed all SQL assertions.\n\nOptimization checklist:\n1. Filter selective WHERE predicates before joins or window functions.\n2. Verify tie-breaking columns in ORDER BY so output stays deterministic.\n3. Compare your query structure with the Reference Solution.`
-          : `All test cases passed (${analysis.detectedMethod} • ${analysis.estimatedComplexity}).\n\nNext steps to tighten complexity:\n1. Examine memory usage: can auxiliary arrays or maps be reduced toward O(1) extra space?\n2. Check inner loops and copies: pass containers by const reference and reserve hash capacities.\n3. Compare with Reference Solution for optimal interview trade-offs.`,
+          ? `**Accepted · ${analysis.detectedMethod}**\n\n**Refinement Checklist**\n- Push selective \`WHERE\` predicates earlier before joins or window \`OVER (...)\` passes.\n- Verify tie-breakers in \`ORDER BY\` so output stays deterministic.\n- Check whether a single \`LEFT JOIN\` + \`GROUP BY\` replaces nested correlated subqueries.`
+          : `**Accepted · ${analysis.detectedMethod} (\`${analysis.estimatedComplexity}\`)**\n\n**Optimization Checklist**\n- Compare against optimal target (\`${analysis.targetComplexity}\`): can auxiliary containers be eliminated toward \`O(1)\` space?\n- Pass read-only containers by \`const &\`, use \`reserve()\` where sizes are known, and avoid redundant passes.${isOop ? '\n- Verify `const`-correct observers, `virtual` destructors where polymorphic, and atomic invariant checks.' : ''}`,
         hintLevel,
         mode: 'optimizer',
       };
     }
 
     const topicNote = req.topic ? ` (${req.topic})` : '';
-    const patternNote = req.pattern && req.pattern !== 'General' ? ` — Pattern: ${req.pattern}` : '';
+    const patternNote = req.pattern && req.pattern !== 'General' ? ` — \`${req.pattern}\`` : '';
 
     if (hintLevel === 1) {
       return {
         message: isSql
-          ? `Hint 1 — Query Structure${topicNote}: Break down the required output grain first. Decide which tables must be joined before filtering or grouping rows.`
-          : `Hint 1 — Pattern Nudge${topicNote}: Identify the lookup or traversal invariant required${patternNote}. Ask whether you need fast O(1) key lookup, monotonic state, or divide-and-conquer.`,
+          ? `**Hint 1 — Output Grain${topicNote}**\nStart by identifying one row of the required result set: choose the base table and decide \`INNER JOIN\` vs \`LEFT JOIN\` (to retain zero/NULL rows) before aggregating.`
+          : isOop
+            ? `**Hint 1 — Class Boundary${topicNote}**\nIdentify the core class invariant first: which fields must remain \`private\`, what preconditions validate state transitions, and which queries should be \`const\`?`
+            : `**Hint 1 — Pattern Nudge${topicNote}**\nIdentify the lookup or traversal invariant required${patternNote}. Ask whether you need \`O(1)\` hash state, two pointers / monotonic structure, or divide-and-conquer to reach \`${analysis.targetComplexity}\`.`,
         hintLevel: 1,
         mode: 'nudge',
       };
@@ -788,8 +877,10 @@ ${roleDirective}`;
     if (hintLevel === 2) {
       return {
         message: isSql
-          ? `Hint 2 — Aggregation & Filtering: Separate row-level WHERE filters from group-level HAVING filters, and watch for NULL handling when joining tables.`
-          : `Hint 2 — Core Invariant${patternNote}: Focus on what state must be carried between steps so each element is processed minimal times without redundant nested scans.`,
+          ? `**Hint 2 — Clauses & NULLs**\nKeep row filters in \`WHERE\` (or \`ON\` for \`LEFT JOIN\` right-table filters!) and post-aggregation filters in \`HAVING\`. Use \`COALESCE(expr, 0)\` and \`1.0 * a / b\` for safe arithmetic.`
+          : isOop
+            ? `**Hint 2 — Ownership & Polymorphism**\nWatch for copy/move ownership (\`Rule of 0/5\`), virtual dispatch through references (\`Base&\`) rather than by-value slicing, and atomic rollback if validation fails.`
+            : `**Hint 2 — Core Invariant${patternNote}**\nMaintain minimal loop state so each element is processed once or logarithmically instead of re-scanning with nested loops.`,
         hintLevel: 2,
         mode: 'nudge',
       };
@@ -797,14 +888,8 @@ ${roleDirective}`;
 
     return {
       message: isSql
-        ? `Hint 3 — Step-by-Step Query Plan:
-1. Select the base relation and apply explicit JOIN conditions.
-2. Aggregate with GROUP BY / window functions (OVER PARTITION BY) if ranking is needed.
-3. Apply final ordering and NULL checks before comparing output columns.`
-        : `Hint 3 — Step-by-Step Approach${patternNote}:
-1. Initialize the minimal tracking state for ${req.topic || 'the problem'}.
-2. Process elements systematically while maintaining the loop invariant.
-3. Verify edge cases: empty input, single item, duplicates, and upper constraint bounds.`,
+        ? `**Hint 3 — Step-by-Step Query Plan**\n1. Build the base join grain (\`FROM\` + \`LEFT/INNER JOIN\`) with explicit join keys.\n2. Compute per-group or ranked metrics via \`GROUP BY\` / window \`OVER (PARTITION BY ... ORDER BY ...)\`.\n3. Project exact required column aliases, handle \`NULL\`s cleanly, and apply final \`ORDER BY\`.`
+        : `**Hint 3 — Implementation Plan${patternNote}**\n1. Initialize clean tracking state sized for \`${req.topic || 'the problem'}\`.\n2. Process elements sequentially while maintaining your loop/class invariant.\n3. Verify boundaries: empty input, single element, duplicates, and \`${req.constraints || 'upper constraint bounds'}\`.`,
       hintLevel: 3,
       mode: 'nudge',
     };

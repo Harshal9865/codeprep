@@ -1,21 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Clock } from 'lucide-react';
-import {
-  ACTIVE_MOCK_STORAGE_KEY,
-  ActiveMockSession,
-} from '../../pages/MockInterviewPage';
+
+const ACTIVE_MOCK_STORAGE_KEY = 'codeprep_active_mock_session_v1';
+
+interface BannerMockSnapshot {
+  submitted?: boolean;
+  expiresAtMs: number;
+  trackName?: string;
+}
 
 interface ActiveMockBannerProps {
   isVisible: boolean;
   onReturnToMock: () => void;
 }
 
-function readActiveUnsubmittedMock(): ActiveMockSession | null {
+function readActiveUnsubmittedMock(): BannerMockSnapshot | null {
   try {
     const raw = localStorage.getItem(ACTIVE_MOCK_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as ActiveMockSession;
-    if (!parsed || parsed.submitted) return null;
+    const parsed = JSON.parse(raw) as BannerMockSnapshot;
+    if (!parsed || parsed.submitted || typeof parsed.expiresAtMs !== 'number') return null;
     return parsed;
   } catch {
     return null;
@@ -26,7 +30,7 @@ export const ActiveMockBanner: React.FC<ActiveMockBannerProps> = ({
   isVisible,
   onReturnToMock,
 }) => {
-  const [session, setSession] = useState<ActiveMockSession | null>(() =>
+  const [session, setSession] = useState<BannerMockSnapshot | null>(() =>
     readActiveUnsubmittedMock()
   );
   const [secsLeft, setSecsLeft] = useState<number>(0);

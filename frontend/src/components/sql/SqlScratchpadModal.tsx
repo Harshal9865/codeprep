@@ -5,6 +5,11 @@ import { Play, Terminal, X, RotateCcw, Loader2, CheckCircle2, AlertCircle } from
 interface SqlScratchpadModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialPreset?: {
+    label?: string;
+    schemaDdl: string;
+    query: string;
+  } | null;
 }
 
 interface ScratchPreset {
@@ -97,7 +102,11 @@ ORDER BY season, rank_in_season, player;`,
 
 const SCRATCH_STORAGE_KEY = 'codeprep_sql_scratchpad_v1';
 
-export const SqlScratchpadModal: React.FC<SqlScratchpadModalProps> = ({ isOpen, onClose }) => {
+export const SqlScratchpadModal: React.FC<SqlScratchpadModalProps> = ({
+  isOpen,
+  onClose,
+  initialPreset,
+}) => {
   const [schemaDdl, setSchemaDdl] = useState<string>(() => {
     try {
       const saved = localStorage.getItem(SCRATCH_STORAGE_KEY);
@@ -128,6 +137,14 @@ export const SqlScratchpadModal: React.FC<SqlScratchpadModalProps> = ({ isOpen, 
     rows: Array<Record<string, unknown>>;
     error?: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (isOpen && initialPreset) {
+      setSchemaDdl(initialPreset.schemaDdl);
+      setQuery(initialPreset.query);
+      setResult(null);
+    }
+  }, [isOpen, initialPreset]);
 
   useEffect(() => {
     try {

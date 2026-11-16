@@ -158,22 +158,23 @@ export class PerformanceService {
       }
     }
 
+    const isTimedOut = runRes.verdict === 'Time Limit Exceeded';
     let partialTimeoutNote: string | undefined;
-    if (runRes.timedOut || uniquePoints.length < generatedTiers.length) {
-      partialTimeoutNote = runRes.timedOut
+    if (isTimedOut || uniquePoints.length < generatedTiers.length) {
+      partialTimeoutNote = isTimedOut
         ? `Timed out at higher input sizes (completed ${uniquePoints.length}/${generatedTiers.length} tiers) — indicates high polynomial/exponential scaling.`
         : `Completed ${uniquePoints.length}/${generatedTiers.length} input tiers.`;
     }
 
     if (uniquePoints.length < 2) {
       throw new Error(
-        runRes.timedOut
+        isTimedOut
           ? 'Benchmark timed out even on small/medium sizes — check for infinite loops or exponential recursion.'
           : 'Your code crashed or returned early during benchmark execution. Run sample test cases first.'
       );
     }
 
-    const fit = this.fitComplexityModel(uniquePoints, Boolean(runRes.timedOut));
+    const fit = this.fitComplexityModel(uniquePoints, isTimedOut);
     const empiricalSummary = uniquePoints
       .map((p) => `N=${p.n}->${p.runtimeMs}ms`)
       .join(', ');
