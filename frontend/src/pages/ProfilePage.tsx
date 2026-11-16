@@ -64,6 +64,16 @@ interface BadgeSummary {
   target: number;
 }
 
+interface SolveSpeedStats {
+  trackedSolvedCount: number;
+  totalActiveMinutes: number;
+  avgEasySec: number | null;
+  avgMediumSec: number | null;
+  avgHardSec: number | null;
+  fastestSolveSec: number | null;
+  fastestProblemTitle: string | null;
+}
+
 interface ProfileTelemetry {
   totalSolved: number;
   totalProblems: number;
@@ -76,6 +86,7 @@ interface ProfileTelemetry {
   currentStreak: number;
   longestStreak: number;
   badges: BadgeSummary[];
+  solveSpeedStats?: SolveSpeedStats;
 }
 
 interface ProfilePageProps {
@@ -179,6 +190,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
           currentStreak: stats.currentStreak ?? 0,
           longestStreak: stats.longestStreak ?? 0,
           badges: Array.isArray(stats.badges) ? stats.badges : [],
+          solveSpeedStats: stats.solveSpeedStats,
         });
       }
     } catch {
@@ -678,6 +690,65 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
             </div>
           )}
         </section>
+
+        {/* 1B. Interview Timer & Solve Speed Benchmarks */}
+        {telemetry?.solveSpeedStats && (
+          <section className="bg-surface border border-border-subtle rounded-2xl p-6 space-y-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-semibold text-text-primary">Interview Timer &amp; Solve Speed Benchmarks</h2>
+              </div>
+              <span className="text-xs font-mono text-text-muted">
+                {telemetry.solveSpeedStats.totalActiveMinutes} min focused across {telemetry.solveSpeedStats.trackedSolvedCount} timed solves
+              </span>
+            </div>
+
+            {(() => {
+              const spd = telemetry.solveSpeedStats!;
+              const fmtDur = (sec: number | null) => {
+                if (sec === null) return '—';
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                return m > 0 ? `${m}m ${s}s` : `${s}s`;
+              };
+              return (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle">
+                    <div className="text-[11px] font-mono text-success">Avg Easy Solve</div>
+                    <div className="text-lg font-bold font-mono text-text-primary mt-0.5">
+                      {fmtDur(spd.avgEasySec)}
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-0.5">Target: &lt; 10m</div>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle">
+                    <div className="text-[11px] font-mono text-warning">Avg Medium Solve</div>
+                    <div className="text-lg font-bold font-mono text-text-primary mt-0.5">
+                      {fmtDur(spd.avgMediumSec)}
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-0.5">Target: &lt; 25m</div>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle">
+                    <div className="text-[11px] font-mono text-danger">Avg Hard Solve</div>
+                    <div className="text-lg font-bold font-mono text-text-primary mt-0.5">
+                      {fmtDur(spd.avgHardSec)}
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-0.5">Target: &lt; 40m</div>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-surface-subtle border border-border-subtle">
+                    <div className="text-[11px] font-mono text-primary">Fastest Accepted</div>
+                    <div className="text-lg font-bold font-mono text-text-primary mt-0.5">
+                      {fmtDur(spd.fastestSolveSec)}
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-0.5 truncate">
+                      {spd.fastestProblemTitle || 'Solve a problem with timer'}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </section>
+        )}
 
         {/* 2. Earned Badges & Milestones Showcase */}
         {telemetry && telemetry.badges.length > 0 && (

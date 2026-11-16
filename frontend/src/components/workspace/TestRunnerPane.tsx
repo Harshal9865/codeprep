@@ -115,6 +115,16 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
     setActiveTab('result');
   };
 
+  const handleAppendCustomToCases = () => {
+    const trimmed = customInput.trim();
+    if (!trimmed) return;
+    const next = [...editableCases, { input: trimmed, expectedOutput: '' }];
+    setEditableCases(next);
+    setSelectedCaseIdx(next.length - 1);
+    setHasEditedCases(true);
+    setActiveTab('cases');
+  };
+
   const handleRunActiveCases = () => {
     if (hasEditedCases) {
       onRun(editableCases, debugMode);
@@ -307,7 +317,13 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
             ) : (
               <Play className="w-3.5 h-3.5 text-text-muted" />
             )}
-            <span>{isRunning ? 'Running...' : 'Run'}</span>
+            <span>
+              {isRunning
+                ? 'Running...'
+                : hasEditedCases || editableCases.length > sampleTestCases.length
+                ? `Run All (${editableCases.length})`
+                : 'Run'}
+            </span>
           </button>
 
           <button
@@ -457,13 +473,23 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
               className="w-full h-24 p-3 rounded-xl bg-surface-subtle text-sm text-text-primary focus:outline-none focus:bg-surface-elevated transition-colors resize-none border border-border-subtle focus:border-primary/50"
               placeholder="e.g. [1,2,3,4] | 5"
             />
-            <button
-              type="button"
-              onClick={handleRunCustom}
-              className="px-4 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high text-text-primary text-xs font-sans transition-colors border border-border-subtle"
-            >
-              Run Custom Input
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRunCustom}
+                className="px-4 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high text-text-primary text-xs font-sans transition-colors border border-border-subtle"
+              >
+                Run Custom Only
+              </button>
+              <button
+                type="button"
+                onClick={handleAppendCustomToCases}
+                disabled={!customInput.trim()}
+                className="px-4 py-1.5 rounded-lg bg-primary-subtle hover:bg-primary/20 text-primary text-xs font-sans font-medium transition-colors border border-primary/35 disabled:opacity-40"
+              >
+                + Add to Testcases
+              </button>
+            </div>
           </div>
         )}
 
@@ -553,15 +579,34 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
                 )}
 
                 {/* Per-Testcase Pass/Fail Tabs (from Run) */}
-                {executionResult.caseResults && executionResult.caseResults.length > 0 && (
+                {executionResult.caseResults && executionResult.caseResults.length > 0 && (() => {
+                  const timedCases = executionResult.caseResults!.filter((c) => typeof c.runtimeMs === 'number');
+                  const maxCaseMs = Math.max(1, ...timedCases.map((c) => c.runtimeMs || 0));
+                  const avgCaseMs =
+                    timedCases.length > 0
+                      ? Math.round(timedCases.reduce((s, c) => s + (c.runtimeMs || 0), 0) / timedCases.length)
+                      : null;
+
+                  return (
                   <div className="space-y-3">
+                    {avgCaseMs !== null && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-text-muted px-1">
+                        <span>Per-Case Breakdown ({executionResult.caseResults!.length} cases)</span>
+                        <span>
+                          Avg: <strong className="text-text-primary">{avgCaseMs}ms</strong> · Peak:{' '}
+                          <strong className="text-text-primary">{maxCaseMs}ms</strong>
+                        </span>
+                      </div>
+                    )}
                     <div className="flex flex-wrap items-center gap-2">
-                      {executionResult.caseResults.map((c, idx) => (
+                      {executionResult.caseResults!.map((c, idx) => {
+                        const pct = typeof c.runtimeMs === 'number' ? Math.max(10, Math.round((c.runtimeMs / maxCaseMs) * 100)) : 0;
+                        return (
                         <button
                           key={c.index}
                           type="button"
                           onClick={() => setSelectedResultCaseIdx(idx)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs border transition-colors ${
+                          className={`relative overflow-hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors ${
                             selectedResultCaseIdx === idx
                               ? 'bg-surface-high text-text-primary font-semibold border-border-default'
                               : 'bg-surface-subtle text-text-muted hover:text-text-primary border-border-subtle'
@@ -576,8 +621,15 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
                           {c.runtimeMs != null && (
                             <span className="text-[10px] text-text-muted">{c.runtimeMs}ms</span>
                           )}
+                          {pct > 0 && (
+                            <span
+                              aria-hidden="true"
+                              className={`absolute inset-x-0 bottom-0 h-0.5 ${c.passed ? 'bg-success/60' : 'bg-danger/60'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          )}
                         </button>
-                      ))}
+                      );})}
                     </div>
 
                     {selectedResultCase && (
@@ -630,7 +682,8 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
                       </div>
                     )}
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* Failed Test Case Diff (shown for Submit when caseResults is omitted) */}
                 {executionResult.failedTestCase && (!executionResult.caseResults || executionResult.caseResults.length === 0) && (

@@ -27,6 +27,7 @@ import {
 import { Button } from '../ui/Button';
 import { CodePrepLoader } from '../ui/CodePrepLoader';
 import { HighlightedCode } from '../ui/CodeHighlight';
+import { SubmissionDiffViewer } from './SubmissionDiffViewer';
 
 const SUPERSCRIPT_DIGITS: Record<string, string> = {
   '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
@@ -58,44 +59,6 @@ function renderFormattedInline(text: string): React.ReactNode {
     }
     return <React.Fragment key={idx}>{part}</React.Fragment>;
   });
-}
-
-function buildSimpleLineDiff(oldCode: string, newCode: string): Array<{ type: 'same' | 'add' | 'del'; text: string }> {
-  const a = oldCode.split('\n');
-  const b = newCode.split('\n');
-  const m = a.length;
-  const n = b.length;
-  if (m * n > 25000) {
-    return [
-      ...a.slice(0, 60).map((t) => ({ type: 'del' as const, text: t })),
-      ...b.slice(0, 60).map((t) => ({ type: 'add' as const, text: t })),
-    ];
-  }
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = m - 1; i >= 0; i--) {
-    for (let j = n - 1; j >= 0; j--) {
-      dp[i][j] = a[i] === b[j] ? 1 + dp[i + 1][j + 1] : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    }
-  }
-  const diff: Array<{ type: 'same' | 'add' | 'del'; text: string }> = [];
-  let i = 0;
-  let j = 0;
-  while (i < m && j < n) {
-    if (a[i] === b[j]) {
-      diff.push({ type: 'same', text: a[i] });
-      i++;
-      j++;
-    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-      diff.push({ type: 'del', text: a[i] });
-      i++;
-    } else {
-      diff.push({ type: 'add', text: b[j] });
-      j++;
-    }
-  }
-  while (i < m) diff.push({ type: 'del', text: a[i++] });
-  while (j < n) diff.push({ type: 'add', text: b[j++] });
-  return diff;
 }
 
 interface LessonData {
@@ -782,7 +745,7 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                             </button>
                           )}
 
-                          {sub.code && currentCode && (
+                          {sub.code && (currentCode || (problem.recentSubmissions?.length ?? 0) > 1) && (
                             <button
                               type="button"
                               onClick={() => {
@@ -794,7 +757,7 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                                   ? 'bg-primary-subtle text-primary border-primary/40'
                                   : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
                               }`}
-                              title="Compare this submission against your current editor code"
+                              title="Compare this submission against your editor or another past submission"
                             >
                               <GitCompare className="w-3.5 h-3.5" />
                               <span>{isDiffing ? 'Close Diff' : 'Diff'}</span>
@@ -815,28 +778,11 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                       </div>
 
                       {isDiffing && sub.code && (
-                        <div className="border-t border-border-subtle bg-canvas">
-                          <div className="px-3 py-1.5 bg-surface flex items-center justify-between border-b border-border-subtle text-[11px] font-mono text-text-muted">
-                            <span>Submission (−) vs Current Editor (+)</span>
-                          </div>
-                          <div className="max-h-64 overflow-auto font-mono text-[11.5px] leading-5 p-2 space-y-0.5">
-                            {buildSimpleLineDiff(sub.code, currentCode).map((d, di) => (
-                              <div
-                                key={di}
-                                className={`px-2 rounded whitespace-pre ${
-                                  d.type === 'add'
-                                    ? 'bg-success/15 text-success'
-                                    : d.type === 'del'
-                                    ? 'bg-danger/15 text-danger'
-                                    : 'text-text-secondary'
-                                }`}
-                              >
-                                {d.type === 'add' ? '+ ' : d.type === 'del' ? '- ' : '  '}
-                                {d.text}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                        <SubmissionDiffViewer
+                          baseSubmission={sub}
+                          allSubmissions={problem.recentSubmissions || []}
+                          currentCode={currentCode}
+                        />
                       )}
 
                       {isPreviewing && sub.code && (

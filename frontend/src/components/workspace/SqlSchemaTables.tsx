@@ -16,6 +16,7 @@ interface ParsedSqlTable {
 interface SqlSchemaTablesProps {
   schemaDdl?: string;
   expectedResult?: Array<Record<string, unknown>>;
+  onInsertIdentifier?: (token: string) => void;
 }
 
 function splitTopLevelCommas(input: string): string[] {
@@ -214,6 +215,7 @@ function renderCellValue(val: unknown): React.ReactNode {
 export const SqlSchemaTables: React.FC<SqlSchemaTablesProps> = ({
   schemaDdl,
   expectedResult,
+  onInsertIdentifier,
 }) => {
   const [showRawDdl, setShowRawDdl] = useState(false);
   const [copiedDdl, setCopiedDdl] = useState(false);
@@ -260,18 +262,56 @@ export const SqlSchemaTables: React.FC<SqlSchemaTablesProps> = ({
               className="rounded-xl border border-border-subtle bg-surface-subtle overflow-hidden"
             >
               <div className="px-3.5 py-2 bg-surface-elevated/70 border-b border-border-subtle flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono text-xs font-bold text-text-primary">
-                  Table: <span className="text-primary">{table.name}</span>
-                </span>
+                {onInsertIdentifier ? (
+                  <button
+                    type="button"
+                    onClick={() => onInsertIdentifier(table.name)}
+                    title={`Insert table name '${table.name}' into SQL editor`}
+                    className="font-mono text-xs font-bold text-text-primary hover:text-primary transition-colors cursor-pointer"
+                  >
+                    Table: <span className="text-primary underline decoration-dotted">{table.name}</span>
+                  </button>
+                ) : (
+                  <span className="font-mono text-xs font-bold text-text-primary">
+                    Table: <span className="text-primary">{table.name}</span>
+                  </span>
+                )}
                 <div className="flex flex-wrap gap-1.5">
-                  {table.columns.map((col) => (
-                    <span
-                      key={col.name}
-                      className="px-1.5 py-0.5 rounded bg-surface border border-border-subtle font-mono text-[10px] text-text-muted"
-                    >
-                      {col.name}: <span className="text-text-secondary">{col.type.split(' ')[0]}</span>
-                    </span>
-                  ))}
+                  {table.columns.map((col) => {
+                    const isFkLike = !col.isPrimaryKey && /(_id|Id)$/.test(col.name);
+                    const badgeClasses = `px-1.5 py-0.5 rounded bg-surface border font-mono text-[10px] inline-flex items-center gap-1 transition-colors ${
+                      col.isPrimaryKey
+                        ? 'border-amber-500/40 text-amber-400'
+                        : isFkLike
+                        ? 'border-sky-500/35 text-sky-400'
+                        : 'border-border-subtle text-text-muted'
+                    } ${onInsertIdentifier ? 'hover:border-primary/60 hover:text-primary cursor-pointer' : ''}`;
+
+                    const content = (
+                      <>
+                        {col.isPrimaryKey && <span className="text-[9px] font-bold">PK</span>}
+                        {isFkLike && <span className="text-[9px] font-bold">FK</span>}
+                        <span>{col.name}:</span>
+                        <span className="text-text-secondary">{col.type.split(' ')[0]}</span>
+                      </>
+                    );
+
+                    return onInsertIdentifier ? (
+                      <button
+                        key={col.name}
+                        type="button"
+                        onClick={() => onInsertIdentifier(col.name)}
+                        title={`Insert column '${col.name}' at cursor`}
+                        className={badgeClasses}
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      <span key={col.name} className={badgeClasses}>
+                        {content}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -282,7 +322,18 @@ export const SqlSchemaTables: React.FC<SqlSchemaTablesProps> = ({
                       <tr className="border-b border-border-subtle bg-surface-subtle text-text-muted text-[11px]">
                         {table.columns.map((col) => (
                           <th key={col.name} className="py-2 px-3 font-semibold whitespace-nowrap">
-                            {col.name}
+                            {onInsertIdentifier ? (
+                              <button
+                                type="button"
+                                onClick={() => onInsertIdentifier(col.name)}
+                                title={`Click to insert '${col.name}' into editor`}
+                                className="hover:text-primary transition-colors cursor-pointer"
+                              >
+                                {col.name}
+                              </button>
+                            ) : (
+                              col.name
+                            )}
                           </th>
                         ))}
                       </tr>

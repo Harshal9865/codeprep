@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 import { SqlSchemaTables } from '../components/workspace/SqlSchemaTables';
+import { SubmissionDiffViewer } from '../components/workspace/SubmissionDiffViewer';
 import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
 import { HighlightedCode, HighlightedCodeEditor } from '../components/ui/CodeHighlight';
 import { ResizableDivider } from '../components/workspace/ResizableDivider';
@@ -37,6 +38,7 @@ import {
   History,
   Eye,
   Code2,
+  GitCompare,
 } from 'lucide-react';
 
 interface SqlProblemData {
@@ -88,6 +90,9 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   // Left pane tabs ('description' | 'solution' | 'submissions')
   const [activeLeftTab, setActiveLeftTab] = useState<'description' | 'solution' | 'submissions'>('description');
   const [previewSqlSubId, setPreviewSqlSubId] = useState<string | null>(null);
+  const [diffSqlSubId, setDiffSqlSubId] = useState<string | null>(null);
+  const sqlTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastActivityRef = useRef<number>(Date.now());
   const [solutionSql, setSolutionSql] = useState<string | null>(null);
   const [solutionError, setSolutionError] = useState<string | null>(null);
   const [isUnlockingSolution, setIsUnlockingSolution] = useState(false);
@@ -168,6 +173,34 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     }
   }, []);
 
+  useEffect(() => {
+    const recordActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+    window.addEventListener('keydown', recordActivity);
+    window.addEventListener('mousemove', recordActivity);
+    window.addEventListener('click', recordActivity);
+    return () => {
+      window.removeEventListener('keydown', recordActivity);
+      window.removeEventListener('mousemove', recordActivity);
+      window.removeEventListener('click', recordActivity);
+    };
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(async () => {
+      if (document.hidden) return;
+      const isUserActive = (Date.now() - lastActivityRef.current) / 1000 < 120;
+      try {
+        await apiRequest('/study/timer/heartbeat', {
+          method: 'POST',
+          body: JSON.stringify({ problemId, isTabActive: isUserActive }),
+        });
+      } catch {}
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [problemId]);
+
   const prevSqlProblemIdRef = useRef<number>(problemId);
   useEffect(() => {
     const prevId = prevSqlProblemIdRef.current;
@@ -180,6 +213,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       setResult(null);
       setSqlBenchmarks(null);
       setPreviewSqlSubId(null);
+      setDiffSqlSubId(null);
       setActiveLeftTab('description');
       setSolutionSql(null);
       setSolutionError(null);
@@ -478,6 +512,29 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     action();
   };
 
+  const handleInsertSqlIdentifier = (token: string) => {
+    const ta = sqlTextareaRef.current;
+    if (!ta) {
+      setQuery((prev) => (prev.endsWith(' ') || prev.endsWith('\n') ? `${prev}${token}` : `${prev} ${token}`));
+      return;
+    }
+    const start = ta.selectionStart ?? query.length;
+    const end = ta.selectionEnd ?? start;
+    const prevChar = start > 0 ? query[start - 1] : '';
+    const nextChar = end < query.length ? query[end] : '';
+    const padLeft = prevChar && !/[\s(.,(]/.test(prevChar) ? ' ' : '';
+    const padRight = nextChar && !/[\s),;.]/.test(nextChar) ? ' ' : '';
+    const insertStr = `${padLeft}${token}${padRight}`;
+    const nextSql = query.slice(0, start) + insertStr + query.slice(end);
+    const nextCaret = start + insertStr.length;
+    setQuery(nextSql);
+    window.requestAnimationFrame(() => {
+      ta.focus();
+      ta.selectionStart = nextCaret;
+      ta.selectionEnd = nextCaret;
+    });
+  };
+
   if (isLoading || !problem) {
     return (
       <CodePrepLoader
@@ -766,6 +823,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                 <SqlSchemaTables
                   schemaDdl={problem.schemaDdl}
                   expectedResult={problem.expectedResult}
+                  onInsertIdentifier={handleInsertSqlIdentifier}
                 />
 
                 <div className="space-y-2">
@@ -847,6 +905,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                     {problem.recentSubmissions.map((sub) => {
                       const isAccepted = sub.verdict === 'Accepted';
                       const isPreview = previewSqlSubId === sub.id;
+                      const isDiffing = diffSqlSubId === sub.id;
                       return (
                         <div
                           key={sub.id}
@@ -877,7 +936,10 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                               {sub.code && (
                                 <button
                                   type="button"
-                                  onClick={() => setPreviewSqlSubId(isPreview ? null : sub.id)}
+                                  onClick={() => {
+                                    setDiffSqlSubId(null);
+                                    setPreviewSqlSubId(isPreview ? null : sub.id);
+                                  }}
                                   className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${
                                     isPreview
                                       ? 'bg-primary-subtle text-primary border-primary/40'
@@ -886,6 +948,24 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                                 >
                                   <Eye className="w-3.5 h-3.5" />
                                   <span>{isPreview ? 'Hide' : 'View'}</span>
+                                </button>
+                              )}
+                              {sub.code && (query || (problem.recentSubmissions?.length ?? 0) > 1) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPreviewSqlSubId(null);
+                                    setDiffSqlSubId(isDiffing ? null : sub.id);
+                                  }}
+                                  className={`px-2 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1 transition-colors ${
+                                    isDiffing
+                                      ? 'bg-primary-subtle text-primary border-primary/40'
+                                      : 'bg-surface-elevated hover:bg-surface-high border-border-subtle text-text-muted hover:text-text-primary'
+                                  }`}
+                                  title="Compare this submission against your editor or another past submission"
+                                >
+                                  <GitCompare className="w-3.5 h-3.5" />
+                                  <span>{isDiffing ? 'Close Diff' : 'Diff'}</span>
                                 </button>
                               )}
                               {sub.code && (
@@ -903,6 +983,14 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                               )}
                             </div>
                           </div>
+
+                          {isDiffing && sub.code && (
+                            <SubmissionDiffViewer
+                              baseSubmission={sub}
+                              allSubmissions={problem.recentSubmissions || []}
+                              currentCode={query}
+                            />
+                          )}
 
                           {isPreview && sub.code && (
                             <div className="border-t border-border-subtle bg-canvas p-3 max-h-52 overflow-auto">
@@ -1084,6 +1172,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
             <HighlightedCodeEditor
               value={query}
               onChange={setQuery}
+              textareaRef={sqlTextareaRef}
               documentKey={problem.id}
               onKeyDown={(e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {

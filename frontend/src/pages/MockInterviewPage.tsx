@@ -71,6 +71,13 @@ interface RoundConfig {
   aptitudeCount: number;
   aptitudeFocus: AptitudeCategory | 'Mixed';
   durationMinutes: number;
+  targetWeakTopics?: boolean;
+}
+
+interface WeaknessRadar {
+  weakTopics: Array<{ topic: string; solved: number; total: number; accuracy: number }>;
+  weakAptitudeCategory: AptitudeCategory | null;
+  weakAptitudeAccuracy: number | null;
 }
 
 interface CompanyProfile {
@@ -313,23 +320,29 @@ function pickRandomProblems(
   pool: CatalogProblem[],
   count: number,
   alreadyChosenIds: Set<number>,
-  seenIds: Set<number>
+  seenIds: Set<number>,
+  preferredTopics?: Set<string>
 ): CatalogProblem[] {
   if (count <= 0 || pool.length === 0) return [];
   const available = pool.filter((p) => !alreadyChosenIds.has(p.id));
   if (available.length === 0) return [];
 
-  // Tier priority so users get genuinely new, unsolved problems every time:
-  // Tier 1: Unseen in prior mocks + Unsolved
-  // Tier 2: Unseen in prior mocks (even if solved before)
-  // Tier 3: Unsolved (seen in an older mock)
-  // Tier 4: Remainder of pool
-  const tier1 = shuffleArray(available.filter((p) => !seenIds.has(p.id) && !p.isSolved));
-  const tier2 = shuffleArray(available.filter((p) => !seenIds.has(p.id) && Boolean(p.isSolved)));
+  const isPreferred = (p: CatalogProblem) =>
+    preferredTopics && preferredTopics.size > 0 && preferredTopics.has(p.topic);
+
+  // Tier priority so users get genuinely new, unsolved problems every time (with optional weak-topic boost):
+  const tier0Pref = preferredTopics && preferredTopics.size > 0
+    ? shuffleArray(available.filter((p) => isPreferred(p) && !seenIds.has(p.id) && !p.isSolved))
+    : [];
+  const tier1 = shuffleArray(available.filter((p) => !isPreferred(p) && !seenIds.has(p.id) && !p.isSolved));
+  const tier2Pref = preferredTopics && preferredTopics.size > 0
+    ? shuffleArray(available.filter((p) => isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved)))
+    : [];
+  const tier2 = shuffleArray(available.filter((p) => !isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved)));
   const tier3 = shuffleArray(available.filter((p) => seenIds.has(p.id) && !p.isSolved));
   const tier4 = shuffleArray(available.filter((p) => seenIds.has(p.id) && Boolean(p.isSolved)));
 
-  const ordered = [...tier1, ...tier2, ...tier3, ...tier4];
+  const ordered = [...tier0Pref, ...tier1, ...tier2Pref, ...tier2, ...tier3, ...tier4];
   const picked = ordered.slice(0, count);
   picked.forEach((p) => alreadyChosenIds.add(p.id));
   return picked;
@@ -362,6 +375,11 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
   const [isSyncingSolveStatus, setIsSyncingSolveStatus] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [history, setHistory] = useState<MockHistoryEntry[]>(() => loadMockHistory());
+  const [weaknessRadar, setWeaknessRadar] = useState<WeaknessRadar>({
+    weakTopics: [],
+    weakAptitudeCategory: null,
+    weakAptitudeAccuracy: null,
+  });
   const [secondsLeft, setSecondsLeft] = useState<number>(() => {
     const existing = loadActiveMock();
     if (!existing) return 0;
@@ -441,11 +459,59 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
     }
   }, []);
 
-  // Sync solve status whenever returning to Mock Interview page with an active session
+  // Sync solve status + detect weak DSA & Aptitude topics for targeted mock recommendations
   useEffect(() => {
     if (session && session.codingProblems.length > 0) {
       syncCodingSolveStatus(session);
     }
+
+    const loadWeaknessRadar = async () => {
+      let weakTopics: WeaknessRadar['weakTopics'] = [];
+      try {
+        const dash = await apiRequest<{
+          analytics?: { topicStats?: Array<{ topic: string; total: number; solved: number; accuracy: number }> };
+          topicStats?: Array<{ topic: string; total: number; solved: number; accuracy: number }>;
+        }>('/analytics/dashboard');
+        const stats = dash.analytics?.topicStats || dash.topicStats || [];
+        weakTopics = [...stats]
+          .filter((t) => t.total > t.solved)
+          .sort((a, b) => {
+            const ratioA = a.total > 0 ? a.solved / a.total : 1;
+            const ratioB = b.total > 0 ? b.solved / b.total : 1;
+            if (Math.abs(ratioA - ratioB) > 0.05) return ratioA - ratioB;
+            return a.accuracy - b.accuracy;
+          })
+          .slice(0, 3);
+      } catch {}
+
+      let weakAptitudeCategory: AptitudeCategory | null = null;
+      let weakAptitudeAccuracy: number | null = null;
+      try {
+        const raw = localStorage.getItem('codeprep_aptitude_dynamic_stats_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw) as {
+            byCategory?: Record<string, { attempted: number; correct: number }>;
+          };
+          const entries = Object.entries(parsed.byCategory || {}).filter(
+            ([, v]) => v && v.attempted >= 2
+          );
+          if (entries.length > 0) {
+            entries.sort((a, b) => a[1].correct / a[1].attempted - b[1].correct / b[1].attempted);
+            const [catName, topWeak] = entries[0];
+            weakAptitudeCategory = catName as AptitudeCategory;
+            weakAptitudeAccuracy = Math.round((topWeak.correct / topWeak.attempted) * 100);
+          }
+        }
+      } catch {}
+
+      setWeaknessRadar({
+        weakTopics,
+        weakAptitudeCategory,
+        weakAptitudeAccuracy,
+      });
+    };
+
+    void loadWeaknessRadar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -529,11 +595,15 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
       const previouslySeen = loadSeenIds();
       const seenSet = new Set<number>(previouslySeen);
       const chosenIds = new Set<number>();
+      const preferredTopicSet =
+        config.targetWeakTopics && weaknessRadar.weakTopics.length > 0
+          ? new Set(weaknessRadar.weakTopics.map((w) => w.topic))
+          : undefined;
 
       // Build coding problem lineup (shuffle order lightly within tiers while keeping DSA -> SQL/OOP logical)
-      const pickedEasy = pickRandomProblems(pools.easyDsa || [], config.easyDsa, chosenIds, seenSet);
-      const pickedMed = pickRandomProblems(pools.mediumDsa || [], config.mediumDsa, chosenIds, seenSet);
-      const pickedHard = pickRandomProblems(pools.hardDsa || [], config.hardDsa, chosenIds, seenSet);
+      const pickedEasy = pickRandomProblems(pools.easyDsa || [], config.easyDsa, chosenIds, seenSet, preferredTopicSet);
+      const pickedMed = pickRandomProblems(pools.mediumDsa || [], config.mediumDsa, chosenIds, seenSet, preferredTopicSet);
+      const pickedHard = pickRandomProblems(pools.hardDsa || [], config.hardDsa, chosenIds, seenSet, preferredTopicSet);
       const pickedSql = pickRandomProblems(pools.sql || [], config.sqlCount, chosenIds, seenSet);
       const pickedOop = pickRandomProblems(pools.oop || [], config.oopCount, chosenIds, seenSet);
 
@@ -1320,6 +1390,61 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
         {errorMsg && (
           <div className="p-4 rounded-xl bg-danger/15 border border-danger/40 text-xs text-danger font-mono">
             {errorMsg}
+          </div>
+        )}
+
+        {/* Adaptive Weakness-Targeted Mock Banner */}
+        {(weaknessRadar.weakTopics.length > 0 || weaknessRadar.weakAptitudeCategory) && (
+          <div className="bg-surface border border-primary/35 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-mono font-semibold text-primary">
+                <Target className="w-4 h-4" />
+                <span>Adaptive Weakness Targeting</span>
+              </div>
+              <p className="text-xs text-text-secondary leading-relaxed">
+                {weaknessRadar.weakTopics.length > 0 && (
+                  <>
+                    Lowest DSA topics:{' '}
+                    <strong className="text-text-primary">
+                      {weaknessRadar.weakTopics.map((w) => `${w.topic} (${w.solved}/${w.total})`).join(', ')}
+                    </strong>
+                    {weaknessRadar.weakAptitudeCategory ? ' · ' : ''}
+                  </>
+                )}
+                {weaknessRadar.weakAptitudeCategory && (
+                  <>
+                    Lowest Aptitude accuracy:{' '}
+                    <strong className="text-text-primary">
+                      {weaknessRadar.weakAptitudeCategory} ({weaknessRadar.weakAptitudeAccuracy}%)
+                    </strong>
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setConfig((prev) => {
+                  const nextTargeted = !prev.targetWeakTopics;
+                  return {
+                    ...prev,
+                    targetWeakTopics: nextTargeted,
+                    aptitudeFocus:
+                      nextTargeted && weaknessRadar.weakAptitudeCategory
+                        ? weaknessRadar.weakAptitudeCategory
+                        : prev.aptitudeFocus,
+                  };
+                });
+              }}
+              aria-pressed={Boolean(config.targetWeakTopics)}
+              className={`px-4 py-2 rounded-xl border text-xs font-semibold shrink-0 transition-colors cursor-pointer ${
+                config.targetWeakTopics
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-primary-subtle text-primary border-primary/40 hover:bg-primary/20'
+              }`}
+            >
+              {config.targetWeakTopics ? 'Weak-Topic Boost: ON ✓' : 'Target My Weakest Topics'}
+            </button>
           </div>
         )}
 

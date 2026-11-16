@@ -67,6 +67,16 @@ export interface Core600Summary {
   nextSqlId: number;
 }
 
+export interface SolveSpeedStats {
+  trackedSolvedCount: number;
+  totalActiveMinutes: number;
+  avgEasySec: number | null;
+  avgMediumSec: number | null;
+  avgHardSec: number | null;
+  fastestSolveSec: number | null;
+  fastestProblemTitle: string | null;
+}
+
 export interface DashboardAnalytics {
   totalSolved: number;
   totalProblems: number;
@@ -114,6 +124,7 @@ export interface DashboardAnalytics {
     reason: 'solved_with_ai' | 'bookmarked';
     lastAttemptedAt: string | null;
   }>;
+  solveSpeedStats: SolveSpeedStats;
 }
 
 interface BadgeDefinition {
@@ -236,8 +247,8 @@ export class AnalyticsService {
 
     const timezone = user?.timezone || 'Asia/Kolkata';
 
-    // 1. Fetch all problems and user submissions in parallel
-    let [allProblems, allSubmissions] = await Promise.all([
+    // 1. Fetch all problems, submissions, and problem timers in parallel
+    let [allProblems, allSubmissions, activeTimers] = await Promise.all([
       prisma.problem.findMany({
         select: {
           id: true,
@@ -260,6 +271,13 @@ export class AnalyticsService {
           submittedAt: true,
         },
         orderBy: { submittedAt: 'asc' },
+      }),
+      prisma.problemActiveTimer.findMany({
+        where: { userId },
+        select: {
+          problemId: true,
+          activeSeconds: true,
+        },
       }),
     ]);
 
@@ -621,6 +639,44 @@ export class AnalyticsService {
       hardSolved,
     });
 
+    const problemLookup = new Map(allProblems.map((p) => [p.id, p]));
+    let totalActiveSec = 0;
+    const easyDurations: number[] = [];
+    const medDurations: number[] = [];
+    const hardDurations: number[] = [];
+    let fastestSolveSec: number | null = null;
+    let fastestProblemTitle: string | null = null;
+    let trackedSolvedCount = 0;
+
+    for (const row of activeTimers) {
+      totalActiveSec += Math.max(0, row.activeSeconds || 0);
+      if (solvedProblemIds.has(row.problemId) && row.activeSeconds >= 10) {
+        trackedSolvedCount++;
+        const prob = problemLookup.get(row.problemId);
+        if (prob?.difficulty === 'Easy') easyDurations.push(row.activeSeconds);
+        else if (prob?.difficulty === 'Medium') medDurations.push(row.activeSeconds);
+        else if (prob?.difficulty === 'Hard') hardDurations.push(row.activeSeconds);
+
+        if (fastestSolveSec === null || row.activeSeconds < fastestSolveSec) {
+          fastestSolveSec = row.activeSeconds;
+          fastestProblemTitle = prob ? `#${prob.id} ${prob.title}` : `#${row.problemId}`;
+        }
+      }
+    }
+
+    const avgOrNull = (arr: number[]): number | null =>
+      arr.length > 0 ? Math.round(arr.reduce((sum, v) => sum + v, 0) / arr.length) : null;
+
+    const solveSpeedStats: SolveSpeedStats = {
+      trackedSolvedCount,
+      totalActiveMinutes: Math.round(totalActiveSec / 60),
+      avgEasySec: avgOrNull(easyDurations),
+      avgMediumSec: avgOrNull(medDurations),
+      avgHardSec: avgOrNull(hardDurations),
+      fastestSolveSec,
+      fastestProblemTitle,
+    };
+
     return {
       totalSolved: solvedProblemIds.size,
       totalProblems: allProblems.length,
@@ -658,6 +714,7 @@ export class AnalyticsService {
       recentSubmissions,
       recommendedProblem: recommended,
       revisionQueue,
+      solveSpeedStats,
     };
   }
 
