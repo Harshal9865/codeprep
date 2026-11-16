@@ -1,4 +1,6 @@
-import { ProblemExample, TestCase } from '../judge/types';
+import { ProblemDefinition, TestCase } from '../judge/types';
+
+type ProblemExample = ProblemDefinition['examples'][number];
 
 export interface BatchSpecResult {
   statement: string;
