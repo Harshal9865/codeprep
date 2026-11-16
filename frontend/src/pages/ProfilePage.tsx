@@ -89,6 +89,13 @@ interface ProfileTelemetry {
   solveSpeedStats?: SolveSpeedStats;
 }
 
+interface StorageStatus {
+  engine: 'PostgreSQL' | 'SQLite';
+  persistent: boolean;
+  location: string;
+  note: string;
+}
+
 interface ProfilePageProps {
   onTabChange?: (tab: string) => void;
 }
@@ -96,6 +103,7 @@ interface ProfilePageProps {
 export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
   const { theme, setTheme } = useTheme();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [telemetry, setTelemetry] = useState<ProfileTelemetry | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [displayName, setDisplayName] = useState('');
@@ -163,13 +171,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
     setIsInitialLoading(true);
     try {
       const [profileRes, analyticsRes] = await Promise.all([
-        apiRequest<{ user: UserProfile }>('/user/profile'),
+        apiRequest<{ user: UserProfile; storage?: StorageStatus }>('/user/profile'),
         apiRequest<{ analytics?: ProfileTelemetry } & Partial<ProfileTelemetry>>('/analytics/dashboard').catch(
           () => null
         ),
       ]);
 
       setProfile(profileRes.user);
+      setStorageStatus(profileRes.storage || null);
       setLocalSnapshotMeta(getLocalBackupMeta(profileRes.user.email));
       setDisplayName(profileRes.user.displayName || '');
       setTimezone(profileRes.user.timezone || 'Asia/Kolkata');
@@ -238,6 +247,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       setProfile(res.user);
       window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: res.user }));
       window.dispatchEvent(new CustomEvent('codeprep-theme-sync', { detail: res.user.themePreference }));
+      window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
       const msg = res.message || 'Profile settings updated.';
       setProfileSuccess(msg);
       showToast('success', 'Profile Saved', msg);
@@ -347,6 +357,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
         return nextProfile;
       });
       const msg = res.message || 'Custom profile photo uploaded and applied across your workspace.';
+      window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
       setProfileSuccess(msg);
       triggerAvatarPulse();
       showToast('success', 'Profile Photo Updated', 'Your new avatar is now live in header & profile.');
@@ -516,11 +527,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
               <div className="relative group shrink-0">
                 <div
-                  className={`w-24 h-24 rounded-2xl overflow-hidden bg-surface-elevated flex items-center justify-center shadow-sm transition-all duration-300 group-hover:scale-[1.02] border ${
-                    avatarJustUpdated
+                  className={`w-24 h-24 rounded-2xl overflow-hidden bg-surface-elevated flex items-center justify-center shadow-sm transition-all duration-300 group-hover:scale-[1.02] border ${avatarJustUpdated
                       ? 'border-success ring-2 ring-success/50 scale-[1.03]'
                       : 'border-border-subtle'
-                  }`}
+                    }`}
                 >
                   <UserAvatar
                     avatarUrl={profile?.avatarUrl}
@@ -769,24 +779,21 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                 return (
                   <div
                     key={badge.badgeKey}
-                    className={`p-3.5 rounded-xl border transition-all ${
-                      badge.unlocked
+                    className={`p-3.5 rounded-xl border transition-all ${badge.unlocked
                         ? 'bg-surface-elevated border-primary/40 shadow-sm'
                         : 'bg-surface-subtle border-border-subtle opacity-80'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <span
-                        className={`text-xs font-semibold truncate ${
-                          badge.unlocked ? 'text-text-primary' : 'text-text-secondary'
-                        }`}
+                        className={`text-xs font-semibold truncate ${badge.unlocked ? 'text-text-primary' : 'text-text-secondary'
+                          }`}
                       >
                         {badge.title}
                       </span>
                       <span
-                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                          badge.unlocked ? 'bg-success-subtle text-success' : 'bg-surface-high text-text-muted'
-                        }`}
+                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${badge.unlocked ? 'bg-success-subtle text-success' : 'bg-surface-high text-text-muted'
+                          }`}
                       >
                         {badge.unlocked ? 'Earned' : `${badge.current}/${badge.target}`}
                       </span>
@@ -794,9 +801,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                     <p className="text-[11px] text-text-muted line-clamp-2 min-h-[28px]">{badge.description}</p>
                     <div className="mt-2.5 w-full h-1 rounded-full bg-surface-high overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          badge.unlocked ? 'bg-success' : 'bg-primary/70'
-                        }`}
+                        className={`h-full rounded-full transition-all duration-500 ${badge.unlocked ? 'bg-success' : 'bg-primary/70'
+                          }`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -825,11 +831,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                   key={choice.id}
                   type="button"
                   onClick={() => handleSelectTheme(choice.id)}
-                  className={`group flex flex-col gap-3 p-3.5 rounded-xl border text-left transition-all ${
-                    active
+                  className={`group flex flex-col gap-3 p-3.5 rounded-xl border text-left transition-all ${active
                       ? 'bg-surface-elevated border-primary ring-1 ring-primary/35 shadow-sm'
                       : 'bg-surface-subtle border-border-subtle text-text-secondary hover:bg-surface-elevated hover:border-border-hover'
-                  }`}
+                    }`}
                 >
                   {/* Mini IDE Syntax Preview Strip */}
                   <div
@@ -913,11 +918,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                   type="button"
                   disabled={isSavingAvatarPreset}
                   onClick={() => handleSelectPixelAvatar(preset.id)}
-                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
-                    isSelected
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${isSelected
                       ? 'bg-surface-elevated border-primary ring-1 ring-primary/35 shadow-sm'
                       : 'bg-surface-subtle border-border-subtle hover:bg-surface-elevated hover:border-border-hover'
-                  }`}
+                    }`}
                 >
                   <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-border-subtle">
                     <PixelAvatar presetId={preset.id} size={40} className="w-full h-full" />
@@ -1089,9 +1093,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                   <span>6+ characters (minimum)</span>
                 </span>
                 <span
-                  className={`inline-flex items-center gap-1 ${
-                    confirmPassword.length > 0 && newPassword === confirmPassword ? 'text-success' : 'text-text-muted'
-                  }`}
+                  className={`inline-flex items-center gap-1 ${confirmPassword.length > 0 && newPassword === confirmPassword ? 'text-success' : 'text-text-muted'
+                    }`}
                 >
                   <Check className="w-3 h-3" />
                   <span>Passwords match</span>
@@ -1127,56 +1130,78 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
           {/* Data Export, Import & Auto-Sync Card */}
           <section className="lg:col-span-2 bg-surface border border-border-subtle rounded-2xl p-6 flex flex-col justify-between space-y-4 shadow-sm">
             <div className="space-y-3">
-              <div className="flex items-center gap-2 pb-3 border-b border-border-subtle">
-                <Download className="w-4 h-4 text-primary" />
-                <h2 className="text-sm font-semibold text-text-primary">SQLite Backup &amp; Restore</h2>
-              </div>
-              <p className="text-xs text-text-secondary leading-relaxed">
-                Export or restore your full progress (submissions, streaks, code drafts, bookmarks, and notes). Your browser also keeps an automatic snapshot to recover after stateless container restarts.
-              </p>
-              {localSnapshotMeta && (
-                <div className="p-2.5 rounded-xl bg-surface-subtle border border-border-subtle text-[11px] font-mono text-text-muted space-y-0.5">
-                  <div className="text-text-secondary font-semibold">Saved Browser Backup</div>
-                  <div>
-                    {localSnapshotMeta.acceptedSubmissions} solved • {localSnapshotMeta.totalSubmissions} submissions • {localSnapshotMeta.draftsCount} drafts
+                <div className="flex items-center justify-between gap-2 pb-3 border-b border-border-subtle">
+                  <div className="flex items-center gap-2">
+                    <Download className="w-4 h-4 text-primary" />
+                    <h2 className="text-sm font-semibold text-text-primary">Database Persistence &amp; Backup</h2>
                   </div>
+                  {storageStatus && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${storageStatus.persistent
+                          ? 'bg-success-subtle text-success border-success/30'
+                          : 'bg-warning-subtle text-warning border-warning/30'
+                        }`}
+                    >
+                      {storageStatus.engine} • {storageStatus.persistent ? 'Persistent' : 'Ephemeral'}
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  Your browser continuously merges and mirrors progress (submissions, streaks, drafts, bookmarks, notes, badges) so data automatically restores after container restarts.
+                </p>
+                {storageStatus && !storageStatus.persistent && (
+                  <div className="p-2.5 rounded-xl bg-warning-subtle/60 border border-warning/35 text-[11px] text-text-primary leading-relaxed space-y-1">
+                    <div className="font-mono font-semibold text-warning">
+                      Tip: Enable Permanent Server Storage
+                    </div>
+                    <div className="text-text-secondary">
+                      {storageStatus.note}
+                    </div>
+                  </div>
+                )}
+                {localSnapshotMeta && (
+                  <div className="p-2.5 rounded-xl bg-surface-subtle border border-border-subtle text-[11px] font-mono text-text-muted space-y-0.5">
+                    <div className="text-text-secondary font-semibold">Saved Browser Backup</div>
+                    <div>
+                      {localSnapshotMeta.acceptedSubmissions} solved • {localSnapshotMeta.totalSubmissions} submissions • {localSnapshotMeta.draftsCount} drafts
+                    </div>
+                  </div>
+                )}
+              </div>
 
-            <div className="space-y-2">
-              <input
-                ref={backupFileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={handleImportBackupFile}
-                className="hidden"
-              />
-              <Button variant="secondary" onClick={handleExportData} className="w-full gap-2 text-xs">
-                <Download className="w-4 h-4" />
-                <span>Export Backup (JSON)</span>
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => backupFileInputRef.current?.click()}
-                disabled={isImportingBackup}
-                className="w-full gap-2 text-xs"
-              >
-                <Upload className="w-4 h-4" />
-                <span>{isImportingBackup ? 'Restoring...' : 'Import Backup (JSON)'}</span>
-              </Button>
-              {localSnapshotMeta && (
-                <Button
-                  variant="ghost"
-                  onClick={handleRestoreBrowserSnapshot}
-                  disabled={isImportingBackup}
-                  className="w-full gap-2 text-xs text-primary hover:text-primary"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restore Browser Snapshot</span>
+              <div className="space-y-2">
+                <input
+                  ref={backupFileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleImportBackupFile}
+                  className="hidden"
+                />
+                <Button variant="secondary" onClick={handleExportData} className="w-full gap-2 text-xs">
+                  <Download className="w-4 h-4" />
+                  <span>Export Backup (JSON)</span>
                 </Button>
-              )}
-            </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => backupFileInputRef.current?.click()}
+                  disabled={isImportingBackup}
+                  className="w-full gap-2 text-xs"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>{isImportingBackup ? 'Restoring...' : 'Import Backup (JSON)'}</span>
+                </Button>
+                {localSnapshotMeta && (
+                  <Button
+                    variant="ghost"
+                    onClick={handleRestoreBrowserSnapshot}
+                    disabled={isImportingBackup}
+                    className="w-full gap-2 text-xs text-primary hover:text-primary"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Restore Browser Snapshot</span>
+                  </Button>
+                )}
+              </div>
           </section>
         </div>
       </div>
@@ -1185,14 +1210,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       {toast && (
         <div
           role="status"
-          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-2xl bg-surface-elevated border shadow-2xl animate-fade-up ${
-            toast.type === 'success' ? 'border-success/50' : 'border-danger/50'
-          }`}
+          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-2xl bg-surface-elevated border shadow-2xl animate-fade-up ${toast.type === 'success' ? 'border-success/50' : 'border-danger/50'
+            }`}
         >
           <span
-            className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
-              toast.type === 'success' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'
-            }`}
+            className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${toast.type === 'success' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'
+              }`}
           >
             {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           </span>

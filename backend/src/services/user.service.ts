@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword } from '../utils/password';
 import { prisma, checkpointWal } from './prisma.service';
 import { Logger } from '../utils/logger';
 import { UserProblemStateService } from './userProblemState.service';
+import { ProblemService } from './problem.service';
 
 export interface AvatarValidationResult {
   valid: boolean;
@@ -33,6 +34,67 @@ function isAllowedAvatarUrl(value: string): boolean {
 }
 
 export class UserService {
+  static getStoragePersistenceStatus(): {
+    engine: 'PostgreSQL' | 'SQLite';
+    persistent: boolean;
+    location: string;
+    note: string;
+  } {
+    const dbUrl = (process.env.DATABASE_URL || '').trim();
+    const lower = dbUrl.toLowerCase();
+    if (lower.startsWith('postgres://') || lower.startsWith('postgresql://')) {
+      return {
+        engine: 'PostgreSQL',
+        persistent: true,
+        location: 'External PostgreSQL Database',
+        note: 'Durable external database active — all progress and accounts persist across redeploys.',
+      };
+    }
+
+    let rawPath = dbUrl.startsWith('file:') ? dbUrl.slice(5).split('?')[0] : './dev.db';
+    if (rawPath.startsWith('///')) rawPath = rawPath.slice(2);
+    const resolvedPath =
+      rawPath && rawPath !== ':memory:'
+        ? path.isAbsolute(rawPath)
+          ? path.normalize(rawPath)
+          : path.resolve(process.cwd(), 'prisma', rawPath)
+        : rawPath || 'dev.db';
+
+    let hasPersistentMount = false;
+    if (process.platform === 'linux' && fs.existsSync('/proc/mounts')) {
+      try {
+        const mounts = fs.readFileSync('/proc/mounts', 'utf8').split('\n');
+        for (const line of mounts) {
+          const parts = line.split(' ');
+          const mountPoint = parts[1];
+          const fsType = parts[2] || '';
+          if (
+            mountPoint &&
+            mountPoint !== '/' &&
+            resolvedPath.startsWith(mountPoint) &&
+            !['tmpfs', 'overlay', 'proc', 'sysfs', 'devtmpfs'].includes(fsType)
+          ) {
+            hasPersistentMount = true;
+            break;
+          }
+        }
+      } catch {
+        // Ignore mount inspection failures
+      }
+    } else if (process.platform === 'win32' || process.platform === 'darwin') {
+      hasPersistentMount = true;
+    }
+
+    return {
+      engine: 'SQLite',
+      persistent: hasPersistentMount,
+      location: resolvedPath,
+      note: hasPersistentMount
+        ? 'Persistent volume detected for SQLite storage.'
+        : 'Container-local SQLite detected without an attached persistent disk mount. Set DATABASE_URL to a PostgreSQL database (e.g. Render Postgres / Neon / Supabase) or attach a Render Disk at /data so server data is never cleared on redeploy.',
+    };
+  }
+
   private static resolveUploadsRoot(): string {
     if (process.env.UPLOADS_DIR?.trim()) {
       return path.resolve(process.env.UPLOADS_DIR.trim());
@@ -430,6 +492,8 @@ export class UserService {
       }>;
     };
 
+    // Ensure catalog is seeded in DB before checking validProblemIds on cold redeploy restores
+    await ProblemService.seedInitialProblems();
     const existingProblems = await prisma.problem.findMany({ select: { id: true } });
     const validProblemIds = new Set(existingProblems.map((p) => p.id));
 
@@ -576,41 +640,41 @@ export class UserService {
           badgesRestored++;
         }
       }
-    });
+  }, { maxWait: 10000, timeout: 60000 });
 
-    await checkpointWal();
+await checkpointWal();
 
-    const updatedUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        displayName: true,
-        avatarUrl: true,
-        themePreference: true,
-        timezone: true,
-        createdAt: true,
-      },
-    });
+const updatedUser = await prisma.user.findUnique({
+  where: { id: userId },
+  select: {
+    id: true,
+    email: true,
+    displayName: true,
+    avatarUrl: true,
+    themePreference: true,
+    timezone: true,
+    createdAt: true,
+  },
+});
 
-    Logger.info('UserService', `Imported backup for user ${userId}`, {
-      submissionsRestored,
-      draftsRestored,
-      timersRestored,
-      savedProblemsRestored,
-      badgesRestored,
-    });
+Logger.info('UserService', `Imported backup for user ${userId}`, {
+  submissionsRestored,
+  draftsRestored,
+  timersRestored,
+  savedProblemsRestored,
+  badgesRestored,
+});
 
-    return {
-      user: updatedUser,
-      restored: {
-        submissionsRestored,
-        draftsRestored,
-        timersRestored,
-        savedProblemsRestored,
-        badgesRestored,
-      },
-    };
+return {
+  user: updatedUser,
+  restored: {
+    submissionsRestored,
+    draftsRestored,
+    timersRestored,
+    savedProblemsRestored,
+    badgesRestored,
+  },
+};
   }
 }
 

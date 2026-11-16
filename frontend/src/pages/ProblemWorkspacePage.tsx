@@ -95,6 +95,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         savedCodeRef.current = draftCode;
         setSaveStatus('saved');
       }
+      window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
     } catch {
       if (activeProblemIdRef.current === targetProblemId) {
         setSaveStatus('error');
@@ -389,6 +390,8 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
             window.setTimeout(() => setPotdBannerMsg(null), 6000);
           }
         }
+      } else {
+        window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
       }
 
       requestTeacherFeedback({
@@ -411,6 +414,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         method: 'POST',
       });
       setProblem((prev) => (prev ? { ...prev, isBookmark: res.isBookmark } : null));
+      window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
     } catch {
       alert('Failed to update bookmark');
     }
@@ -423,6 +427,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       body: JSON.stringify({ notes }),
     });
     setProblem((prev) => (prev ? { ...prev, userNotes: res.notes } : null));
+    window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
   };
 
   const handleNavigateSafely = async (targetAction: () => void) => {

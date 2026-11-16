@@ -15,7 +15,8 @@ export class UserController {
       }
 
       const user = await UserService.updateProfile(userId, {});
-      res.json({ user });
+      const storage = UserService.getStoragePersistenceStatus();
+      res.json({ user, storage });
     } catch (error) {
       res.status(500).json({ error: 'Failed to retrieve user profile.' });
     }

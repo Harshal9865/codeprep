@@ -174,6 +174,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         savedQueryRef.current = draftSql;
         setSaveStatus('saved');
       }
+      window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
     } catch {
       if (activeIdRef.current === targetId) {
         setSaveStatus('error');
@@ -428,6 +429,8 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
             })
           );
         }
+      } else {
+        window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
       }
       void requestSqlCoach({
         requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
@@ -461,6 +464,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         method: 'POST',
       });
       setProblem((prev) => (prev ? { ...prev, isBookmark: res.isBookmark } : null));
+      window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
     } catch {
       // Ignore transient error
     }
