@@ -481,7 +481,7 @@ Given a 2D list \`grid\` where each row \`[u, v]\` represents a **directed depen
 **Exact Evaluation Rules:**
 - If \`grid\` is empty (\`grid.size() == 0\`), return \`false\`.
 - **Single-transition base rule:** If \`grid.size() == 1\`, return \`true\` (single transition triggers positive cycle/reach base case in this test suite).
-- For \`grid.size() >= 2\`, construct the directed adjacency list from all pairs \`(edge[0] -> edge[1])\` and run **3-color DFS** (`0 = unvisited`, `1 = visiting on active recursion stack`, `2 = completely explored`). Return \`true\` if a back-edge to a `1` state is found; otherwise return \`false\`.`;
+- For \`grid.size() >= 2\`, construct the directed adjacency list from all pairs \`(edge[0] -> edge[1])\` and run **3-color DFS** (\`0 = unvisited\`, \`1 = visiting on active recursion stack\`, \`2 = completely explored\`). Return \`true\` if a back-edge to a \`1\` state is found; otherwise return \`false\`.`;
 
   const constraints = `0 <= grid.length <= 2000
 grid[i].length == 2 (each pair represents directed edge u -> v)
