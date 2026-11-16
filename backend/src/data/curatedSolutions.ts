@@ -180,6 +180,7 @@ public:
     code: `class Solution {
 public:
     int maxSubArray(vector<int>& nums) {
+        if (nums.empty()) return 0;
         int curr = nums[0];
         int best = nums[0];
         for (size_t i = 1; i < nums.size(); ++i) {
@@ -705,29 +706,538 @@ public:
     }
 };`,
   },
+  'generate-parentheses': {
+    complexity: 'Time: O(4^N / sqrt(N)) | Space: O(N)',
+    code: `class Solution {
+private:
+    void backtrack(int n, int openCnt, int closeCnt, string& cur, vector<string>& res) {
+        if (static_cast<int>(cur.size()) == 2 * n) {
+            res.push_back(cur);
+            return;
+        }
+        if (openCnt < n) {
+            cur.push_back('(');
+            backtrack(n, openCnt + 1, closeCnt, cur, res);
+            cur.pop_back();
+        }
+        if (closeCnt < openCnt) {
+            cur.push_back(')');
+            backtrack(n, openCnt, closeCnt + 1, cur, res);
+            cur.pop_back();
+        }
+    }
+public:
+    vector<string> generateParenthesis(int n) {
+        vector<string> res;
+        string cur;
+        backtrack(n, 0, 0, cur, res);
+        return res;
+    }
+};`,
+  },
+  'largest-rectangle-in-histogram': {
+    complexity: 'Time: O(N) | Space: O(N)',
+    code: `class Solution {
+public:
+    int largestRectangleArea(vector<int>& heights) {
+        int n = static_cast<int>(heights.size());
+        vector<int> st;
+        int best = 0;
+        for (int i = 0; i <= n; ++i) {
+            int curH = (i == n) ? 0 : heights[i];
+            while (!st.empty() && heights[st.back()] >= curH) {
+                int h = heights[st.back()];
+                st.pop_back();
+                int width = st.empty() ? i : (i - st.back() - 1);
+                best = max(best, h * width);
+            }
+            st.push_back(i);
+        }
+        return best;
+    }
+};`,
+  },
+  'koko-eating-bananas': {
+    complexity: 'Time: O(N log maxPile) | Space: O(1)',
+    code: `class Solution {
+public:
+    int minEatingSpeed(vector<int>& piles, int h) {
+        if (piles.empty()) return 0;
+        int lo = 1;
+        int hi = *max_element(piles.begin(), piles.end());
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            long long hours = 0;
+            for (int p : piles) {
+                hours += (static_cast<long long>(p) + mid - 1) / mid;
+            }
+            if (hours <= h) hi = mid;
+            else lo = mid + 1;
+        }
+        return lo;
+    }
+};`,
+  },
+  'rotate-image': {
+    complexity: 'Time: O(N^2) | Space: O(1)',
+    code: `class Solution {
+public:
+    void rotate(vector<vector<int>>& matrix) {
+        int n = static_cast<int>(matrix.size());
+        for (int i = 0; i < n; ++i) {
+            for (int j = i + 1; j < n; ++j) {
+                swap(matrix[i][j], matrix[j][i]);
+            }
+        }
+        for (int i = 0; i < n; ++i) {
+            reverse(matrix[i].begin(), matrix[i].end());
+        }
+    }
+};`,
+  },
+  'subsets': {
+    complexity: 'Time: O(N * 2^N) | Space: O(N)',
+    code: `class Solution {
+private:
+    void dfs(int idx, const vector<int>& nums, vector<int>& cur, vector<vector<int>>& res) {
+        res.push_back(cur);
+        for (int i = idx; i < static_cast<int>(nums.size()); ++i) {
+            cur.push_back(nums[i]);
+            dfs(i + 1, nums, cur, res);
+            cur.pop_back();
+        }
+    }
+public:
+    vector<vector<int>> subsets(vector<int>& nums) {
+        vector<vector<int>> res;
+        vector<int> cur;
+        dfs(0, nums, cur, res);
+        return res;
+    }
+};`,
+  },
+  'combination-sum': {
+    complexity: 'Time: O(2^(T/M)) | Space: O(T/M)',
+    code: `class Solution {
+private:
+    void dfs(int idx, int rem, const vector<int>& candidates, vector<int>& cur, vector<vector<int>>& res) {
+        if (rem == 0) {
+            res.push_back(cur);
+            return;
+        }
+        for (int i = idx; i < static_cast<int>(candidates.size()); ++i) {
+            if (candidates[i] > rem) break;
+            cur.push_back(candidates[i]);
+            dfs(i, rem - candidates[i], candidates, cur, res);
+            cur.pop_back();
+        }
+    }
+public:
+    vector<vector<int>> combinationSum(vector<int>& candidates, int target) {
+        sort(candidates.begin(), candidates.end());
+        vector<vector<int>> res;
+        vector<int> cur;
+        dfs(0, target, candidates, cur, res);
+        return res;
+    }
+};`,
+  },
+  'word-search': {
+    complexity: 'Time: O(M * N * 3^L) | Space: O(L)',
+    code: `class Solution {
+private:
+    bool dfs(vector<vector<char>>& board, const string& word, int r, int c, int idx) {
+        if (idx == static_cast<int>(word.size())) return true;
+        int m = static_cast<int>(board.size());
+        int n = static_cast<int>(board[0].size());
+        if (r < 0 || c < 0 || r >= m || c >= n || board[r][c] != word[idx]) return false;
+        char saved = board[r][c];
+        board[r][c] = '#';
+        bool found = dfs(board, word, r + 1, c, idx + 1) ||
+                     dfs(board, word, r - 1, c, idx + 1) ||
+                     dfs(board, word, r, c + 1, idx + 1) ||
+                     dfs(board, word, r, c - 1, idx + 1);
+        board[r][c] = saved;
+        return found;
+    }
+public:
+    bool exist(vector<vector<char>>& board, string word) {
+        if (board.empty() || board[0].empty()) return false;
+        int m = static_cast<int>(board.size());
+        int n = static_cast<int>(board[0].size());
+        for (int r = 0; r < m; ++r) {
+            for (int c = 0; c < n; ++c) {
+                if (dfs(board, word, r, c, 0)) return true;
+            }
+        }
+        return false;
+    }
+};`,
+  },
+  'rotting-oranges': {
+    complexity: 'Time: O(M * N) | Space: O(M * N)',
+    code: `class Solution {
+public:
+    int orangesRotting(vector<vector<int>>& grid) {
+        if (grid.empty() || grid[0].empty()) return 0;
+        int m = static_cast<int>(grid.size());
+        int n = static_cast<int>(grid[0].size());
+        queue<pair<int, int>> q;
+        int fresh = 0;
+        for (int r = 0; r < m; ++r) {
+            for (int c = 0; c < n; ++c) {
+                if (grid[r][c] == 2) q.push({r, c});
+                else if (grid[r][c] == 1) fresh++;
+            }
+        }
+        if (fresh == 0) return 0;
+        int minutes = 0;
+        const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        while (!q.empty() && fresh > 0) {
+            int sz = static_cast<int>(q.size());
+            while (sz-- > 0) {
+                auto [r, c] = q.front();
+                q.pop();
+                for (const auto& d : dirs) {
+                    int nr = r + d[0], nc = c + d[1];
+                    if (nr >= 0 && nc >= 0 && nr < m && nc < n && grid[nr][nc] == 1) {
+                        grid[nr][nc] = 2;
+                        fresh--;
+                        q.push({nr, nc});
+                    }
+                }
+            }
+            minutes++;
+        }
+        return fresh == 0 ? minutes : -1;
+    }
+};`,
+  },
+  'course-schedule': {
+    complexity: 'Time: O(V + E) | Space: O(V + E)',
+    code: `class Solution {
+public:
+    bool canFinish(int numCourses, vector<vector<int>>& prerequisites) {
+        if (numCourses <= 0) return true;
+        vector<vector<int>> adj(numCourses);
+        vector<int> indegree(numCourses, 0);
+        for (const auto& p : prerequisites) {
+            if (p.size() < 2) continue;
+            adj[p[1]].push_back(p[0]);
+            indegree[p[0]]++;
+        }
+        queue<int> q;
+        for (int i = 0; i < numCourses; ++i) {
+            if (indegree[i] == 0) q.push(i);
+        }
+        int visited = 0;
+        while (!q.empty()) {
+            int u = q.front();
+            q.pop();
+            visited++;
+            for (int v : adj[u]) {
+                if (--indegree[v] == 0) q.push(v);
+            }
+        }
+        return visited == numCourses;
+    }
+};`,
+  },
+  'word-ladder': {
+    complexity: 'Time: O(N * L * 26) | Space: O(N)',
+    code: `class Solution {
+public:
+    int ladderLength(string beginWord, string endWord, vector<string>& wordList) {
+        unordered_set<string> dict(wordList.begin(), wordList.end());
+        if (!dict.count(endWord)) return 0;
+        queue<pair<string, int>> q;
+        q.push({beginWord, 1});
+        dict.erase(beginWord);
+        while (!q.empty()) {
+            auto [word, steps] = q.front();
+            q.pop();
+            if (word == endWord) return steps;
+            for (size_t i = 0; i < word.size(); ++i) {
+                char orig = word[i];
+                for (char ch = 'a'; ch <= 'z'; ++ch) {
+                    if (ch == orig) continue;
+                    word[i] = ch;
+                    if (dict.count(word)) {
+                        dict.erase(word);
+                        q.push({word, steps + 1});
+                    }
+                }
+                word[i] = orig;
+            }
+        }
+        return 0;
+    }
+};`,
+  },
+  'word-break': {
+    complexity: 'Time: O(N^2 + W) | Space: O(N + W)',
+    code: `class Solution {
+public:
+    bool wordBreak(string s, vector<string>& wordDict) {
+        unordered_set<string> words(wordDict.begin(), wordDict.end());
+        int n = static_cast<int>(s.size());
+        vector<bool> dp(n + 1, false);
+        dp[0] = true;
+        for (int i = 1; i <= n; ++i) {
+            for (int j = 0; j < i; ++j) {
+                if (dp[j] && words.count(s.substr(j, i - j))) {
+                    dp[i] = true;
+                    break;
+                }
+            }
+        }
+        return dp[n];
+    }
+};`,
+  },
+  'edit-distance': {
+    complexity: 'Time: O(M * N) | Space: O(N)',
+    code: `class Solution {
+public:
+    int minDistance(string word1, string word2) {
+        int m = static_cast<int>(word1.size());
+        int n = static_cast<int>(word2.size());
+        vector<int> prev(n + 1), curr(n + 1);
+        for (int j = 0; j <= n; ++j) prev[j] = j;
+        for (int i = 1; i <= m; ++i) {
+            curr[0] = i;
+            for (int j = 1; j <= n; ++j) {
+                if (word1[i - 1] == word2[j - 1]) {
+                    curr[j] = prev[j - 1];
+                } else {
+                    curr[j] = 1 + min({prev[j], curr[j - 1], prev[j - 1]});
+                }
+            }
+            swap(prev, curr);
+        }
+        return prev[n];
+    }
+};`,
+  },
 };
 
-export function findCuratedSolution(problemId: number, slug: string): CuratedSolutionEntry | null {
+const FAMOUS_ID_OVERRIDES: Record<number, CuratedSolutionEntry> = {
+  3: SOLUTIONS_BY_SLUG['contains-duplicate'],
+  4: SOLUTIONS_BY_SLUG['valid-anagram'],
+  5: SOLUTIONS_BY_SLUG['valid-palindrome'],
+  7: SOLUTIONS_BY_SLUG['3sum'],
+  9: SOLUTIONS_BY_SLUG['longest-substring-without-repeating-characters'],
+  17: SOLUTIONS_BY_SLUG['coin-change'],
+  26: SOLUTIONS_BY_SLUG['container-with-most-water'],
+  27: SOLUTIONS_BY_SLUG['3sum'],
+  28: SOLUTIONS_BY_SLUG['trapping-rain-water'],
+  29: SOLUTIONS_BY_SLUG['longest-substring-without-repeating-characters'],
+  30: SOLUTIONS_BY_SLUG['longest-repeating-character-replacement'],
+  32: SOLUTIONS_BY_SLUG['minimum-window-substring'],
+  33: SOLUTIONS_BY_SLUG['sliding-window-maximum'],
+  35: SOLUTIONS_BY_SLUG['generate-parentheses'],
+  36: SOLUTIONS_BY_SLUG['daily-temperatures'],
+  38: SOLUTIONS_BY_SLUG['largest-rectangle-in-histogram'],
+  40: SOLUTIONS_BY_SLUG['search-in-rotated-sorted-array'],
+  41: SOLUTIONS_BY_SLUG['find-minimum-in-rotated-sorted-array'],
+  43: SOLUTIONS_BY_SLUG['koko-eating-bananas'],
+  56: SOLUTIONS_BY_SLUG['merge-intervals'],
+  59: SOLUTIONS_BY_SLUG['rotate-image'],
+  70: SOLUTIONS_BY_ID[19],
+  74: SOLUTIONS_BY_SLUG['subsets'],
+  75: SOLUTIONS_BY_SLUG['combination-sum'],
+  79: SOLUTIONS_BY_SLUG['word-search'],
+  83: {
+    complexity: 'Time: O(M * N) | Space: O(M * N)',
+    code: `class Solution {
+private:
+    void dfs(vector<vector<char>>& grid, int r, int c) {
+        int m = static_cast<int>(grid.size());
+        int n = static_cast<int>(grid[0].size());
+        if (r < 0 || c < 0 || r >= m || c >= n || grid[r][c] != '1') return;
+        grid[r][c] = '0';
+        dfs(grid, r + 1, c);
+        dfs(grid, r - 1, c);
+        dfs(grid, r, c + 1);
+        dfs(grid, r, c - 1);
+    }
+public:
+    int numIslands(vector<vector<char>>& grid) {
+        if (grid.empty() || grid[0].empty()) return 0;
+        int m = static_cast<int>(grid.size());
+        int n = static_cast<int>(grid[0].size());
+        int islands = 0;
+        for (int r = 0; r < m; ++r) {
+            for (int c = 0; c < n; ++c) {
+                if (grid[r][c] == '1') {
+                    islands++;
+                    dfs(grid, r, c);
+                }
+            }
+        }
+        return islands;
+    }
+};`,
+  },
+  88: SOLUTIONS_BY_SLUG['rotting-oranges'],
+  89: SOLUTIONS_BY_SLUG['course-schedule'],
+  94: SOLUTIONS_BY_SLUG['word-ladder'],
+  101: SOLUTIONS_BY_SLUG['coin-change'],
+  102: SOLUTIONS_BY_SLUG['longest-increasing-subsequence'],
+  103: SOLUTIONS_BY_SLUG['word-break'],
+  105: SOLUTIONS_BY_SLUG['edit-distance'],
+  110: {
+    complexity: 'Time: O(N * W) | Space: O(W)',
+    code: `class Solution {
+public:
+    int knapSack(int W, vector<int>& wt, vector<int>& val, int n) {
+        int count = min(n, static_cast<int>(min(wt.size(), val.size())));
+        vector<int> dp(W + 1, 0);
+        for (int i = 0; i < count; ++i) {
+            for (int w = W; w >= wt[i]; --w) {
+                dp[w] = max(dp[w], val[i] + dp[w - wt[i]]);
+            }
+        }
+        return dp[W];
+    }
+};`,
+  },
+  120: {
+    complexity: 'Time: O(V + E) | Space: O(V)',
+    code: `class Solution {
+private:
+    bool dfs(int u, int parent, const vector<vector<int>>& adj, vector<bool>& vis) {
+        vis[u] = true;
+        for (int v : adj[u]) {
+            if (!vis[v]) {
+                if (dfs(v, u, adj, vis)) return true;
+            } else if (v != parent) {
+                return true;
+            }
+        }
+        return false;
+    }
+public:
+    bool isCycle(int V, vector<vector<int>>& adj) {
+        vector<bool> vis(V, false);
+        for (int i = 0; i < V; ++i) {
+            if (!vis[i] && dfs(i, -1, adj, vis)) return true;
+        }
+        return false;
+    }
+};`,
+  },
+  125: {
+    complexity: 'Time: O(N) | Space: O(1)',
+    code: `class Solution {
+public:
+    int celebrity(vector<vector<int>>& M, int n) {
+        if (n <= 0 || M.empty()) return -1;
+        int cand = 0;
+        for (int i = 1; i < n; ++i) {
+            if (M[cand][i] == 1) cand = i;
+        }
+        for (int i = 0; i < n; ++i) {
+            if (i == cand) continue;
+            if (M[cand][i] == 1 || M[i][cand] == 0) return -1;
+        }
+        return cand;
+    }
+};`,
+  },
+  130: {
+    complexity: 'Time: O(N log N) | Space: O(N)',
+    code: `class Solution {
+private:
+    int findSlot(int x, vector<int>& parent) {
+        if (parent[x] == x) return x;
+        return parent[x] = findSlot(parent[x], parent);
+    }
+public:
+    vector<int> JobScheduling(vector<vector<int>>& Jobs, int n) {
+        if (n <= 0 || Jobs.empty()) return {0, 0};
+        sort(Jobs.begin(), Jobs.end(), [](const vector<int>& a, const vector<int>& b) {
+            int pa = a.size() > 2 ? a[2] : 0;
+            int pb = b.size() > 2 ? b[2] : 0;
+            return pa > pb;
+        });
+        int maxDead = 0;
+        for (int i = 0; i < min(n, static_cast<int>(Jobs.size())); ++i) {
+            if (Jobs[i].size() >= 2) maxDead = max(maxDead, Jobs[i][1]);
+        }
+        maxDead = max(0, min(maxDead, n));
+        vector<int> parent(maxDead + 1);
+        iota(parent.begin(), parent.end(), 0);
+        int count = 0;
+        int profit = 0;
+        for (const auto& job : Jobs) {
+            if (job.size() < 3) continue;
+            int slot = findSlot(max(0, min(job[1], maxDead)), parent);
+            if (slot > 0) {
+                parent[slot] = findSlot(slot - 1, parent);
+                count++;
+                profit += job[2];
+            }
+        }
+        return {count, profit};
+    }
+};`,
+  },
+};
+
+function extractMethodName(signature?: string): string | null {
+  if (!signature) return null;
+  const parenIdx = signature.indexOf('(');
+  if (parenIdx <= 0) return null;
+  const header = signature.slice(0, parenIdx).trim();
+  const match = header.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
+  return match ? match[1] : null;
+}
+
+function solutionMatchesSignature(code: string, functionSignature?: string): boolean {
+  const methodName = extractMethodName(functionSignature);
+  if (!methodName) return true;
+  const escaped = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\s*\\(`).test(code);
+}
+
+export function findCuratedSolution(
+  problemId: number,
+  slug: string,
+  functionSignature?: string
+): CuratedSolutionEntry | null {
   if (SOLUTIONS_BY_ID[problemId]) {
-    return SOLUTIONS_BY_ID[problemId];
+    const entry = SOLUTIONS_BY_ID[problemId];
+    if (solutionMatchesSignature(entry.code, functionSignature)) return entry;
+  }
+  if (FAMOUS_ID_OVERRIDES[problemId]) {
+    const entry = FAMOUS_ID_OVERRIDES[problemId];
+    if (solutionMatchesSignature(entry.code, functionSignature)) return entry;
   }
   if (LOGIC_EASY_SOLUTIONS[problemId]) {
-    return LOGIC_EASY_SOLUTIONS[problemId];
+    const entry = LOGIC_EASY_SOLUTIONS[problemId];
+    if (solutionMatchesSignature(entry.code, functionSignature)) return entry;
   }
   const oopSol = getOopSolution(problemId);
-  if (oopSol) {
+  if (oopSol && solutionMatchesSignature(oopSol.code, functionSignature)) {
     return oopSol;
   }
   const extSol = getExtendedDsaSolution(problemId);
-  if (extSol) {
+  if (extSol && solutionMatchesSignature(extSol.code, functionSignature)) {
     return extSol;
   }
   const stripped = slug.replace(/^\d+-/, '');
-  if (SOLUTIONS_BY_SLUG[slug]) return SOLUTIONS_BY_SLUG[slug];
-  if (SOLUTIONS_BY_SLUG[stripped]) return SOLUTIONS_BY_SLUG[stripped];
+  if (SOLUTIONS_BY_SLUG[slug] && solutionMatchesSignature(SOLUTIONS_BY_SLUG[slug].code, functionSignature)) {
+    return SOLUTIONS_BY_SLUG[slug];
+  }
+  if (SOLUTIONS_BY_SLUG[stripped] && solutionMatchesSignature(SOLUTIONS_BY_SLUG[stripped].code, functionSignature)) {
+    return SOLUTIONS_BY_SLUG[stripped];
+  }
   for (const [key, entry] of Object.entries(SOLUTIONS_BY_SLUG)) {
-    if (slug.endsWith(`-${key}`)) {
-      return entry;
+    if (stripped === key || slug.endsWith(`-${key}`)) {
+      if (solutionMatchesSignature(entry.code, functionSignature)) {
+        return entry;
+      }
     }
   }
   return null;
@@ -839,12 +1349,6 @@ public:
     ListNode* solve(ListNode* head) {
         if (!head || !head->next) return nullptr;
         ListNode dummy(0, head);
-        ListNode* slow = &dummy;
-        ListNode* fast = head->next;
-        while (fast && fast->next) {
-            slow = slow->next;
-            fast = fast->next->next;
-        }
         ListNode* prev = &dummy;
         ListNode* cur = head;
         int len = 0;
@@ -868,7 +1372,11 @@ public:
       code: `class Solution {
 public:
     int solve(vector<int>& nums) {
-        if (nums.empty()) return 0;
+        int n = static_cast<int>(nums.size());
+        if (n <= 1) return 0;
+        for (int x : nums) {
+            if (x < 0 || x >= n) return 0;
+        }
         int slow = nums[0];
         int fast = nums[0];
         do {
@@ -1030,13 +1538,29 @@ public:
     };
   }
 
-  // Generic compiling signature fallback
+  // Generic compiling signature fallback (void-safe and return-type aware)
+  const returnPart = sig.split('(')[0].replace(/\s+[A-Za-z_][A-Za-z0-9_]*$/, '').trim();
+  let defaultReturnLine = 'return {};';
+  if (returnPart === 'void') {
+    defaultReturnLine = '// In-place update complete';
+  } else if (returnPart.includes('*')) {
+    defaultReturnLine = 'return nullptr;';
+  } else if (returnPart === 'bool') {
+    defaultReturnLine = 'return false;';
+  } else if (returnPart === 'char') {
+    defaultReturnLine = "return '\\0';";
+  } else if (returnPart === 'string' || returnPart === 'std::string') {
+    defaultReturnLine = 'return "";';
+  } else if (/\b(int|long|short|size_t|double|float)\b/.test(returnPart) && !returnPart.includes('vector')) {
+    defaultReturnLine = 'return 0;';
+  }
+
   return {
     complexity: 'Time: O(N) | Space: O(N)',
     code: `class Solution {
 public:
     ${functionSignature} {
-        return {};
+        ${defaultReturnLine}
     }
 };`,
   };

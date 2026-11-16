@@ -311,6 +311,7 @@ Optimal subarray: [4, -1, 2, 1] with sum = 6.`,
     verifiedSolution: `class Solution {
 public:
     int maxSubArray(vector<int>& nums) {
+        if (nums.empty()) return 0;
         int currentSum = nums[0];
         int maxSum = nums[0];
         

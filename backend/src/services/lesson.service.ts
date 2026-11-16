@@ -132,11 +132,36 @@ export class LessonService {
     }
   }
 
+  private static stripCodeFences(code: string | null | undefined): string {
+    if (!code) return '';
+    return code
+      .trim()
+      .replace(/^```(?:cpp|c\+\+|sql)?\s*\r?\n/i, '')
+      .replace(/\r?\n```$/i, '')
+      .trim();
+  }
+
+  private static extractSignatureParts(signature: string | null | undefined): {
+    returnType: string;
+    methodName: string;
+  } | null {
+    if (!signature) return null;
+    const parenIdx = signature.indexOf('(');
+    if (parenIdx <= 0) return null;
+    const header = signature.slice(0, parenIdx).replace(/\s+/g, ' ').trim();
+    const match = header.match(/^(.*?)\s*([A-Za-z_][A-Za-z0-9_]*)$/);
+    if (!match) return null;
+    return {
+      returnType: match[1].trim(),
+      methodName: match[2].trim(),
+    };
+  }
+
   private static isPlaceholderSolution(code: string | null | undefined): boolean {
     if (!code) return true;
-    const trimmed = code.trim();
+    const trimmed = this.stripCodeFences(code);
     return (
-      trimmed.length < 30 ||
+      trimmed.length < 25 ||
       trimmed.includes('// Reference Strategy Blueprint') ||
       trimmed.includes('// Optimal Strategy Blueprint') ||
       trimmed.includes('// Implement your solution here') ||
@@ -144,6 +169,33 @@ export class LessonService {
       trimmed.includes('// Your code here') ||
       trimmed.includes('// Apply ')
     );
+  }
+
+  private static isSolutionCompatible(
+    code: string | null | undefined,
+    category: string,
+    functionSignature?: string | null
+  ): boolean {
+    const cleaned = this.stripCodeFences(code);
+    if (this.isPlaceholderSolution(cleaned)) return false;
+    if ((code || '').includes('```')) return false;
+
+    if (category.toUpperCase() === 'SQL') {
+      const upper = cleaned.toUpperCase();
+      return upper.includes('SELECT') || upper.includes('WITH');
+    }
+
+    const parts = this.extractSignatureParts(functionSignature);
+    if (parts) {
+      const escapedMethod = parts.methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const hasMethod = new RegExp(`\\b${escapedMethod}\\s*\\(`).test(cleaned);
+      if (!hasMethod) return false;
+      if (parts.returnType === 'void' && /return\s*\{\s*\}\s*;/.test(cleaned)) {
+        return false;
+      }
+    }
+
+    return /\b(?:class|struct)\s+Solution\b/.test(cleaned);
   }
 
   static async seedLessons(): Promise<void> {
@@ -273,9 +325,9 @@ ${guide.mistakes}`;
     if (isSql && sqlDef) {
       verifiedSolution = `-- Reference Query for #${dbProblem.id}: ${dbProblem.title}\n${sqlDef.expectedQuery}`;
     } else {
-      const curated = findCuratedSolution(dbProblem.id, dbProblem.slug);
+      const curated = findCuratedSolution(dbProblem.id, dbProblem.slug, dbProblem.functionSignature);
       if (curated) {
-        verifiedSolution = curated.code;
+        verifiedSolution = this.stripCodeFences(curated.code);
         if (curated.complexity) {
           approachProgression = `${curated.complexity}\n\n${guide.progression}`;
         }
@@ -293,8 +345,12 @@ ${guide.mistakes}`;
           examples,
         });
 
-        if (aiGenerated && !this.isPlaceholderSolution(aiGenerated.verifiedSolution)) {
-          verifiedSolution = aiGenerated.verifiedSolution;
+        const cleanedAiSolution = this.stripCodeFences(aiGenerated?.verifiedSolution);
+        if (
+          aiGenerated &&
+          this.isSolutionCompatible(cleanedAiSolution, dbProblem.category, dbProblem.functionSignature)
+        ) {
+          verifiedSolution = cleanedAiSolution;
           if (aiGenerated.techniqueLesson) baseTechnique = aiGenerated.techniqueLesson;
           if (aiGenerated.approachProgression) approachProgression = aiGenerated.approachProgression;
         } else {
@@ -303,7 +359,7 @@ ${guide.mistakes}`;
             functionSignature: dbProblem.functionSignature,
             topic: dbProblem.topic,
           });
-          verifiedSolution = fallbackSolution.code;
+          verifiedSolution = this.stripCodeFences(fallbackSolution.code);
           if (fallbackSolution.complexity) {
             approachProgression = `${fallbackSolution.complexity}\n\n${guide.progression}`;
           }
@@ -339,13 +395,13 @@ ${guide.mistakes}`;
     // Ensure catalog is seeded if a cold boot receives a direct lesson request
     let probMeta = await prisma.problem.findUnique({
       where: { id: problemId },
-      select: { id: true, category: true },
+      select: { id: true, category: true, slug: true, functionSignature: true },
     });
     if (!probMeta) {
       await ProblemService.seedInitialProblems();
       probMeta = await prisma.problem.findUnique({
         where: { id: problemId },
-        select: { id: true, category: true },
+        select: { id: true, category: true, slug: true, functionSignature: true },
       });
     }
 
@@ -361,9 +417,28 @@ ${guide.mistakes}`;
       where: { problemId },
     });
 
+    const cachedCurated =
+      probMeta && probMeta.category.toUpperCase() !== 'SQL'
+        ? findCuratedSolution(probMeta.id, probMeta.slug, probMeta.functionSignature)
+        : null;
+    const isStaleCurated =
+      Boolean(
+        lesson &&
+        cachedCurated &&
+        this.stripCodeFences(lesson.verifiedSolution) !== this.stripCodeFences(cachedCurated.code)
+      );
+    const isIncompatible =
+      Boolean(
+        lesson &&
+        probMeta &&
+        !this.isSolutionCompatible(lesson.verifiedSolution, probMeta.category, probMeta.functionSignature)
+      );
+
     if (
       !lesson ||
       this.isPlaceholderSolution(lesson.verifiedSolution) ||
+      isStaleCurated ||
+      isIncompatible ||
       !lesson.visualTraceJson ||
       !lesson.similarProblemsJson
     ) {
