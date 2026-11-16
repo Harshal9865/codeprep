@@ -95,6 +95,7 @@ export const WorkspaceProblemDrawer: React.FC<WorkspaceProblemDrawerProps> = ({
           items?: DrawerProblemItem[];
           problems?: DrawerProblemItem[];
           total?: number;
+          pagination?: { total?: number; totalPages?: number };
         }>(`/problems?${params.toString()}`);
 
         if (!cancelled) {
@@ -103,8 +104,14 @@ export const WorkspaceProblemDrawer: React.FC<WorkspaceProblemDrawerProps> = ({
             : Array.isArray(res.problems)
               ? res.problems
               : [];
+          const resolvedTotal =
+            typeof res.pagination?.total === 'number'
+              ? res.pagination.total
+              : typeof res.total === 'number'
+                ? res.total
+                : list.length;
           setItems(list);
-          setTotal(typeof res.total === 'number' ? res.total : list.length);
+          setTotal(resolvedTotal);
         }
       } catch {
         if (!cancelled) {

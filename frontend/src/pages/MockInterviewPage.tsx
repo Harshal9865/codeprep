@@ -449,12 +449,17 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Live countdown timer when an unsubmitted mock is active
+  const submitMockRef = React.useRef<() => void>(() => {});
+
+  // Live countdown timer when an unsubmitted mock is active (auto-submits when time runs out)
   useEffect(() => {
     if (!session || session.submitted) return;
     const tick = () => {
       const remaining = Math.max(0, Math.floor((session.expiresAtMs - Date.now()) / 1000));
       setSecondsLeft(remaining);
+      if (remaining === 0) {
+        submitMockRef.current();
+      }
     };
     tick();
     const timer = window.setInterval(tick, 1000);
@@ -699,6 +704,8 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
     persistActiveMock(completed);
     setSession(completed);
   };
+
+  submitMockRef.current = handleSubmitMock;
 
   const handleDiscardOrReset = () => {
     persistActiveMock(null);

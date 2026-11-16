@@ -88,6 +88,13 @@ const WORKSPACE_MAP = [
     purpose: 'Pillar-by-pillar OOP & SOLID study modules, 100 executable C++17 OOP design challenges, and placement MCQs.',
   },
   {
+    id: 'mock-interview',
+    icon: ShieldCheck,
+    label: 'Mock Interview (Aptitude + Coding)',
+    route: '#mock-interview',
+    purpose: 'Timed company-calibrated rounds pairing fresh dynamic Aptitude MCQs with randomized unseen DSA, SQL & OOP problems.',
+  },
+  {
     id: 'aptitude',
     icon: Brain,
     label: 'Aptitude',

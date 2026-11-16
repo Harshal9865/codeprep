@@ -629,6 +629,7 @@ interface HighlightedCodeEditorProps {
   onSaveShortcut?: () => void;
   errorLines?: EditorErrorLine[];
   focusLineRequest?: { line: number; nonce: number } | null;
+  documentKey?: string | number;
 }
 
 const OPEN_TO_CLOSE: Record<string, string> = {
@@ -689,6 +690,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   onSaveShortcut,
   errorLines = [],
   focusLineRequest = null,
+  documentKey,
 }) => {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const resolvedRef = externalRef ?? internalRef;
@@ -800,7 +802,20 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
   );
 
   // Sync external updates (e.g., Format button, Reset, Load Submission, Problem switch) into undo stack
+  const prevDocKeyRef = useRef<string | number | undefined>(documentKey);
   useEffect(() => {
+    if (documentKey !== prevDocKeyRef.current) {
+      prevDocKeyRef.current = documentKey;
+      internalValueRef.current = value;
+      historyRef.current = {
+        stack: [{ code: value, start: 0, end: 0 }],
+        index: 0,
+        lastTs: 0,
+      };
+      setCompletion(null);
+      setFindOpen(false);
+      return;
+    }
     if (value !== internalValueRef.current) {
       internalValueRef.current = value;
       const hist = historyRef.current;
@@ -811,7 +826,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       hist.index = sliced.length - 1;
       hist.lastTs = 0;
     }
-  }, [value]);
+  }, [value, documentKey]);
 
   const handleUndo = useCallback(() => {
     const hist = historyRef.current;
@@ -1248,12 +1263,17 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         commitCodeChange(nextVal, start - 1);
         return;
       }
-      if (value[start - 1] === ' ' && /^ {4}$/.test(value.slice(Math.max(0, start - 4), start))) {
+      const step = indentUnit.length;
+      if (
+        value[start - 1] === ' ' &&
+        start >= step &&
+        value.slice(start - step, start) === indentUnit
+      ) {
         const lineStart = value.lastIndexOf('\n', start - 1) + 1;
         if (/^ +$/.test(value.slice(lineStart, start))) {
           e.preventDefault();
-          const nextVal = value.slice(0, start - 4) + value.slice(start);
-          commitCodeChange(nextVal, start - 4);
+          const nextVal = value.slice(0, start - step) + value.slice(start);
+          commitCodeChange(nextVal, start - step);
           return;
         }
       }
@@ -1270,9 +1290,9 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
       const afterChar = value[end] ?? '';
 
       if (beforeChar === '{' && afterChar === '}') {
-        const insertion = `\n${currentIndent}    \n${currentIndent}`;
+        const insertion = `\n${currentIndent}${indentUnit}\n${currentIndent}`;
         const nextVal = value.slice(0, start) + insertion + value.slice(end);
-        commitCodeChange(nextVal, start + 1 + currentIndent.length + 4);
+        commitCodeChange(nextVal, start + 1 + currentIndent.length + indentUnit.length);
         return;
       }
 
@@ -1283,7 +1303,7 @@ export const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
         trimmedBefore.endsWith('[') ||
         (language === 'cpp' && /^(public|private|protected|default|case\b.*):$/.test(trimmedBefore.trim()));
 
-      const nextIndent = shouldIncreaseIndent ? `${currentIndent}    ` : currentIndent;
+      const nextIndent = shouldIncreaseIndent ? `${currentIndent}${indentUnit}` : currentIndent;
       const nextVal = value.slice(0, start) + '\n' + nextIndent + value.slice(end);
       commitCodeChange(nextVal, start + 1 + nextIndent.length);
       return;

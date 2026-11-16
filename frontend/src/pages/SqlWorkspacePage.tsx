@@ -79,7 +79,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
 }) => {
   const [problem, setProblem] = useState<SqlProblemData | null>(null);
   const [query, setQuery] = useState<string>('');
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty' | 'error'>('saved');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [result, setResult] = useState<SqlQueryResult | null>(null);
@@ -162,11 +162,19 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         setSaveStatus('saved');
       }
     } catch {
-      // Keep quiet on offline retry
+      if (activeIdRef.current === targetId) {
+        setSaveStatus('error');
+      }
     }
   }, []);
 
+  const prevSqlProblemIdRef = useRef<number>(problemId);
   useEffect(() => {
+    const prevId = prevSqlProblemIdRef.current;
+    if (prevId !== problemId && activeQueryRef.current && activeQueryRef.current !== savedQueryRef.current) {
+      void persistDraftNow(prevId, activeQueryRef.current);
+    }
+    prevSqlProblemIdRef.current = problemId;
     const fetchProblem = async () => {
       setIsLoading(true);
       setResult(null);
@@ -211,7 +219,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     };
 
     fetchProblem();
-  }, [problemId]);
+  }, [problemId, persistDraftNow]);
 
   useEffect(() => {
     if (!problem || query === savedQueryRef.current) return;
@@ -415,31 +423,36 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     }
   };
 
+  const sqlWorkspaceActionRef = useRef<(action: string) => void>(() => {});
+  sqlWorkspaceActionRef.current = (action: string) => {
+    if (action === 'run') {
+      expandBottom();
+      void handleRunQuery();
+    } else if (action === 'submit') {
+      expandBottom();
+      void handleSubmitQuery();
+    } else if (action === 'format') {
+      const formatted = formatCode(activeQueryRef.current, 'sql');
+      setQuery(formatted);
+      setSaveStatus(formatted === savedQueryRef.current ? 'saved' : 'dirty');
+    } else if (action === 'reset-layout') {
+      resetLayout();
+    } else if (action === 'quick-list') {
+      setIsProblemDrawerOpen((p) => !p);
+    } else if (action === 'toggle-coach') {
+      setIsCoachOpen((p) => !p);
+    }
+  };
+
   useEffect(() => {
     const handleWorkspaceCommand = (e: Event) => {
       const detail = (e as CustomEvent<{ action?: string }>).detail;
       if (!detail?.action) return;
-      if (detail.action === 'run') {
-        expandBottom();
-        void handleRunQuery();
-      } else if (detail.action === 'submit') {
-        expandBottom();
-        void handleSubmitQuery();
-      } else if (detail.action === 'format') {
-        const formatted = formatCode(activeQueryRef.current, 'sql');
-        setQuery(formatted);
-        setSaveStatus(formatted === savedQueryRef.current ? 'saved' : 'dirty');
-      } else if (detail.action === 'reset-layout') {
-        resetLayout();
-      } else if (detail.action === 'quick-list') {
-        setIsProblemDrawerOpen((p) => !p);
-      } else if (detail.action === 'toggle-coach') {
-        setIsCoachOpen((p) => !p);
-      }
+      sqlWorkspaceActionRef.current(detail.action);
     };
     window.addEventListener('codeprep:workspace:action', handleWorkspaceCommand);
     return () => window.removeEventListener('codeprep:workspace:action', handleWorkspaceCommand);
-  });
+  }, []);
 
   const handleUnlockAndLoadSolution = async () => {
     if (!problem) return;
@@ -1027,11 +1040,21 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
                 <span className="hidden xl:inline text-[10px] text-text-muted">
                   Ln {cursorInfo.line}, Col {cursorInfo.col}
                 </span>
-                <span className={saveStatus === 'saved' ? 'text-success' : 'text-warning'}>
+                <span
+                  className={
+                    saveStatus === 'error'
+                      ? 'text-danger'
+                      : saveStatus === 'saved'
+                      ? 'text-success'
+                      : 'text-warning'
+                  }
+                >
                   {saveStatus === 'saving'
                     ? 'Saving...'
                     : saveStatus === 'dirty'
                     ? 'Unsaved edits'
+                    : saveStatus === 'error'
+                    ? 'Autosave retry pending'
                     : 'Draft saved'}
                 </span>
                 <button
@@ -1061,6 +1084,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
             <HighlightedCodeEditor
               value={query}
               onChange={setQuery}
+              documentKey={problem.id}
               onKeyDown={(e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                   e.preventDefault();

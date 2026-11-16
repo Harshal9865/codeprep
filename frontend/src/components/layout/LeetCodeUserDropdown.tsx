@@ -101,7 +101,7 @@ export const LeetCodeUserDropdown: React.FC<LeetCodeUserDropdownProps> = ({ onNa
               <div className="h-7 w-7 rounded-lg bg-surface-high flex items-center justify-center text-primary mb-1 group-hover:scale-105 transition-transform">
                 <Code2 className="w-3.5 h-3.5 stroke-[2.2]" />
               </div>
-              <span className="text-[11px] font-medium text-text-primary">DSA 500</span>
+              <span className="text-[11px] font-medium text-text-primary">DSA 2,500</span>
             </button>
 
             <button
@@ -115,7 +115,7 @@ export const LeetCodeUserDropdown: React.FC<LeetCodeUserDropdownProps> = ({ onNa
               <div className="h-7 w-7 rounded-lg bg-surface-high flex items-center justify-center text-sky-400 mb-1 group-hover:scale-105 transition-transform">
                 <Database className="w-3.5 h-3.5 stroke-[2.2]" />
               </div>
-              <span className="text-[11px] font-medium text-text-primary">SQL 100</span>
+              <span className="text-[11px] font-medium text-text-primary">SQL 400</span>
             </button>
 
             <button

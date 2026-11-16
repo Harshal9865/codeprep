@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleUserUpdated = (event: Event) => {
       const custom = event as CustomEvent<User>;
       if (custom.detail && custom.detail.id) {
-        applyUserSession(custom.detail, true);
+        applyUserSession(custom.detail, false);
       }
     };
 

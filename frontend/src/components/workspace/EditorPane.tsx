@@ -329,6 +329,7 @@ export const EditorPane: React.FC<EditorPaneProps> = ({
             onChange={onChange}
             onKeyDown={handleKeyDown}
             language="cpp"
+            documentKey={problemId}
             textareaRef={textareaRef}
             showLineNumbers
             paddingClass="p-3"

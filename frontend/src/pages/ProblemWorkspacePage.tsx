@@ -183,9 +183,15 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     }
   }, [onBackToList]);
 
+  const prevLoadedProblemIdRef = useRef<number>(problemId);
   useEffect(() => {
+    const prevId = prevLoadedProblemIdRef.current;
+    if (prevId !== problemId && activeCodeRef.current && activeCodeRef.current !== savedCodeRef.current) {
+      void persistDraftNow(prevId, activeCodeRef.current);
+    }
+    prevLoadedProblemIdRef.current = problemId;
     loadProblem(problemId);
-  }, [problemId, loadProblem]);
+  }, [problemId, loadProblem, persistDraftNow]);
 
   // Fast 1.5s debounced autosave to SQLite whenever code changes
   useEffect(() => {
@@ -352,10 +358,10 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       setProblem((prev) =>
         prev
           ? {
-              ...prev,
-              isSolved: prev.isSolved || res.result.verdict === 'Accepted',
-              recentSubmissions: [newHistoryItem, ...(prev.recentSubmissions || [])].slice(0, 20),
-            }
+            ...prev,
+            isSolved: prev.isSolved || res.result.verdict === 'Accepted',
+            recentSubmissions: [newHistoryItem, ...(prev.recentSubmissions || [])].slice(0, 20),
+          }
           : null
       );
 
@@ -377,8 +383,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
             );
           } else {
             setPotdBannerMsg(
-              `Daily POTD Solved! Streak maintained at ${res.potdStatus.currentStreak} day${
-                res.potdStatus.currentStreak === 1 ? '' : 's'
+              `Daily POTD Solved! Streak maintained at ${res.potdStatus.currentStreak} day${res.potdStatus.currentStreak === 1 ? '' : 's'
               }.`
             );
             window.setTimeout(() => setPotdBannerMsg(null), 6000);
@@ -445,20 +450,25 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     return parsed;
   }, [executionResult?.compileError]);
 
+  const workspaceActionHandlerRef = useRef<(action: string) => void>(() => {});
+  workspaceActionHandlerRef.current = (action: string) => {
+    if (action === 'run') void handleRun();
+    else if (action === 'submit') void handleSubmit();
+    else if (action === 'format') handleCodeChange(formatCode(activeCodeRef.current, 'cpp'));
+    else if (action === 'reset-layout') resetLayout();
+    else if (action === 'quick-list') setIsProblemDrawerOpen((p) => !p);
+    else if (action === 'toggle-coach') handleToggleHints();
+  };
+
   useEffect(() => {
     const handleWorkspaceCommand = (e: Event) => {
       const detail = (e as CustomEvent<{ action?: string }>).detail;
       if (!detail?.action) return;
-      if (detail.action === 'run') void handleRun();
-      else if (detail.action === 'submit') void handleSubmit();
-      else if (detail.action === 'format') handleCodeChange(formatCode(activeCodeRef.current, 'cpp'));
-      else if (detail.action === 'reset-layout') resetLayout();
-      else if (detail.action === 'quick-list') setIsProblemDrawerOpen((p) => !p);
-      else if (detail.action === 'toggle-coach') handleToggleHints();
+      workspaceActionHandlerRef.current(detail.action);
     };
     window.addEventListener('codeprep:workspace:action', handleWorkspaceCommand);
     return () => window.removeEventListener('codeprep:workspace:action', handleWorkspaceCommand);
-  });
+  }, []);
 
   if (isLoading || !problem) {
     return (
@@ -514,11 +524,10 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
               type="button"
               onClick={handleToggleHints}
               aria-expanded={isHintsOpen}
-              className={`relative px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border flex items-center gap-1.5 ${
-                isHintsOpen
+              className={`relative px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border flex items-center gap-1.5 ${isHintsOpen
                   ? 'bg-primary text-black border-primary shadow-sm'
                   : 'bg-primary-subtle hover:bg-primary/20 text-primary border-primary/35'
-              }`}
+                }`}
               title="Toggle AI Code Coach & Method Diagnostics"
             >
               <Lightbulb className="w-3.5 h-3.5" />
@@ -539,11 +548,10 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       >
         {layout.maximizedPane !== 'editor' && layout.maximizedPane !== 'console' && (
           <div
-            className={`${
-              layout.maximizedPane === 'spec'
+            className={`${layout.maximizedPane === 'spec'
                 ? 'w-full h-full flex-1'
                 : 'w-full md:flex-none md:w-[var(--left-pane-w)] h-[44%] md:h-full'
-            } min-w-0 overflow-hidden ${isDraggingSplit ? '' : 'transition-[width] duration-75'}`}
+              } min-w-0 overflow-hidden ${isDraggingSplit ? '' : 'transition-[width] duration-75'}`}
           >
             <ProblemSpecPane
               problem={problem}

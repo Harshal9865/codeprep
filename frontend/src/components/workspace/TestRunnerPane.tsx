@@ -173,10 +173,14 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
         if (idx !== selectedCaseIdx) return tc;
         const parts = tc.input.split(' | ');
         parts[paramIdx] = newVal;
+        const nextInput = parts.join(' | ');
         return {
           ...tc,
-          input: parts.join(' | '),
-          expectedOutput: idx < sampleTestCases.length && tc.input === sampleTestCases[idx].input ? tc.expectedOutput : '',
+          input: nextInput,
+          expectedOutput:
+            idx < sampleTestCases.length && nextInput === sampleTestCases[idx].input
+              ? sampleTestCases[idx].expectedOutput
+              : '',
         };
       })
     );

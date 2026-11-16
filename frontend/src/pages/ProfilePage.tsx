@@ -453,7 +453,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
   };
 
   const handleRestoreBrowserSnapshot = async () => {
-    const snap = readLocalBackupSnapshot();
+    const snap = readLocalBackupSnapshot(profile?.email);
     if (!snap) {
       showToast('error', 'No Local Snapshot', 'No browser auto-backup snapshot found.');
       return;
@@ -1013,9 +1013,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
 
               {/* Live Validation Checklist */}
               <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono pt-0.5">
-                <span className={`inline-flex items-center gap-1 ${newPassword.length >= 10 ? 'text-success' : 'text-text-muted'}`}>
+                <span className={`inline-flex items-center gap-1 ${newPassword.length >= 6 ? 'text-success' : 'text-text-muted'}`}>
                   <Check className="w-3 h-3" />
-                  <span>10+ characters</span>
+                  <span>6+ characters (minimum)</span>
                 </span>
                 <span
                   className={`inline-flex items-center gap-1 ${
