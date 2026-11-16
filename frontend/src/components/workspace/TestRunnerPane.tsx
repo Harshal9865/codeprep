@@ -466,7 +466,30 @@ export const TestRunnerPane: React.FC<TestRunnerPaneProps> = ({
 
         {activeTab === 'custom' && (
           <div className="space-y-3">
-            <span className="text-xs text-text-muted font-sans font-medium">Custom Testcase Input:</span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-text-muted font-sans font-medium">
+                Custom Testcase Input:
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { label: 'Array', value: '[1,2,3,4,5]' },
+                  { label: 'Array + Target', value: '[2,7,11,15] | 9' },
+                  { label: '2D Matrix', value: '[[1,3,5],[2,4,6]]' },
+                  { label: 'Binary Tree', value: '[3,9,20,null,null,15,7]' },
+                  { label: 'Graph Edges', value: '4 | [[0,1],[1,2],[2,3],[3,0]]' },
+                ].map((tpl) => (
+                  <button
+                    key={tpl.label}
+                    type="button"
+                    onClick={() => setCustomInput(tpl.value)}
+                    className="px-2 py-0.5 rounded-md bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[10px] font-mono text-text-secondary hover:text-text-primary transition-colors"
+                    title={`Insert ${tpl.label} template`}
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <textarea
               value={customInput}
               onChange={(e) => setCustomInput(e.target.value)}

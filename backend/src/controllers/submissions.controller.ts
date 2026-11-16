@@ -338,5 +338,33 @@ export class SubmissionsController {
       res.status(500).json({ error: 'Failed to fetch submission history.' });
     }
   }
+
+  static async runSqlScratch(req: Request, res: Response): Promise<void> {
+    try {
+      const { schemaDdl, query, explainOnly } = req.body as {
+        schemaDdl?: string;
+        query?: string;
+        explainOnly?: boolean;
+      };
+      const sqlResult = await SqlRunner.executeScratchQuery(
+        typeof schemaDdl === 'string' ? schemaDdl : '',
+        typeof query === 'string' ? query : '',
+        { explainOnly: Boolean(explainOnly) }
+      );
+      res.json({
+        result: {
+          verdict: sqlResult.verdict,
+          runtimeMs: sqlResult.runtimeMs,
+          columns: sqlResult.columns,
+          rows: sqlResult.rows,
+          error: sqlResult.error,
+        },
+      });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : 'SQL scratch execution failed.',
+      });
+    }
+  }
 }
 

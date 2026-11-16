@@ -179,8 +179,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       setLocalSnapshotMeta(getLocalBackupMeta(profileRes.user.email));
       setDisplayName(profileRes.user.displayName || '');
       setTimezone(profileRes.user.timezone || 'Asia/Kolkata');
-      const dbTheme = (profileRes.user.themePreference || 'dark') as ThemeMode;
-      setThemePreference(dbTheme);
 
       if (analyticsRes) {
         const payload = analyticsRes;
@@ -544,11 +542,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
               <div className="flex flex-col items-center text-center space-y-3">
                 <div className="relative group">
                   <div
-                    className={`w-24 h-24 rounded-2xl overflow-hidden bg-surface-elevated border-2 flex items-center justify-center transition-all ${
-                      avatarJustUpdated
-                        ? 'border-success ring-4 ring-success/20'
-                        : 'border-border-default'
-                    }`}
+                    className={`w-24 h-24 rounded-2xl overflow-hidden bg-surface-elevated border-2 flex items-center justify-center transition-all ${avatarJustUpdated
+                      ? 'border-success ring-4 ring-success/20'
+                      : 'border-border-default'
+                      }`}
                   >
                     <UserAvatar
                       avatarUrl={profile?.avatarUrl}
@@ -676,11 +673,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors ${
-                      isActive
-                        ? 'bg-primary text-black shadow-xs'
-                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
-                    }`}
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors ${isActive
+                      ? 'bg-primary text-black shadow-xs'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
+                      }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
                     <span>{tab.label}</span>
@@ -835,22 +831,20 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                         return (
                           <div
                             key={badge.badgeKey}
-                            className={`p-3.5 rounded-xl border transition-all ${
-                              badge.unlocked
-                                ? 'bg-surface-elevated border-primary/35'
-                                : 'bg-surface-subtle border-border-subtle opacity-75'
-                            }`}
+                            className={`p-3.5 rounded-xl border transition-all ${badge.unlocked
+                              ? 'bg-surface-elevated border-primary/35'
+                              : 'bg-surface-subtle border-border-subtle opacity-75'
+                              }`}
                           >
                             <div className="flex items-center justify-between gap-2 mb-1">
                               <span className="text-xs font-semibold text-text-primary truncate">
                                 {badge.title}
                               </span>
                               <span
-                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
-                                  badge.unlocked
-                                    ? 'bg-success-subtle text-success'
-                                    : 'bg-surface-high text-text-muted'
-                                }`}
+                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${badge.unlocked
+                                  ? 'bg-success-subtle text-success'
+                                  : 'bg-surface-high text-text-muted'
+                                  }`}
                               >
                                 {badge.unlocked ? 'Unlocked' : `${badge.current}/${badge.target}`}
                               </span>
@@ -860,9 +854,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                             </p>
                             <div className="mt-2 w-full h-1 rounded-full bg-surface-high overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${
-                                  badge.unlocked ? 'bg-success' : 'bg-primary/70'
-                                }`}
+                                className={`h-full rounded-full ${badge.unlocked ? 'bg-success' : 'bg-primary/70'
+                                  }`}
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
@@ -893,11 +886,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                           key={choice.id}
                           type="button"
                           onClick={() => handleSelectTheme(choice.id)}
-                          className={`flex flex-col gap-2.5 p-3.5 rounded-xl border text-left transition-all ${
-                            active
-                              ? 'bg-surface-elevated border-primary ring-1 ring-primary/35'
-                              : 'bg-surface-subtle border-border-subtle text-text-secondary hover:bg-surface-elevated'
-                          }`}
+                          className={`flex flex-col gap-2.5 p-3.5 rounded-xl border text-left transition-all ${active
+                            ? 'bg-surface-elevated border-primary ring-1 ring-primary/35'
+                            : 'bg-surface-subtle border-border-subtle text-text-secondary hover:bg-surface-elevated'
+                            }`}
                         >
                           <div
                             className="w-full h-10 rounded-lg border border-border-subtle p-2 flex flex-col justify-between"
@@ -981,11 +973,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                           type="button"
                           disabled={isSavingAvatarPreset}
                           onClick={() => handleSelectPixelAvatar(preset.id)}
-                          className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
-                            isSelected
-                              ? 'bg-surface-elevated border-primary ring-1 ring-primary/35'
-                              : 'bg-surface-subtle border-border-subtle hover:bg-surface-elevated'
-                          }`}
+                          className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${isSelected
+                            ? 'bg-surface-elevated border-primary ring-1 ring-primary/35'
+                            : 'bg-surface-subtle border-border-subtle hover:bg-surface-elevated'
+                            }`}
                         >
                           <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-border-subtle">
                             <PixelAvatar presetId={preset.id} size={36} className="w-full h-full" />
@@ -1195,8 +1186,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                           {isUpdatingPassword
                             ? 'Updating...'
                             : passwordJustUpdated
-                            ? 'Updated ✓'
-                            : 'Update Password'}
+                              ? 'Updated ✓'
+                              : 'Update Password'}
                         </Button>
                       </div>
                     </form>
@@ -1209,11 +1200,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
                         <h2 className="text-sm font-semibold text-text-primary">Backup &amp; Restore</h2>
                         {storageStatus && (
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${
-                              storageStatus.persistent
-                                ? 'bg-success-subtle text-success border-success/30'
-                                : 'bg-warning-subtle text-warning border-warning/30'
-                            }`}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${storageStatus.persistent
+                              ? 'bg-success-subtle text-success border-success/30'
+                              : 'bg-warning-subtle text-warning border-warning/30'
+                              }`}
                           >
                             {storageStatus.persistent ? 'Persistent' : 'Ephemeral'}
                           </span>
@@ -1284,16 +1274,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
       {toast && (
         <div
           role="status"
-          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-2xl bg-surface-elevated border shadow-2xl animate-fade-up ${
-            toast.type === 'success' ? 'border-success/50' : 'border-danger/50'
-          }`}
+          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-2xl bg-surface-elevated border shadow-2xl animate-fade-up ${toast.type === 'success' ? 'border-success/50' : 'border-danger/50'
+            }`}
         >
           <span
-            className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
-              toast.type === 'success'
-                ? 'bg-success-subtle text-success'
-                : 'bg-danger-subtle text-danger'
-            }`}
+            className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${toast.type === 'success'
+              ? 'bg-success-subtle text-success'
+              : 'bg-danger-subtle text-danger'
+              }`}
           >
             {toast.type === 'success' ? (
               <CheckCircle2 className="w-4 h-4" />
@@ -1303,9 +1291,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onTabChange }) => {
           </span>
           <div className="min-w-0 flex-1">
             <div
-              className={`text-xs font-semibold ${
-                toast.type === 'success' ? 'text-success' : 'text-danger'
-              }`}
+              className={`text-xs font-semibold ${toast.type === 'success' ? 'text-success' : 'text-danger'
+                }`}
             >
               {toast.title}
             </div>

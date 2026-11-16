@@ -76,6 +76,7 @@ export class AiController {
         isSolved,
         userQuestion,
         requestMode,
+        conversationHistory,
       } = req.body;
       const numericId = parseInt(problemId, 10);
       const def =
@@ -85,6 +86,26 @@ export class AiController {
         ? await prisma.problem.findUnique({ where: { id: numericId } })
         : null;
 
+      let parsedExamples: Array<{ input?: string; output?: string }> = def?.examples || [];
+      if (!def && dbProb?.examplesJson) {
+        try {
+          parsedExamples = JSON.parse(dbProb.examplesJson);
+        } catch {}
+      }
+
+      const safeHistory = Array.isArray(conversationHistory)
+        ? conversationHistory
+            .filter(
+              (m: unknown): m is { role: 'user' | 'assistant'; content: string } =>
+                Boolean(m) &&
+                typeof m === 'object' &&
+                ((m as { role?: string }).role === 'user' ||
+                  (m as { role?: string }).role === 'assistant') &&
+                typeof (m as { content?: string }).content === 'string'
+            )
+            .slice(-8)
+        : undefined;
+
       const sqlSchema = def && 'schemaDdl' in def ? (def as { schemaDdl?: string }).schemaDdl : undefined;
       const feedback = await AiTeacherService.getFeedback({
         problemId: def ? def.id : dbProb ? dbProb.id : numericId,
@@ -93,12 +114,14 @@ export class AiController {
         functionSignature: def?.functionSignature ?? dbProb?.functionSignature,
         constraints: def?.constraints ?? dbProb?.constraints,
         schemaDdl: sqlSchema,
+        examples: parsedExamples,
         userCode: userCode || '',
         verdict,
         executionResult,
         hintLevel: hintLevel ? parseInt(hintLevel, 10) : 1,
         requestMode,
-        userQuestion: typeof userQuestion === 'string' ? userQuestion.slice(0, 500) : undefined,
+        userQuestion: typeof userQuestion === 'string' ? userQuestion.slice(0, 600) : undefined,
+        conversationHistory: safeHistory,
         isSolved: Boolean(isSolved),
         topic: def?.topic ?? dbProb?.topic,
         pattern: def?.pattern ?? dbProb?.pattern,

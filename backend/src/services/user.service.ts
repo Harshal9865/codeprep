@@ -295,7 +295,7 @@ export class UserService {
    * Full JSON data export for the user
    */
   static async exportUserData(userId: string) {
-    const [user, submissions, drafts, timers, userProblemStates, allowLegacy, badges] = await Promise.all([
+    const [user, submissions, drafts, timers, userProblemStates, allowLegacy, badges, mockAttempts] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -367,6 +367,24 @@ export class UserService {
         },
         orderBy: { unlockedAt: 'asc' },
       }),
+      prisma.mockAttempt.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          clientSessionId: true,
+          trackId: true,
+          trackName: true,
+          difficultyLabel: true,
+          aptitudeScore: true,
+          aptitudeTotal: true,
+          codingSolved: true,
+          codingTotal: true,
+          durationSec: true,
+          finishedAt: true,
+        },
+        orderBy: { finishedAt: 'desc' },
+        take: 50,
+      }),
     ]);
 
     const savedMap = new Map<
@@ -435,17 +453,19 @@ export class UserService {
         bookmarkedProblems: bookmarksAndNotes.filter((p) => p.isBookmark).length,
         notesCount: bookmarksAndNotes.filter((p) => p.userNotes).length,
         badgesUnlocked: badges.length,
+        mockAttemptsCount: mockAttempts.length,
       },
       submissions,
       drafts,
       timers,
       savedProblems: bookmarksAndNotes,
       badges,
+      mockAttempts,
     };
   }
 
   /**
-   * Restores user profile settings, submissions, drafts, timers, bookmarks, notes, and badges from an exported JSON snapshot
+   * Restores user profile settings, submissions, drafts, timers, bookmarks, notes, badges, and mock attempts
    */
   static async importUserData(userId: string, rawDump: unknown) {
     if (!rawDump || typeof rawDump !== 'object') {
@@ -490,6 +510,19 @@ export class UserService {
         category?: string;
         unlockedAt?: string;
       }>;
+      mockAttempts?: Array<{
+        clientSessionId?: string | null;
+        id?: string;
+        trackId?: string;
+        trackName?: string;
+        difficultyLabel?: string;
+        aptitudeScore?: number;
+        aptitudeTotal?: number;
+        codingSolved?: number;
+        codingTotal?: number;
+        durationSec?: number;
+        finishedAt?: string;
+      }>;
     };
 
     // Ensure catalog is seeded in DB before checking validProblemIds on cold redeploy restores
@@ -512,6 +545,7 @@ export class UserService {
     let timersRestored = 0;
     let savedProblemsRestored = 0;
     let badgesRestored = 0;
+    let mockAttemptsRestored = 0;
 
     await prisma.$transaction(async (tx) => {
       if (dump.user) {
@@ -640,6 +674,40 @@ export class UserService {
           badgesRestored++;
         }
       }
+
+      if (Array.isArray(dump.mockAttempts)) {
+        for (const attempt of dump.mockAttempts) {
+          const cid =
+            (typeof attempt?.clientSessionId === 'string' && attempt.clientSessionId.trim()) ||
+            (typeof attempt?.id === 'string' && attempt.id.trim()) ||
+            null;
+          if (!cid || typeof attempt.trackName !== 'string') continue;
+          const finishedDate = attempt.finishedAt ? new Date(attempt.finishedAt) : new Date();
+          const safeFinishedAt = Number.isNaN(finishedDate.getTime()) ? new Date() : finishedDate;
+
+          await tx.mockAttempt.upsert({
+            where: { userId_clientSessionId: { userId, clientSessionId: cid } },
+            update: {
+              codingSolved: Math.max(0, Math.floor(Number(attempt.codingSolved) || 0)),
+            },
+            create: {
+              clientSessionId: cid,
+              userId,
+              trackId: typeof attempt.trackId === 'string' ? attempt.trackId : 'custom',
+              trackName: attempt.trackName,
+              difficultyLabel:
+                typeof attempt.difficultyLabel === 'string' ? attempt.difficultyLabel : 'Mixed',
+              aptitudeScore: Math.max(0, Math.floor(Number(attempt.aptitudeScore) || 0)),
+              aptitudeTotal: Math.max(0, Math.floor(Number(attempt.aptitudeTotal) || 0)),
+              codingSolved: Math.max(0, Math.floor(Number(attempt.codingSolved) || 0)),
+              codingTotal: Math.max(0, Math.floor(Number(attempt.codingTotal) || 0)),
+              durationSec: Math.max(0, Math.floor(Number(attempt.durationSec) || 0)),
+              finishedAt: safeFinishedAt,
+            },
+          });
+          mockAttemptsRestored++;
+        }
+      }
   }, { maxWait: 10000, timeout: 60000 });
 
 await checkpointWal();
@@ -663,6 +731,7 @@ Logger.info('UserService', `Imported backup for user ${userId}`, {
   timersRestored,
   savedProblemsRestored,
   badgesRestored,
+  mockAttemptsRestored,
 });
 
 return {
@@ -673,8 +742,97 @@ return {
     timersRestored,
     savedProblemsRestored,
     badgesRestored,
+    mockAttemptsRestored,
   },
 };
+  }
+
+  static async getMockHistory(userId: string) {
+    const rows = await prisma.mockAttempt.findMany({
+      where: { userId },
+      orderBy: { finishedAt: 'desc' },
+      take: 25,
+    });
+    return rows.map((r) => ({
+      id: r.clientSessionId || r.id,
+      finishedAt: r.finishedAt.toISOString(),
+      trackId: r.trackId,
+      trackName: r.trackName,
+      difficultyLabel: r.difficultyLabel,
+      aptitudeScore: r.aptitudeScore,
+      aptitudeTotal: r.aptitudeTotal,
+      codingSolved: r.codingSolved,
+      codingTotal: r.codingTotal,
+      durationSec: r.durationSec,
+    }));
+  }
+
+  static async saveMockAttempt(
+    userId: string,
+    payload: {
+      id?: string;
+      clientSessionId?: string;
+      trackId?: string;
+      trackName?: string;
+      difficultyLabel?: string;
+      aptitudeScore?: number;
+      aptitudeTotal?: number;
+      codingSolved?: number;
+      codingTotal?: number;
+      durationSec?: number;
+      finishedAt?: string;
+    }
+  ) {
+    const cid =
+      (typeof payload?.clientSessionId === 'string' && payload.clientSessionId.trim()) ||
+      (typeof payload?.id === 'string' && payload.id.trim()) ||
+      `mock-${Date.now()}`;
+    const trackName =
+      typeof payload?.trackName === 'string' && payload.trackName.trim()
+        ? payload.trackName.trim()
+        : 'Mock Assessment';
+    const finishedDate = payload?.finishedAt ? new Date(payload.finishedAt) : new Date();
+    const safeFinishedAt = Number.isNaN(finishedDate.getTime()) ? new Date() : finishedDate;
+
+    const saved = await prisma.mockAttempt.upsert({
+      where: { userId_clientSessionId: { userId, clientSessionId: cid } },
+      update: {
+        aptitudeScore: Math.max(0, Math.floor(Number(payload?.aptitudeScore) || 0)),
+        codingSolved: Math.max(0, Math.floor(Number(payload?.codingSolved) || 0)),
+        durationSec: Math.max(0, Math.floor(Number(payload?.durationSec) || 0)),
+      },
+      create: {
+        clientSessionId: cid,
+        userId,
+        trackId: typeof payload?.trackId === 'string' ? payload.trackId : 'custom',
+        trackName,
+        difficultyLabel:
+          typeof payload?.difficultyLabel === 'string' ? payload.difficultyLabel : 'Mixed',
+        aptitudeScore: Math.max(0, Math.floor(Number(payload?.aptitudeScore) || 0)),
+        aptitudeTotal: Math.max(0, Math.floor(Number(payload?.aptitudeTotal) || 0)),
+        codingSolved: Math.max(0, Math.floor(Number(payload?.codingSolved) || 0)),
+        codingTotal: Math.max(0, Math.floor(Number(payload?.codingTotal) || 0)),
+        durationSec: Math.max(0, Math.floor(Number(payload?.durationSec) || 0)),
+        finishedAt: safeFinishedAt,
+      },
+    });
+
+    return {
+      id: saved.clientSessionId || saved.id,
+      finishedAt: saved.finishedAt.toISOString(),
+      trackId: saved.trackId,
+      trackName: saved.trackName,
+      difficultyLabel: saved.difficultyLabel,
+      aptitudeScore: saved.aptitudeScore,
+      aptitudeTotal: saved.aptitudeTotal,
+      codingSolved: saved.codingSolved,
+      codingTotal: saved.codingTotal,
+      durationSec: saved.durationSec,
+    };
+  }
+
+  static async clearMockHistory(userId: string): Promise<void> {
+    await prisma.mockAttempt.deleteMany({ where: { userId } });
   }
 }
 

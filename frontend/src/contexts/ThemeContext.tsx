@@ -13,6 +13,18 @@ function normalizeTheme(value: unknown): ThemeMode {
   return 'dark';
 }
 
+function readStoredTheme(): ThemeMode | null {
+  try {
+    const raw = localStorage.getItem('codeprep_theme');
+    if (typeof raw === 'string' && VALID_THEMES.has(raw as ThemeMode)) {
+      return raw as ThemeMode;
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return null;
+}
+
 function applyThemeToDom(mode: ThemeMode) {
   const meta = THEME_OPTIONS.find((t) => t.id === mode) || THEME_OPTIONS[0];
   const root = document.documentElement;
@@ -33,9 +45,10 @@ function applyThemeToDom(mode: ThemeMode) {
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
-    return normalizeTheme(localStorage.getItem('codeprep_theme'));
+    return readStoredTheme() || 'dark';
   });
-  const manualSwitchAtRef = useRef<number>(0);
+  const themeRef = useRef<ThemeMode>(theme);
+  themeRef.current = theme;
 
   const themeMeta = THEME_OPTIONS.find((t) => t.id === theme) || THEME_OPTIONS[0];
   const resolvedTheme: 'dark' | 'light' = themeMeta.isDark ? 'dark' : 'light';
@@ -56,72 +69,66 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     if (!hasSession) return;
 
-    apiRequest<{ user?: { id: string } }>('/user/profile', {
+    void apiRequest('/user/profile', {
       method: 'PATCH',
       body: JSON.stringify({ themePreference: valid }),
-    })
-      .then((res) => {
-        try {
-          localStorage.removeItem('codeprep_theme_dirty');
-        } catch {}
-        if (res?.user) {
-          window.dispatchEvent(new CustomEvent('codeprep:user-updated', { detail: res.user }));
-        }
-      })
-      .catch(() => {
-        // Offline / transient network errors stay cached in localStorage
-      });
+    }).catch(() => {
+      // Offline / transient network errors stay safely persisted in localStorage
+    });
   }, []);
 
-  // Listen for DB preference sync events emitted on login or initial status check
+  // Only push local theme up to server on session load; never overwrite user's chosen local theme
   useEffect(() => {
     const handleSync = (event: Event) => {
-      const custom = event as CustomEvent<string | { theme?: string; force?: boolean }>;
+      const custom = event as CustomEvent<string | { theme?: string }>;
       const rawDetail = custom.detail;
       const incomingRaw = typeof rawDetail === 'string' ? rawDetail : rawDetail?.theme;
-      const isForced = typeof rawDetail === 'object' && rawDetail !== null && Boolean(rawDetail.force);
-      const nextTheme = normalizeTheme(incomingRaw);
+      const serverTheme = normalizeTheme(incomingRaw);
+      const localTheme = readStoredTheme();
 
-      let localSavedRaw: string | null = null;
-      let hasPendingLocalEdit = false;
-      try {
-        localSavedRaw = localStorage.getItem('codeprep_theme');
-        hasPendingLocalEdit = localStorage.getItem('codeprep_theme_dirty') === '1';
-      } catch {}
-
-      const hasValidLocalTheme =
-        typeof localSavedRaw === 'string' && VALID_THEMES.has(localSavedRaw as ThemeMode);
-
-      // Never overwrite an explicit local theme choice on passive page refresh;
-      // instead push the local choice back up to the user's profile if out of sync.
-      if (!isForced && (Date.now() - manualSwitchAtRef.current < 10_000 || hasValidLocalTheme || hasPendingLocalEdit)) {
-        const activeLocal = normalizeTheme(localSavedRaw);
-        if (hasPendingLocalEdit || (hasValidLocalTheme && activeLocal !== nextTheme)) {
-          persistThemePreference(activeLocal);
+      if (localTheme) {
+        if (localTheme !== serverTheme) {
+          persistThemePreference(localTheme);
+        }
+        if (themeRef.current !== localTheme) {
+          applyThemeToDom(localTheme);
+          setThemeState(localTheme);
         }
         return;
       }
 
-      try {
-        localStorage.removeItem('codeprep_theme_dirty');
-      } catch {}
-      applyThemeToDom(nextTheme);
-      setThemeState(nextTheme);
+      // First-time browser with no stored preference adopts server theme once
+      applyThemeToDom(serverTheme);
+      setThemeState(serverTheme);
     };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'codeprep_theme' && e.newValue && VALID_THEMES.has(e.newValue as ThemeMode)) {
+        const next = e.newValue as ThemeMode;
+        if (next !== themeRef.current) {
+          applyThemeToDom(next);
+          setThemeState(next);
+        }
+      }
+    };
+
     window.addEventListener('codeprep-theme-sync', handleSync);
-    return () => window.removeEventListener('codeprep-theme-sync', handleSync);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('codeprep-theme-sync', handleSync);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [persistThemePreference]);
 
-  const setTheme = useCallback((mode: ThemeMode) => {
-    const valid = normalizeTheme(mode);
-    manualSwitchAtRef.current = Date.now();
-    try {
-      localStorage.setItem('codeprep_theme_dirty', '1');
-    } catch {}
-    applyThemeToDom(valid);
-    setThemeState(valid);
-    persistThemePreference(valid);
-  }, [persistThemePreference]);
+  const setTheme = useCallback(
+    (mode: ThemeMode) => {
+      const valid = normalizeTheme(mode);
+      applyThemeToDom(valid);
+      setThemeState(valid);
+      persistThemePreference(valid);
+    },
+    [persistThemePreference]
+  );
 
   const toggleTheme = useCallback(() => {
     const idx = THEME_OPTIONS.findIndex((t) => t.id === theme);

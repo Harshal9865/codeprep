@@ -324,8 +324,8 @@ function pickRandomProblems(
   const tier2Pref =
     preferredTopics && preferredTopics.size > 0
       ? shuffleArray(
-          available.filter((p) => isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved))
-        )
+        available.filter((p) => isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved))
+      )
       : [];
   const tier2 = shuffleArray(
     available.filter((p) => !isPreferred(p) && !seenIds.has(p.id) && Boolean(p.isSolved))
@@ -428,7 +428,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
   });
 
   const initialSyncReadyRef = useRef<boolean>(false);
-  const submitMockRef = useRef<() => void>(() => {});
+  const submitMockRef = useRef<() => void>(() => { });
 
   const selectedProfile = useMemo(
     () => COMPANY_PROFILES.find((p) => p.id === config.trackId) || COMPANY_PROFILES[0],
@@ -537,6 +537,35 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
     };
 
     void loadWeaknessData();
+
+    // Load persisted mock history from backend and backfill any local-only attempts
+    const syncMockHistoryFromServer = async () => {
+      try {
+        const res = await apiRequest<{ attempts?: MockHistoryEntry[] }>('/user/mock-history');
+        const serverAttempts = Array.isArray(res.attempts) ? res.attempts : [];
+        const serverIds = new Set(serverAttempts.map((a) => a.id));
+        const localEntries = loadMockHistory();
+        const unsyncedLocal = localEntries.filter((e) => !serverIds.has(e.id));
+        if (unsyncedLocal.length > 0) {
+          await Promise.all(
+            unsyncedLocal.slice(0, 10).map((entry) =>
+              apiRequest('/user/mock-history', {
+                method: 'POST',
+                body: JSON.stringify(entry),
+              }).catch(() => null)
+            )
+          );
+        }
+        const merged = [...serverAttempts, ...unsyncedLocal]
+          .sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime())
+          .slice(0, 25);
+        setHistory(merged);
+        saveMockHistory(merged);
+      } catch {
+        // Keep local history fallback silently if offline
+      }
+    };
+    void syncMockHistoryFromServer();
 
     const handleReturnSync = () => {
       const latest = loadActiveMock();
@@ -829,10 +858,25 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
 
     const nextHistory = [historyEntry, ...history.filter((h) => h.id !== historyEntry.id)].slice(
       0,
-      15
+      25
     );
     setHistory(nextHistory);
     saveMockHistory(nextHistory);
+
+    void apiRequest('/user/mock-history', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...historyEntry,
+        clientSessionId: session.id,
+        trackId: session.trackId,
+      }),
+    })
+      .then(() => {
+        window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
+      })
+      .catch(() => {
+        // Already cached locally
+      });
 
     persistActiveMock(completed);
     setSession(completed);
@@ -850,9 +894,9 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
   const aptitudeAnsweredCount = session ? Object.keys(session.aptitudeAnswers).length : 0;
   const aptitudeCorrectCount = session
     ? session.aptitudeQuestions.reduce(
-        (acc, q) => acc + (session.aptitudeAnswers[q.id] === q.correctIndex ? 1 : 0),
-        0
-      )
+      (acc, q) => acc + (session.aptitudeAnswers[q.id] === q.correctIndex ? 1 : 0),
+      0
+    )
     : 0;
   const codingSolvedCount = session
     ? session.codingProblems.filter((p) => p.isSolved).length
@@ -876,8 +920,8 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
       session.aptitudeQuestions.length === 0
         ? 'coding'
         : session.codingProblems.length === 0
-        ? 'aptitude'
-        : activeSection;
+          ? 'aptitude'
+          : activeSection;
 
     return (
       <AppLayout currentTab="mock-interview" onTabChange={onTabChange}>
@@ -904,11 +948,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveSection('aptitude')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                      effectiveSection === 'aptitude'
-                        ? 'bg-surface-elevated text-text-primary border border-border-default shadow-xs'
-                        : 'text-text-secondary hover:text-text-primary'
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${effectiveSection === 'aptitude'
+                      ? 'bg-surface-elevated text-text-primary border border-border-default shadow-xs'
+                      : 'text-text-secondary hover:text-text-primary'
+                      }`}
                   >
                     <HelpCircle className="w-3.5 h-3.5 text-primary" />
                     <span>
@@ -918,11 +961,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveSection('coding')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                      effectiveSection === 'coding'
-                        ? 'bg-surface-elevated text-text-primary border border-border-default shadow-xs'
-                        : 'text-text-secondary hover:text-text-primary'
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${effectiveSection === 'coding'
+                      ? 'bg-surface-elevated text-text-primary border border-border-default shadow-xs'
+                      : 'text-text-secondary hover:text-text-primary'
+                      }`}
                   >
                     <Code2 className="w-3.5 h-3.5 text-success" />
                     <span>
@@ -935,11 +977,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
 
             <div className="flex flex-wrap items-center gap-2">
               <div
-                className={`px-3 py-1.5 rounded-xl border font-mono text-xs font-bold flex items-center gap-1.5 ${
-                  isLowTime
-                    ? 'bg-danger-subtle border-danger/45 text-danger'
-                    : 'bg-surface-subtle border-border-subtle text-text-primary'
-                }`}
+                className={`px-3 py-1.5 rounded-xl border font-mono text-xs font-bold flex items-center gap-1.5 ${isLowTime
+                  ? 'bg-danger-subtle border-danger/45 text-danger'
+                  : 'bg-surface-subtle border-border-subtle text-text-primary'
+                  }`}
               >
                 <Clock className="w-3.5 h-3.5 text-primary" />
                 <span>
@@ -1052,11 +1093,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                     <button
                       type="button"
                       onClick={() => handleToggleFlag(currentAptitudeQ.id)}
-                      className={`px-2.5 py-1 rounded-lg border text-xs font-mono flex items-center gap-1.5 transition-colors ${
-                        session.flaggedIds.includes(currentAptitudeQ.id)
-                          ? 'bg-warning-subtle border-warning/45 text-warning'
-                          : 'bg-surface-subtle border-border-subtle text-text-muted hover:text-text-primary'
-                      }`}
+                      className={`px-2.5 py-1 rounded-lg border text-xs font-mono flex items-center gap-1.5 transition-colors ${session.flaggedIds.includes(currentAptitudeQ.id)
+                        ? 'bg-warning-subtle border-warning/45 text-warning'
+                        : 'bg-surface-subtle border-border-subtle text-text-muted hover:text-text-primary'
+                        }`}
                     >
                       <Flag className="w-3.5 h-3.5" />
                       <span>
@@ -1217,9 +1257,8 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                         key={q.id}
                         type="button"
                         onClick={() => setAptitudeIndex(idx)}
-                        className={`h-9 rounded-lg border font-mono text-xs font-semibold transition-all ${pillStyle} ${
-                          isCurrent ? 'ring-2 ring-primary/60' : ''
-                        }`}
+                        className={`h-9 rounded-lg border font-mono text-xs font-semibold transition-all ${pillStyle} ${isCurrent ? 'ring-2 ring-primary/60' : ''
+                          }`}
                       >
                         {idx + 1}
                       </button>
@@ -1282,8 +1321,8 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                     prob.difficulty === 'Easy'
                       ? 'bg-success-subtle text-success'
                       : prob.difficulty === 'Medium'
-                      ? 'bg-warning-subtle text-warning'
-                      : 'bg-danger-subtle text-danger';
+                        ? 'bg-warning-subtle text-warning'
+                        : 'bg-danger-subtle text-danger';
 
                   return (
                     <div
@@ -1302,8 +1341,8 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                             {prob.category === 'SQL'
                               ? 'SQL'
                               : prob.category === 'OOP'
-                              ? 'OOP / C++'
-                              : 'DSA'}
+                                ? 'OOP / C++'
+                                : 'DSA'}
                           </span>
                           {prob.isSolved && (
                             <span className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-success">
@@ -1407,11 +1446,10 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                       key={profile.id}
                       type="button"
                       onClick={() => handleSelectProfile(profile)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-colors ${
-                        isSelected
-                          ? 'bg-primary-subtle border-primary/50 text-primary font-semibold'
-                          : 'bg-surface-subtle border-border-subtle text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
-                      }`}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-colors ${isSelected
+                        ? 'bg-primary-subtle border-primary/50 text-primary font-semibold'
+                        : 'bg-surface-subtle border-border-subtle text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
+                        }`}
                     >
                       {profile.shortLabel}
                     </button>
@@ -1625,6 +1663,7 @@ export const MockInterviewPage: React.FC<MockInterviewPageProps> = ({
                     onClick={() => {
                       setHistory([]);
                       saveMockHistory([]);
+                      void apiRequest('/user/mock-history', { method: 'DELETE' }).catch(() => {});
                     }}
                     className="text-[11px] font-mono text-text-muted hover:text-text-primary"
                   >

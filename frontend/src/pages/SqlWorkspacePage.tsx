@@ -6,7 +6,7 @@ import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 import { SqlSchemaTables } from '../components/workspace/SqlSchemaTables';
 import { SubmissionDiffViewer } from '../components/workspace/SubmissionDiffViewer';
-import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
+import { HintsDrawer, MethodAnalysisData, CoachMessageItem } from '../components/workspace/HintsDrawer';
 import { HighlightedCode, HighlightedCodeEditor } from '../components/ui/CodeHighlight';
 import { ResizableDivider } from '../components/workspace/ResizableDivider';
 import { WorkspaceProblemDrawer } from '../components/workspace/WorkspaceProblemDrawer';
@@ -147,6 +147,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
   // SQL AI Coach drawer state
   const [isCoachOpen, setIsCoachOpen] = useState(false);
   const [coachGuidance, setCoachGuidance] = useState('');
+  const [coachMessages, setCoachMessages] = useState<CoachMessageItem[]>([]);
   const [coachAnalysis, setCoachAnalysis] = useState<MethodAnalysisData | null>(null);
   const [coachProvider, setCoachProvider] = useState<'gemini' | 'local' | undefined>(undefined);
   const [coachProviderNote, setCoachProviderNote] = useState<string | undefined>(undefined);
@@ -228,6 +229,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       setSolutionError(null);
       setExpandedSqlHints({});
       setCoachGuidance('');
+      setCoachMessages([]);
       setCoachAnalysis(null);
       setCoachProvider(undefined);
       setCoachProviderNote(undefined);
@@ -296,6 +298,12 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
     const verdictToSend = options?.verdict ?? (matchesEvaluated ? result?.verdict : undefined);
     const resultToSend = options?.queryResult ?? (matchesEvaluated ? result ?? undefined : undefined);
 
+    const trimmedQuestion = options?.userQuestion?.trim();
+    const historyToSend = coachMessages.slice(-8);
+    if (trimmedQuestion) {
+      setCoachMessages((prev) => [...prev, { role: 'user', content: trimmedQuestion }]);
+    }
+
     setIsCoachLoading(true);
     try {
       const feedback = await requestStudyGuidance({
@@ -306,18 +314,30 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         hintLevel: options?.hintLevel ?? 1,
         isSolved: verdictToSend === 'Accepted',
         requestMode: options?.requestMode,
-        userQuestion: options?.userQuestion,
+        userQuestion: trimmedQuestion || options?.userQuestion,
+        conversationHistory: historyToSend,
       });
       setCoachGuidance(feedback.message);
       setCoachAnalysis(feedback.analysis ?? null);
       setCoachProvider(feedback.provider);
       setCoachProviderNote(feedback.providerNote);
       analyzedQueryRef.current = targetSql;
+
+      if (trimmedQuestion || options?.requestMode === 'hint') {
+        setCoachMessages((prev) => [...prev, { role: 'assistant', content: feedback.message }]);
+      } else {
+        setCoachMessages([{ role: 'assistant', content: feedback.message }]);
+      }
+
       if (!isCoachOpen) {
         setHasUnreadCoach(true);
       }
     } catch {
-      setCoachGuidance('Unable to reach AI Coach right now. Re-run or click "Analyze My Query & Find Mistakes".');
+      const errMsg = 'Unable to reach AI Coach right now. Re-run or click "Audit SQL Query".';
+      setCoachGuidance(errMsg);
+      if (trimmedQuestion) {
+        setCoachMessages((prev) => [...prev, { role: 'assistant', content: errMsg }]);
+      }
     } finally {
       setIsCoachLoading(false);
     }
@@ -340,7 +360,7 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       evaluatedQueryRef.current = submittedSql;
       setSqlBenchmarks(null);
       setResult(res.result);
-      if (!explainOnly) {
+      if (!explainOnly && isCoachOpen) {
         void requestSqlCoach({
           requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
           verdict: res.result.verdict,
@@ -356,12 +376,14 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       };
       evaluatedQueryRef.current = submittedSql;
       setResult(fallbackErr);
-      void requestSqlCoach({
-        requestMode: 'analyze',
-        verdict: fallbackErr.verdict,
-        queryResult: fallbackErr,
-        queryOverride: submittedSql,
-      });
+      if (isCoachOpen) {
+        void requestSqlCoach({
+          requestMode: 'analyze',
+          verdict: fallbackErr.verdict,
+          queryResult: fallbackErr,
+          queryOverride: submittedSql,
+        });
+      }
     } finally {
       setIsRunning(false);
     }
@@ -432,12 +454,14 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       } else {
         window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
       }
-      void requestSqlCoach({
-        requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
-        verdict: res.result.verdict,
-        queryResult: res.result,
-        queryOverride: submittedSql,
-      });
+      if (isCoachOpen) {
+        void requestSqlCoach({
+          requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+          verdict: res.result.verdict,
+          queryResult: res.result,
+          queryOverride: submittedSql,
+        });
+      }
     } catch (err: unknown) {
       const fallbackErr: SqlQueryResult = {
         verdict: 'Query Error',
@@ -446,12 +470,14 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
       };
       evaluatedQueryRef.current = submittedSql;
       setResult(fallbackErr);
-      void requestSqlCoach({
-        requestMode: 'analyze',
-        verdict: fallbackErr.verdict,
-        queryResult: fallbackErr,
-        queryOverride: submittedSql,
-      });
+      if (isCoachOpen) {
+        void requestSqlCoach({
+          requestMode: 'analyze',
+          verdict: fallbackErr.verdict,
+          queryResult: fallbackErr,
+          queryOverride: submittedSql,
+        });
+      }
     } finally {
       setIsRunning(false);
     }
@@ -1477,6 +1503,11 @@ export const SqlWorkspacePage: React.FC<SqlWorkspacePageProps> = ({
         isOpen={isCoachOpen}
         onClose={() => setIsCoachOpen(false)}
         guidanceMessage={coachGuidance}
+        chatMessages={coachMessages}
+        onClearChat={() => {
+          setCoachMessages([]);
+          setCoachGuidance('');
+        }}
         analysis={coachAnalysis}
         provider={coachProvider}
         providerNote={coachProviderNote}

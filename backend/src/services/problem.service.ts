@@ -449,7 +449,8 @@ export class ProblemService {
     const skip = (page - 1) * pageSize;
 
     const statusLower = (options.status || '').toLowerCase();
-    const [catalog, userSubmissions, bookmarkedIds] = await Promise.all([
+    const isRevisionFilter = statusLower === 'revision' || statusLower === 'review';
+    const [catalog, userSubmissions, bookmarkedIds, revisionStates, failedSubmissions] = await Promise.all([
       ProblemService.getCatalogMetadata(),
       prisma.submission.findMany({
         where: { userId, verdict: 'Accepted' },
@@ -459,10 +460,34 @@ export class ProblemService {
       statusLower === 'bookmarked' || statusLower === 'saved'
         ? UserProblemStateService.getBookmarkedProblemIds(userId)
         : Promise.resolve([] as number[]),
+      isRevisionFilter
+        ? prisma.userProblemState.findMany({
+            where: {
+              userId,
+              OR: [
+                { isBookmark: true },
+                { solvedWithAiHelp: true },
+                { unlockedAiSolution: true },
+              ],
+            },
+            select: { problemId: true },
+          })
+        : Promise.resolve([] as Array<{ problemId: number }>),
+      isRevisionFilter
+        ? prisma.submission.findMany({
+            where: { userId, verdict: { not: 'Accepted' } },
+            select: { problemId: true },
+            distinct: ['problemId'],
+          })
+        : Promise.resolve([] as Array<{ problemId: number }>),
     ]);
 
     const solvedSet = new Set(userSubmissions.map((s) => s.problemId));
     const bookmarkedSet = new Set(bookmarkedIds);
+    const revisionSet = new Set<number>([
+      ...revisionStates.map((r) => r.problemId),
+      ...failedSubmissions.map((f) => f.problemId).filter((id) => !solvedSet.has(id)),
+    ]);
 
     const catFilter = (options.category || '').trim().toUpperCase();
     const trackFilter = (options.track || '').trim().toLowerCase();
@@ -519,6 +544,9 @@ export class ProblemService {
       if (statusLower === 'solved' && !solvedSet.has(p.id)) return false;
       if (statusLower === 'unsolved' && solvedSet.has(p.id)) return false;
       if ((statusLower === 'bookmarked' || statusLower === 'saved') && !bookmarkedSet.has(p.id)) {
+        return false;
+      }
+      if (isRevisionFilter && !revisionSet.has(p.id)) {
         return false;
       }
 

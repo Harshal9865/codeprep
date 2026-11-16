@@ -27,7 +27,7 @@ interface ProblemListPageProps {
   onSelectProblem: (id: number) => void;
   onTabChange: (tab: string) => void;
   initialPrepSetId?: string | null;
-  initialStatusFilter?: 'All' | 'Solved' | 'Unsolved' | 'Bookmarked';
+  initialStatusFilter?: 'All' | 'Solved' | 'Unsolved' | 'Bookmarked' | 'Revision';
   initialDifficultyFilter?: string;
   initialTopicFilter?: string;
   initialFilterVersion?: number;
@@ -92,7 +92,7 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>(initialDifficultyFilter || 'All');
   const [selectedTopic, setSelectedTopic] = useState<string>(initialTopicFilter || 'All');
   const [selectedCategory, setSelectedCategory] = useState<CategoryTab>('all');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Solved' | 'Unsolved' | 'Bookmarked'>(
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Solved' | 'Unsolved' | 'Bookmarked' | 'Revision'>(
     initialStatusFilter
   );
   const [selectedPrepSetId, setSelectedPrepSetId] = useState<string | null>(initialPrepSetId);
@@ -302,15 +302,15 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
     selectedPrepSetId === 'core-dsa-500' || selectedCategory === 'core-dsa-500'
       ? 'core-dsa-500'
       : selectedPrepSetId === 'core-sql-100' || selectedCategory === 'core-sql-100'
-      ? 'core-sql-100'
-      : 'core-600';
+        ? 'core-sql-100'
+        : 'core-600';
 
   const coreNextSolveId =
     activeCoreSubTrack === 'core-sql-100'
       ? meta.core600?.nextSqlId ?? 501
       : activeCoreSubTrack === 'core-dsa-500'
-      ? meta.core600?.nextDsaId ?? 1
-      : meta.core600?.nextUnsolvedId ?? 1;
+        ? meta.core600?.nextDsaId ?? 1
+        : meta.core600?.nextUnsolvedId ?? 1;
 
   return (
     <AppLayout currentTab="dsa" onTabChange={onTabChange} currentStreak={currentStreak}>
@@ -322,14 +322,14 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               statusFilter === 'Bookmarked'
                 ? 'favorites'
                 : isCoreTrackActive
-                ? 'core-600'
-                : selectedTopic === 'Graph'
-                ? 'graphs'
-                : selectedTopic === 'Dynamic'
-                ? 'dp'
-                : selectedTopic === 'Math'
-                ? 'math'
-                : selectedCategory
+                  ? 'core-600'
+                  : selectedTopic === 'Graph'
+                    ? 'graphs'
+                    : selectedTopic === 'Dynamic'
+                      ? 'dp'
+                      : selectedTopic === 'Math'
+                        ? 'math'
+                        : selectedCategory
             }
             totalProblems={totalProblems}
             sqlTotal={sqlTotal}
@@ -417,8 +417,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                       ? activeCoreSubTrack === 'core-dsa-500'
                         ? 'Core 500 DSA Problems (#1–#500)'
                         : activeCoreSubTrack === 'core-sql-100'
-                        ? 'Core 100 SQL Problems (#501–#600)'
-                        : 'Core 600 Curriculum (#1–#600)'
+                          ? 'Core 100 SQL Problems (#501–#600)'
+                          : 'Core 600 Curriculum (#1–#600)'
                       : activePrepSet?.title}
                   </h2>
                   <p className="text-xs text-text-secondary">
@@ -443,11 +443,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                             setIsShuffled(false);
                             setCurrentPage(1);
                           }}
-                          className={`px-3 py-1 rounded-full text-xs font-mono border transition-colors ${
-                            activeCoreSubTrack === tab.id
-                              ? 'bg-primary text-black border-primary font-semibold'
-                              : 'bg-surface-elevated hover:bg-surface-high text-text-secondary border-border-subtle'
-                          }`}
+                          className={`px-3 py-1 rounded-full text-xs font-mono border transition-colors ${activeCoreSubTrack === tab.id
+                            ? 'bg-primary text-black border-primary font-semibold'
+                            : 'bg-surface-elevated hover:bg-surface-high text-text-secondary border-border-subtle'
+                            }`}
                         >
                           {tab.label}
                         </button>
@@ -486,9 +485,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
             {/* Dynamic Topic Tags Row */}
             <div className="relative">
               <div
-                className={`flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none select-none transition-all ${
-                  isTagsExpanded ? 'flex-wrap' : 'overflow-hidden flex-nowrap'
-                }`}
+                className={`flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none select-none transition-all ${isTagsExpanded ? 'flex-wrap' : 'overflow-hidden flex-nowrap'
+                  }`}
               >
                 <button
                   type="button"
@@ -496,11 +494,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                     setSelectedTopic('All');
                     setCurrentPage(1);
                   }}
-                  className={`px-3 py-1.5 rounded-full text-xs transition-colors shrink-0 border ${
-                    selectedTopic === 'All'
-                      ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                      : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-xs transition-colors shrink-0 border ${selectedTopic === 'All'
+                    ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
+                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-high hover:text-text-primary border-border-subtle'
+                    }`}
                 >
                   All Topics ({totalProblems})
                 </button>
@@ -516,19 +513,17 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                         setSelectedTopic(isActive ? 'All' : topicName);
                         setCurrentPage(1);
                       }}
-                      className={`px-3 py-1.5 rounded-full text-xs transition-colors flex items-center gap-1.5 shrink-0 border ${
-                        isActive
-                          ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
-                          : 'bg-surface-elevated hover:bg-surface-high text-text-secondary hover:text-text-primary border-border-subtle'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs transition-colors flex items-center gap-1.5 shrink-0 border ${isActive
+                        ? 'bg-primary/15 text-primary border-primary/45 font-semibold'
+                        : 'bg-surface-elevated hover:bg-surface-high text-text-secondary hover:text-text-primary border-border-subtle'
+                        }`}
                     >
                       <span>{topicName}</span>
                       <span
-                        className={`text-[11px] font-mono px-1.5 py-0.5 rounded-full ${
-                          isActive
-                            ? 'bg-primary/20 text-primary font-bold'
-                            : 'bg-surface-high text-text-muted'
-                        }`}
+                        className={`text-[11px] font-mono px-1.5 py-0.5 rounded-full ${isActive
+                          ? 'bg-primary/20 text-primary font-bold'
+                          : 'bg-surface-high text-text-muted'
+                          }`}
                       >
                         {count}
                       </span>
@@ -543,9 +538,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 >
                   <span>{isTagsExpanded ? 'Collapse' : 'Expand'}</span>
                   <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform ${
-                      isTagsExpanded ? 'rotate-180' : ''
-                    }`}
+                    className={`w-3.5 h-3.5 transition-transform ${isTagsExpanded ? 'rotate-180' : ''
+                      }`}
                   />
                 </button>
               </div>
@@ -556,11 +550,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectProblem(potd.id)}
-                className={`2xl:hidden w-full text-left px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 transition-all ${
-                  potd.solvedToday
-                    ? 'bg-surface border-success/35 hover:border-success/60'
-                    : 'bg-surface border-primary/40 hover:border-primary/70'
-                }`}
+                className={`2xl:hidden w-full text-left px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 transition-all ${potd.solvedToday
+                  ? 'bg-surface border-success/35 hover:border-success/60'
+                  : 'bg-surface border-primary/40 hover:border-primary/70'
+                  }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-subtle text-primary text-[11px] font-mono font-semibold shrink-0">
@@ -571,21 +564,19 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                     #{potd.id}. {potd.title}
                   </span>
                   <span
-                    className={`hidden sm:inline px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
-                      potd.difficulty === 'Easy'
-                        ? 'bg-success-subtle text-success'
-                        : potd.difficulty === 'Medium'
+                    className={`hidden sm:inline px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${potd.difficulty === 'Easy'
+                      ? 'bg-success-subtle text-success'
+                      : potd.difficulty === 'Medium'
                         ? 'bg-warning-subtle text-warning'
                         : 'bg-danger-subtle text-danger'
-                    }`}
+                      }`}
                   >
                     {potd.difficulty}
                   </span>
                 </div>
                 <span
-                  className={`text-xs font-mono font-semibold shrink-0 flex items-center gap-1 ${
-                    potd.solvedToday ? 'text-success' : 'text-primary'
-                  }`}
+                  className={`text-xs font-mono font-semibold shrink-0 flex items-center gap-1 ${potd.solvedToday ? 'text-success' : 'text-primary'
+                    }`}
                 >
                   <span>{potd.solvedToday ? 'Solved ✓' : 'Solve'}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -606,7 +597,38 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 bg-surface-elevated p-1 rounded-full text-xs border border-border-subtle">
+                  {(
+                    [
+                      { id: 'All', label: 'All' },
+                      { id: 'Unsolved', label: 'Todo' },
+                      { id: 'Revision', label: 'Revision' },
+                      { id: 'Solved', label: 'Solved' },
+                      { id: 'Bookmarked', label: 'Saved' },
+                    ] as const
+                  ).map((st) => {
+                    const active = statusFilter === st.id;
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(st.id);
+                          setCurrentPage(1);
+                        }}
+                        className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                          active
+                            ? 'bg-primary text-black font-semibold'
+                            : 'text-text-muted hover:text-text-primary'
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <div className="hidden lg:flex items-center gap-1 bg-surface-elevated p-1 rounded-full text-xs border border-border-subtle">
                   {['All', 'Easy', 'Medium', 'Hard'].map((diff) => {
                     const isActive = selectedDifficulty === diff;
@@ -627,9 +649,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                           setSelectedDifficulty(diff);
                           setCurrentPage(1);
                         }}
-                        className={`px-3 py-1 rounded-full text-xs transition-colors ${
-                          isActive ? activeClass : 'text-text-muted hover:text-text-primary'
-                        }`}
+                        className={`px-3 py-1 rounded-full text-xs transition-colors ${isActive ? activeClass : 'text-text-muted hover:text-text-primary'
+                          }`}
                       >
                         {diff}
                       </button>
@@ -650,11 +671,10 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                   type="button"
                   onClick={handleShuffleList}
                   aria-pressed={isShuffled}
-                  className={`px-3 py-1.5 rounded-full transition-colors border flex items-center gap-1.5 text-xs font-mono font-semibold ${
-                    isShuffled
-                      ? 'bg-primary-subtle hover:bg-primary/20 text-primary border-primary/45'
-                      : 'bg-surface-elevated hover:bg-surface-muted text-text-secondary hover:text-text-primary border-border-default'
-                  }`}
+                  className={`px-3 py-1.5 rounded-full transition-colors border flex items-center gap-1.5 text-xs font-mono font-semibold ${isShuffled
+                    ? 'bg-primary-subtle hover:bg-primary/20 text-primary border-primary/45'
+                    : 'bg-surface-elevated hover:bg-surface-muted text-text-secondary hover:text-text-primary border-border-default'
+                    }`}
                   title={
                     isShuffled
                       ? 'Showing shuffled order — click to restore #ID order'
@@ -711,9 +731,8 @@ export const ProblemListPage: React.FC<ProblemListPageProps> = ({
                       <tr
                         key={prob.id}
                         onClick={() => onSelectProblem(prob.id)}
-                        className={`hover:bg-surface-high transition-colors cursor-pointer group ${
-                          idx % 2 === 0 ? 'bg-surface' : 'bg-surface-subtle'
-                        }`}
+                        className={`hover:bg-surface-high transition-colors cursor-pointer group ${idx % 2 === 0 ? 'bg-surface' : 'bg-surface-subtle'
+                          }`}
                       >
                         <td className="py-3.5 px-4 text-center">
                           {prob.isSolved ? (

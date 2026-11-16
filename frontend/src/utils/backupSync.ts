@@ -58,6 +58,19 @@ export interface PortableBackupSnapshot {
     category?: string;
     unlockedAt?: string;
   }>;
+  mockAttempts?: Array<{
+    id?: string;
+    clientSessionId?: string | null;
+    trackId?: string;
+    trackName: string;
+    difficultyLabel: string;
+    aptitudeScore: number;
+    aptitudeTotal: number;
+    codingSolved: number;
+    codingTotal: number;
+    durationSec: number;
+    finishedAt?: string;
+  }>;
 }
 
 const DEMO_EMAIL = 'demo@codeprep.dev';
@@ -81,8 +94,9 @@ function hasMeaningfulData(snap: PortableBackupSnapshot | null | undefined): boo
     (snap.submissions?.length || 0) > 0 ||
     (snap.drafts?.length || 0) > 0 ||
     (snap.savedProblems?.length || 0) > 0 ||
-      (snap.timers?.length || 0) > 0 ||
-    (snap.badges?.length || 0) > 0
+    (snap.timers?.length || 0) > 0 ||
+    (snap.badges?.length || 0) > 0 ||
+    (snap.mockAttempts?.length || 0) > 0
   );
 }
 
@@ -146,6 +160,12 @@ export function mergeBackupSnapshots(
     if (b?.badgeKey) badgeMap.set(b.badgeKey, b);
   }
 
+  const mockMap = new Map<string, NonNullable<PortableBackupSnapshot['mockAttempts']>[number]>();
+  for (const m of [...(existing.mockAttempts || []), ...(incoming.mockAttempts || [])]) {
+    const k = m.clientSessionId || m.id;
+    if (k) mockMap.set(k, m);
+  }
+
   const mergedSubmissions = Array.from(subMap.values()).sort((a, b) => {
     const ta = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
     const tb = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
@@ -174,6 +194,7 @@ export function mergeBackupSnapshots(
     })),
     savedProblems: Array.from(savedMap.values()),
     badges: Array.from(badgeMap.values()),
+    mockAttempts: Array.from(mockMap.values()),
   };
 }
 
@@ -203,6 +224,14 @@ function serverNeedsRestoreFromLocal(
   const serverBadges = new Set((serverSnap.badges || []).map((b) => b.badgeKey));
   for (const b of localSnap.badges || []) {
     if (b.badgeKey && !serverBadges.has(b.badgeKey)) return true;
+  }
+
+  const serverMocks = new Set(
+    (serverSnap.mockAttempts || []).map((m) => m.clientSessionId || m.id).filter(Boolean)
+  );
+  for (const m of localSnap.mockAttempts || []) {
+    const k = m.clientSessionId || m.id;
+    if (k && !serverMocks.has(k)) return true;
   }
 
   const serverTimers = new Map((serverSnap.timers || []).map((t) => [t.problemId, t.activeSeconds || 0]));

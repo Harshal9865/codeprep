@@ -61,7 +61,7 @@ type AppView =
   | 'prep'
   | 'mock-interview';
 
-type ProblemStatusFilter = 'All' | 'Solved' | 'Unsolved' | 'Bookmarked';
+type ProblemStatusFilter = 'All' | 'Solved' | 'Unsolved' | 'Bookmarked' | 'Revision';
 
 const isSqlProblemId = (id: number) => (id >= 501 && id <= 600) || (id >= 731 && id <= 1030);
 

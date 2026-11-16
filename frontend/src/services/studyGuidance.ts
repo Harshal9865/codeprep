@@ -1,6 +1,11 @@
 import { apiRequest } from './api';
 import { MethodAnalysisData } from '../components/workspace/HintsDrawer';
 
+export interface CoachChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface StudyGuidanceRequest {
   problemId: number;
   userCode: string;
@@ -10,6 +15,7 @@ export interface StudyGuidanceRequest {
   isSolved?: boolean;
   userQuestion?: string;
   requestMode?: 'analyze' | 'hint' | 'coach' | 'optimizer';
+  conversationHistory?: CoachChatTurn[];
 }
 
 export interface StudyGuidanceResponse {
@@ -22,7 +28,7 @@ export interface StudyGuidanceResponse {
 }
 
 /**
- * Requests AI/local method analysis, mistake diagnostics, or progressive hints.
+ * Requests Gemini-powered or local method analysis, complexity check, progressive hints, and follow-up chat.
  */
 export async function requestStudyGuidance(
   payload: StudyGuidanceRequest
@@ -33,4 +39,3 @@ export async function requestStudyGuidance(
   });
   return res.feedback;
 }
-

@@ -12,6 +12,9 @@ router.post('/avatar', UserController.uploadAvatar);
 router.post('/password', UserController.changePassword);
 router.get('/export', UserController.exportData);
 router.post('/import', UserController.importData);
+router.get('/mock-history', UserController.getMockHistory);
+router.post('/mock-history', UserController.saveMockAttempt);
+router.delete('/mock-history', UserController.clearMockHistory);
 
 export default router;
 

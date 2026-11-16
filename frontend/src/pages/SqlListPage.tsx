@@ -3,7 +3,8 @@ import { AppLayout } from '../components/layout/AppLayout';
 import { apiRequest } from '../services/api';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
-import { Search, Check, ChevronRight, Shuffle } from 'lucide-react';
+import { SqlScratchpadModal } from '../components/sql/SqlScratchpadModal';
+import { Search, Check, ChevronRight, Shuffle, Terminal } from 'lucide-react';
 
 interface SqlProblemItem {
   id: number;
@@ -37,6 +38,7 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
   const [difficultyTotals, setDifficultyTotals] = useState({ Easy: 125, Medium: 170, Hard: 105 });
   const [isShuffled, setIsShuffled] = useState(false);
   const [shuffleSeed, setShuffleSeed] = useState(1);
+  const [isScratchpadOpen, setIsScratchpadOpen] = useState(false);
   const PAGE_SIZE = 30;
 
   useEffect(() => {
@@ -136,18 +138,29 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
             </p>
           </div>
 
-          <div className="min-w-[200px] bg-surface border border-border-subtle rounded-xl p-3 space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-text-muted">Lab Progress</span>
-              <span className="text-text-primary font-semibold">
-                {sqlSolvedTotal}/{sqlTotal} ({sqlPct}%)
-              </span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-surface-high overflow-hidden">
-              <div
-                className="h-full bg-sky-500 rounded-full transition-all duration-500"
-                style={{ width: `${sqlPct}%` }}
-              />
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsScratchpadOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-surface-elevated hover:bg-surface-high border border-border-default text-xs font-semibold text-text-primary flex items-center gap-2 transition-colors"
+            >
+              <Terminal className="w-4 h-4 text-primary" />
+              <span>SQL Scratchpad</span>
+            </button>
+
+            <div className="min-w-[200px] bg-surface border border-border-subtle rounded-xl p-3 space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-text-muted">Lab Progress</span>
+                <span className="text-text-primary font-semibold">
+                  {sqlSolvedTotal}/{sqlTotal} ({sqlPct}%)
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-surface-high overflow-hidden">
+                <div
+                  className="h-full bg-sky-500 rounded-full transition-all duration-500"
+                  style={{ width: `${sqlPct}%` }}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -346,6 +359,11 @@ export const SqlListPage: React.FC<SqlListPageProps> = ({ onSelectProblem, onTab
           />
         </div>
       </div>
+
+      <SqlScratchpadModal
+        isOpen={isScratchpadOpen}
+        onClose={() => setIsScratchpadOpen(false)}
+      />
     </AppLayout>
   );
 };

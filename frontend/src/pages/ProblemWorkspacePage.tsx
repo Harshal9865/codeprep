@@ -9,10 +9,11 @@ import { TestRunnerPane } from '../components/workspace/TestRunnerPane';
 import { ResizableDivider } from '../components/workspace/ResizableDivider';
 import { WorkspaceProblemDrawer } from '../components/workspace/WorkspaceProblemDrawer';
 import { useWorkspaceLayout } from '../hooks/useWorkspaceLayout';
-import { HintsDrawer, MethodAnalysisData } from '../components/workspace/HintsDrawer';
+import { HintsDrawer, MethodAnalysisData, CoachMessageItem } from '../components/workspace/HintsDrawer';
 import { PerformanceCurveModal } from '../components/workspace/PerformanceCurveModal';
 import { Activity, Lightbulb, Flame, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../services/api';
+import { fetchDashboardAnalytics } from '../services/analyticsCache';
 import { requestStudyGuidance } from '../services/studyGuidance';
 import { CodePrepLoader } from '../components/ui/CodePrepLoader';
 
@@ -60,6 +61,7 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
 
   // Separate Hints & Diagnostics pane state
   const [teacherGuidance, setTeacherGuidance] = useState<string>('');
+  const [teacherMessages, setTeacherMessages] = useState<CoachMessageItem[]>([]);
   const [teacherAnalysis, setTeacherAnalysis] = useState<MethodAnalysisData | null>(null);
   const [teacherProvider, setTeacherProvider] = useState<'gemini' | 'local' | undefined>(undefined);
   const [teacherProviderNote, setTeacherProviderNote] = useState<string | undefined>(undefined);
@@ -148,11 +150,12 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     setIsLoading(true);
     setPotdBannerMsg(null);
     try {
-      const [res, dashRes] = await Promise.all([
+      const [res, dashPayload] = await Promise.all([
         apiRequest<{ problem: Problem }>(`/problems/${id}`),
-        apiRequest<{
-          analytics?: { currentStreak?: number; potd?: { id: number; solvedToday: boolean } };
-        }>('/analytics/dashboard').catch(() => null),
+        fetchDashboardAnalytics<{
+          currentStreak?: number;
+          potd?: { id: number; solvedToday: boolean };
+        }>().catch(() => null),
       ]);
       const initialCode = res.problem.userDraftCode || res.problem.defaultCodeStub || '';
       setProblem(res.problem);
@@ -165,16 +168,17 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       evaluatedCodeRef.current = '';
       analyzedCodeRef.current = '';
       setTeacherGuidance('');
+      setTeacherMessages([]);
       setTeacherAnalysis(null);
       setTeacherProvider(undefined);
       setTeacherProviderNote(undefined);
       setHasUnreadGuidance(false);
 
-      const potd = dashRes?.analytics?.potd;
+      const potd = dashPayload?.potd;
       setPotdInfo({
         isPotd: potd?.id === id,
         solvedToday: Boolean(potd?.solvedToday),
-        currentStreak: dashRes?.analytics?.currentStreak ?? 0,
+        currentStreak: dashPayload?.currentStreak ?? 0,
       });
     } catch {
       alert(`Problem #${id} could not be loaded.`);
@@ -239,6 +243,12 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
     const verdictToSend = options?.verdict ?? (matchesEvaluated ? executionResult?.verdict : undefined);
     const resultToSend = options?.result ?? (matchesEvaluated ? executionResult ?? undefined : undefined);
 
+    const trimmedQuestion = options?.userQuestion?.trim();
+    const historyToSend = teacherMessages.slice(-8);
+    if (trimmedQuestion) {
+      setTeacherMessages((prev) => [...prev, { role: 'user', content: trimmedQuestion }]);
+    }
+
     setIsTeacherLoading(true);
     try {
       const feedback = await requestStudyGuidance({
@@ -249,18 +259,30 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         hintLevel: options?.hintLevel ?? 1,
         isSolved: verdictToSend === 'Accepted',
         requestMode: options?.requestMode,
-        userQuestion: options?.userQuestion,
+        userQuestion: trimmedQuestion || options?.userQuestion,
+        conversationHistory: historyToSend,
       });
       setTeacherGuidance(feedback.message);
       setTeacherAnalysis(feedback.analysis ?? null);
       setTeacherProvider(feedback.provider);
       setTeacherProviderNote(feedback.providerNote);
       analyzedCodeRef.current = targetCode;
+
+      if (trimmedQuestion || options?.requestMode === 'hint') {
+        setTeacherMessages((prev) => [...prev, { role: 'assistant', content: feedback.message }]);
+      } else {
+        setTeacherMessages([{ role: 'assistant', content: feedback.message }]);
+      }
+
       if (!isHintsOpen) {
         setHasUnreadGuidance(true);
       }
     } catch {
-      setTeacherGuidance('Unable to reach AI Coach right now. Re-run or click "Analyze My Method & Find Mistakes".');
+      const errMsg = 'Unable to reach AI Coach right now. Re-run or click "Audit Code & Complexity".';
+      setTeacherGuidance(errMsg);
+      if (trimmedQuestion) {
+        setTeacherMessages((prev) => [...prev, { role: 'assistant', content: errMsg }]);
+      }
     } finally {
       setIsTeacherLoading(false);
     }
@@ -305,12 +327,14 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
       evaluatedCodeRef.current = submittedCode;
       setBenchmarks(null);
       setExecutionResult(res.result);
-      requestTeacherFeedback({
-        requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
-        verdict: res.result.verdict,
-        result: res.result,
-        codeOverride: submittedCode,
-      });
+      if (isHintsOpen) {
+        requestTeacherFeedback({
+          requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+          verdict: res.result.verdict,
+          result: res.result,
+          codeOverride: submittedCode,
+        });
+      }
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Run failed');
     } finally {
@@ -394,12 +418,14 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
         window.dispatchEvent(new CustomEvent('codeprep:backup-dirty'));
       }
 
-      requestTeacherFeedback({
-        requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
-        verdict: res.result.verdict,
-        result: res.result,
-        codeOverride: submittedCode,
-      });
+      if (isHintsOpen) {
+        requestTeacherFeedback({
+          requestMode: res.result.verdict === 'Accepted' ? 'optimizer' : 'analyze',
+          verdict: res.result.verdict,
+          result: res.result,
+          codeOverride: submittedCode,
+        });
+      }
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Submission failed');
     } finally {
@@ -659,6 +685,11 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
           isOpen={isHintsOpen}
           onClose={() => setIsHintsOpen(false)}
           guidanceMessage={teacherGuidance}
+          chatMessages={teacherMessages}
+          onClearChat={() => {
+            setTeacherMessages([]);
+            setTeacherGuidance('');
+          }}
           analysis={teacherAnalysis}
           provider={teacherProvider}
           providerNote={teacherProviderNote}
@@ -676,6 +707,9 @@ export const ProblemWorkspacePage: React.FC<ProblemWorkspacePageProps> = ({
               hintLevel: lvl,
               requestMode: 'hint',
             })
+          }
+          onJumpToLine={(line) =>
+            setFocusLineRequest((prev) => ({ line, nonce: (prev?.nonce ?? 0) + 1 }))
           }
           isLoading={isTeacherLoading}
         />

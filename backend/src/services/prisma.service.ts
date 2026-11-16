@@ -133,6 +133,23 @@ const PRISMA_SCHEMA_DDL: string[] = [
   );`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserProblemState_problemId_userId_key" ON "UserProblemState"("problemId", "userId");`,
   `CREATE INDEX IF NOT EXISTS "UserProblemState_userId_isBookmark_idx" ON "UserProblemState"("userId", "isBookmark");`,
+  `CREATE TABLE IF NOT EXISTS "MockAttempt" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "clientSessionId" TEXT,
+    "userId" TEXT NOT NULL,
+    "trackId" TEXT NOT NULL,
+    "trackName" TEXT NOT NULL,
+    "difficultyLabel" TEXT NOT NULL,
+    "aptitudeScore" INTEGER NOT NULL DEFAULT 0,
+    "aptitudeTotal" INTEGER NOT NULL DEFAULT 0,
+    "codingSolved" INTEGER NOT NULL DEFAULT 0,
+    "codingTotal" INTEGER NOT NULL DEFAULT 0,
+    "durationSec" INTEGER NOT NULL DEFAULT 0,
+    "finishedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "MockAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE INDEX IF NOT EXISTS "MockAttempt_userId_finishedAt_idx" ON "MockAttempt"("userId", "finishedAt");`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "MockAttempt_userId_clientSessionId_key" ON "MockAttempt"("userId", "clientSessionId");`,
 ];
 
 function isPostgresUrl(dbUrl = process.env.DATABASE_URL || ''): boolean {
@@ -265,6 +282,23 @@ const POSTGRES_SCHEMA_DDL: string[] = [
   );`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserProblemState_problemId_userId_key" ON "UserProblemState"("problemId", "userId");`,
   `CREATE INDEX IF NOT EXISTS "UserProblemState_userId_isBookmark_idx" ON "UserProblemState"("userId", "isBookmark");`,
+  `CREATE TABLE IF NOT EXISTS "MockAttempt" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "clientSessionId" TEXT,
+    "userId" TEXT NOT NULL,
+    "trackId" TEXT NOT NULL,
+    "trackName" TEXT NOT NULL,
+    "difficultyLabel" TEXT NOT NULL,
+    "aptitudeScore" INTEGER NOT NULL DEFAULT 0,
+    "aptitudeTotal" INTEGER NOT NULL DEFAULT 0,
+    "codingSolved" INTEGER NOT NULL DEFAULT 0,
+    "codingTotal" INTEGER NOT NULL DEFAULT 0,
+    "durationSec" INTEGER NOT NULL DEFAULT 0,
+    "finishedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "MockAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );`,
+  `CREATE INDEX IF NOT EXISTS "MockAttempt_userId_finishedAt_idx" ON "MockAttempt"("userId", "finishedAt");`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "MockAttempt_userId_clientSessionId_key" ON "MockAttempt"("userId", "clientSessionId");`,
 ];
 
 function sleep(ms: number): Promise<void> {

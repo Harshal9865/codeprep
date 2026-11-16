@@ -8,6 +8,7 @@ router.use(requireAuth);
 
 router.post('/run', SubmissionsController.runCode);
 router.post('/submit', SubmissionsController.submitCode);
+router.post('/sql-scratch', SubmissionsController.runSqlScratch);
 router.get('/history/:problemId', SubmissionsController.getHistory);
 
 export default router;

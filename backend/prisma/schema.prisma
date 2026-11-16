@@ -25,6 +25,7 @@ model User {
   timers           ProblemActiveTimer[]
   badges           UserBadge[]
   problemStates    UserProblemState[]
+  mockAttempts     MockAttempt[]
 }
 
 model RefreshToken {
@@ -154,5 +155,24 @@ model UserBadge {
 
   @@unique([userId, badgeKey])
   @@index([userId])
+}
+
+model MockAttempt {
+  id              String   @id @default(uuid())
+  clientSessionId String?
+  userId          String
+  trackId         String
+  trackName       String
+  difficultyLabel String
+  aptitudeScore   Int      @default(0)
+  aptitudeTotal   Int      @default(0)
+  codingSolved    Int      @default(0)
+  codingTotal     Int      @default(0)
+  durationSec     Int      @default(0)
+  finishedAt      DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientSessionId])
+  @@index([userId, finishedAt])
 }
 

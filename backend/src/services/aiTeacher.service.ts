@@ -1,7 +1,12 @@
 import { ExecutionResult } from '../judge/types';
 import { env } from '../config/env';
 import { Logger } from '../utils/logger';
-import { CodeAnalyzerService, MethodAnalysisReport } from './codeAnalyzer.service';
+import { CodeAnalyzerService, CodeMistakeItem, MethodAnalysisReport } from './codeAnalyzer.service';
+
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 export interface TeacherFeedbackRequest {
   problemId: number;
@@ -10,12 +15,14 @@ export interface TeacherFeedbackRequest {
   functionSignature?: string;
   constraints?: string;
   schemaDdl?: string;
+  examples?: Array<{ input?: string; output?: string }>;
   userCode: string;
   verdict?: string;
   executionResult?: ExecutionResult;
   hintLevel?: number; // 1 = Pattern Nudge, 2 = Key Observation, 3 = Step-by-Step Strategy
   requestMode?: 'analyze' | 'hint' | 'coach' | 'optimizer';
   userQuestion?: string;
+  conversationHistory?: ChatTurn[];
   isSolved: boolean;
   topic?: string;
   pattern?: string;
@@ -28,17 +35,47 @@ export interface TeacherFeedbackResponse {
   mode: 'analyze' | 'coach' | 'optimizer' | 'nudge';
   provider?: 'gemini' | 'local';
   providerNote?: string;
-  analysis?: MethodAnalysisReport;
+  analysis?: MethodAnalysisReport & {
+    spaceComplexity?: string;
+  };
+}
+
+export interface GeminiComplexityReport {
+  timeComplexity: string;
+  spaceComplexity: string;
+  referenceComplexity: string;
+  bottleneck: string;
+  optimizationTip: string;
+  provider: 'gemini' | 'local';
+}
+
+interface GeminiPart {
+  text?: string;
 }
 
 interface GeminiGenerateResponse {
   candidates?: Array<{
     content?: {
-      parts?: Array<{ text?: string }>;
+      parts?: GeminiPart[];
     };
     finishReason?: string;
   }>;
   error?: { message?: string; code?: number };
+}
+
+interface StructuredCoachPayload {
+  verdictSummary?: string;
+  detectedMethod?: string;
+  timeComplexity?: string;
+  spaceComplexity?: string;
+  targetComplexity?: string;
+  mistakes?: Array<{
+    line?: number;
+    title?: string;
+    detail?: string;
+    fixHint?: string;
+  }>;
+  feedback?: string;
 }
 
 export class StudyGuideService {
@@ -52,15 +89,14 @@ export class StudyGuideService {
   }
 
   /**
-   * Generates live AI coaching via Google Gemini when AI_API_KEY is configured,
-   * gracefully falling back to deterministic guidance on error or missing key.
+   * Generates live AI coaching via Google Gemini when configured,
+   * merging structured complexity & line-level diagnostics with local static analysis.
    */
   static async getFeedback(req: TeacherFeedbackRequest): Promise<TeacherFeedbackResponse> {
     const hintLevel = req.hintLevel || 1;
     const hasFailureVerdict = Boolean(req.verdict && req.verdict !== 'Accepted');
     const isCurrentAccepted = req.verdict === 'Accepted';
 
-    // Never treat failing code as an accepted optimization task, even if the problem was solved previously.
     const mode: TeacherFeedbackResponse['mode'] = hasFailureVerdict
       ? req.requestMode === 'analyze'
         ? 'analyze'
@@ -75,7 +111,7 @@ export class StudyGuideService {
               ? 'coach'
               : 'nudge';
 
-    const analysis = CodeAnalyzerService.analyze({
+    const staticAnalysis = CodeAnalyzerService.analyze({
       problemId: req.problemId,
       problemTitle: req.problemTitle,
       problemStatement: req.problemStatement,
@@ -95,23 +131,178 @@ export class StudyGuideService {
     let providerNote: string | undefined;
 
     if (env.AI_PROVIDER === 'gemini' && apiKey) {
-      const aiRes = await this.callGeminiCoach(req, mode, hintLevel, analysis, apiKey);
+      const aiRes = await this.callGeminiCoach(req, mode, hintLevel, staticAnalysis, apiKey);
       if (aiRes.text) {
+        const parsed = this.tryParseCoachJson(aiRes.text);
+        if (parsed && parsed.feedback) {
+          const mergedMistakes: CodeMistakeItem[] = [];
+          const seenTitles = new Set<string>();
+
+          if (Array.isArray(parsed.mistakes)) {
+            for (const m of parsed.mistakes) {
+              if (!m || typeof m.title !== 'string' || typeof m.detail !== 'string') continue;
+              const key = `${m.line ?? ''}:${m.title.toLowerCase()}`;
+              seenTitles.add(key);
+              mergedMistakes.push({
+                line: typeof m.line === 'number' && m.line > 0 ? m.line : undefined,
+                title: m.title.trim(),
+                detail: m.detail.trim(),
+                fixHint: typeof m.fixHint === 'string' ? m.fixHint.trim() : 'Review this logic.',
+              });
+            }
+          }
+
+          for (const sm of staticAnalysis.mistakes) {
+            const key = `${sm.line ?? ''}:${sm.title.toLowerCase()}`;
+            if (!seenTitles.has(key) && mergedMistakes.length < 6) {
+              mergedMistakes.push(sm);
+            }
+          }
+
+          const timeLabel = parsed.timeComplexity?.trim();
+          const spaceLabel = parsed.spaceComplexity?.trim();
+          const combinedComplexity =
+            timeLabel && spaceLabel
+              ? `${timeLabel} Time · ${spaceLabel} Space`
+              : timeLabel || staticAnalysis.estimatedComplexity;
+
+          const enhancedAnalysis: MethodAnalysisReport & { spaceComplexity?: string } = {
+            detectedMethod: parsed.detectedMethod?.trim() || staticAnalysis.detectedMethod,
+            estimatedComplexity: combinedComplexity,
+            targetComplexity: parsed.targetComplexity?.trim() || staticAnalysis.targetComplexity,
+            mistakes: mergedMistakes,
+            guidanceSteps: staticAnalysis.guidanceSteps,
+            summary: parsed.verdictSummary?.trim() || staticAnalysis.summary,
+            spaceComplexity: spaceLabel,
+          };
+
+          return {
+            message: parsed.feedback.trim(),
+            hintLevel,
+            mode,
+            provider: 'gemini',
+            analysis: enhancedAnalysis,
+          };
+        }
+
+        // Plain-text fallback if Gemini returned markdown instead of JSON
         return {
           message: aiRes.text,
           hintLevel,
           mode,
           provider: 'gemini',
-          analysis,
+          analysis: staticAnalysis,
         };
       }
-      providerNote = aiRes.errorReason || 'Gemini unavailable; using local analyzer.';
+      providerNote = aiRes.errorReason || 'Gemini temporarily unavailable; using local analyzer.';
     } else if (!apiKey) {
-      providerNote = 'AI_API_KEY / GEMINI_API_KEY is not set on server; using local analyzer.';
+      providerNote = 'GEMINI_API_KEY / AI_API_KEY is not configured on the server.';
     }
 
-    const fallback = this.generateDeterministicGuidance(req, mode, hintLevel, analysis);
-    return { ...fallback, provider: 'local', providerNote, analysis };
+    const fallback = this.generateDeterministicGuidance(req, mode, hintLevel, staticAnalysis);
+    return { ...fallback, provider: 'local', providerNote, analysis: staticAnalysis };
+  }
+
+  /**
+   * Dedicated Gemini Big-O & bottleneck analyzer paired with PerformanceService empirical timings.
+   */
+  static async analyzeComplexityWithGemini(params: {
+    problemTitle: string;
+    problemStatement: string;
+    constraints?: string;
+    functionSignature?: string;
+    userCode: string;
+    empiricalPointsSummary?: string;
+  }): Promise<GeminiComplexityReport> {
+    const apiKey = this.resolveApiKey();
+    const staticFallback = CodeAnalyzerService.analyze({
+      problemId: 0,
+      problemTitle: params.problemTitle,
+      problemStatement: params.problemStatement,
+      functionSignature: params.functionSignature,
+      constraints: params.constraints,
+      userCode: params.userCode,
+      isSolved: false,
+    });
+
+    if (env.AI_PROVIDER !== 'gemini' || !apiKey || !params.userCode.trim()) {
+      return {
+        timeComplexity: staticFallback.estimatedComplexity,
+        spaceComplexity: 'See local analysis',
+        referenceComplexity: staticFallback.targetComplexity,
+        bottleneck: staticFallback.mistakes[0]?.detail || staticFallback.detectedMethod,
+        optimizationTip: staticFallback.guidanceSteps[0] || 'Check loop nesting and extra containers.',
+        provider: 'local',
+      };
+    }
+
+    const numberedCode = params.userCode
+      .split(/\r?\n/)
+      .slice(0, 120)
+      .map((l, i) => `${i + 1}: ${l}`)
+      .join('\n')
+      .slice(0, 3500);
+
+    const prompt = `Analyze the exact asymptotic Time and Auxiliary Space complexity of this C++17 solution.
+Problem: ${params.problemTitle}
+Constraints: ${params.constraints || 'Standard competitive limits'}
+Signature: ${params.functionSignature || 'Solution method'}
+Statement: ${(params.problemStatement || '').slice(0, 800)}
+${params.empiricalPointsSummary ? `Measured C++ Runtime Benchmark: ${params.empiricalPointsSummary}\n` : ''}
+Code:
+${numberedCode}
+
+Return STRICT JSON only:
+{
+  "timeComplexity": "exact Big-O e.g. O(N log N) or O(V + E)",
+  "spaceComplexity": "exact auxiliary space e.g. O(N) or O(1)",
+  "referenceComplexity": "optimal Big-O for this problem e.g. O(N) time, O(1) space",
+  "bottleneck": "1 short sentence naming the exact loop, recursion, or data structure driving complexity (cite line number)",
+  "optimizationTip": "1 concrete sentence on how to improve complexity or confirm it is already optimal"
+}`;
+
+    const res = await this.invokeGeminiPrompt(prompt, apiKey, 700, {
+      jsonMode: true,
+      thinkingBudget: 512,
+    });
+
+    if (res.text) {
+      try {
+        const cleaned = res.text
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim();
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+        const candidate =
+          firstBrace !== -1 && lastBrace > firstBrace
+            ? cleaned.slice(firstBrace, lastBrace + 1)
+            : cleaned;
+        const parsed = JSON.parse(candidate) as Partial<GeminiComplexityReport>;
+        if (parsed.timeComplexity) {
+          return {
+            timeComplexity: parsed.timeComplexity,
+            spaceComplexity: parsed.spaceComplexity || 'O(1)',
+            referenceComplexity: parsed.referenceComplexity || staticFallback.targetComplexity,
+            bottleneck: parsed.bottleneck || staticFallback.detectedMethod,
+            optimizationTip:
+              parsed.optimizationTip || 'Complexity inspected against problem constraints.',
+            provider: 'gemini',
+          };
+        }
+      } catch {
+        // Fall through to static report cleanly
+      }
+    }
+
+    return {
+      timeComplexity: staticFallback.estimatedComplexity,
+      spaceComplexity: 'O(1) – O(N)',
+      referenceComplexity: staticFallback.targetComplexity,
+      bottleneck: staticFallback.detectedMethod,
+      optimizationTip: staticFallback.guidanceSteps[0] || 'Check nested loops or extra storage.',
+      provider: 'local',
+    };
   }
 
   static async generateReferenceLessonContent(params: {
@@ -152,7 +343,10 @@ ${exampleSnippet ? `${exampleSnippet}\n` : ''}Constraints: ${params.constraints}
 Return STRICT JSON only (no markdown fences) with keys:
 {"verifiedSolution": "class Solution {\\npublic:\\n    ...\\n};", "techniqueLesson": "short intuition + pitfalls", "approachProgression": "1. Brute Force ...\\n2. Optimal ..."}`;
 
-    const res = await this.invokeGeminiPrompt(prompt, apiKey, 1600, { jsonMode: true });
+    const res = await this.invokeGeminiPrompt(prompt, apiKey, 1800, {
+      jsonMode: true,
+      thinkingBudget: 512,
+    });
     if (!res.text) return null;
 
     const isUsableCode = (code: string) =>
@@ -211,10 +405,10 @@ Return STRICT JSON only (no markdown fences) with keys:
           ? `You are a Principal Software Engineer conducting an SDE interview prep session on CodePrep.
 Topic: ${params.topic}
 Candidate question:
-${params.question || 'Give me a crisp interview masterclass on this topic.'}
+${params.question || 'Give me a crisp interview overview on this topic.'}
 
 Respond clearly under 220 words with bullet points, concrete mechanisms, trade-offs, and one common interviewer trap.`
-          : `You are a strict yet constructive Bar-Raiser interviewer grading a candidate's mock answer.
+          : `You are a strict yet constructive interviewer grading a candidate's mock answer.
 Topic: ${params.topic}
 Interview Question: ${params.question || 'General technical / behavioral question'}
 Candidate's Answer:
@@ -227,7 +421,7 @@ Provide:
 4. One realistic Follow-Up Curveball question an interviewer would ask next.
 Keep total output concise (under 220 words).`;
 
-      const res = await this.invokeGeminiPrompt(prompt, apiKey, 550);
+      const res = await this.invokeGeminiPrompt(prompt, apiKey, 700, { thinkingBudget: 256 });
       if (res.text) {
         return { reply: res.text, provider: 'gemini' };
       }
@@ -253,10 +447,28 @@ Keep total output concise (under 220 words).`;
     mode: 'critique' | 'ask';
   }): string {
     if (params.mode === 'ask') {
-      return `Local Study Checklist (${params.topic}):\n• Define the core mechanism in 1 crisp sentence before diving into implementation.\n• State exact time/space or latency/consistency trade-offs.\n• Highlight one edge case (NULLs, overflow, failover, or clock drift) proactively.`;
+      return `Study Checklist (${params.topic}):\n• Define the core mechanism in 1 crisp sentence before diving into implementation.\n• State exact time/space or latency/consistency trade-offs.\n• Highlight one edge case (NULLs, overflow, failover, or clock drift) proactively.`;
     }
     const len = (params.userAnswer || '').trim().split(/\s+/).filter(Boolean).length;
-    return `Offline Answer Checklist (${params.topic} — ${len} words):\n• Clarity & Structure: Aim for Definition → Architecture/Mechanism → Concrete Trade-off → Metrics.\n• Check whether you stated numbers or edge cases explicitly.\n• Follow-up Curveball: How does your design behave under a 10x traffic spike or partial node failure?`;
+    return `Answer Checklist (${params.topic} — ${len} words):\n• Clarity & Structure: Aim for Definition -> Mechanism -> Concrete Trade-off -> Metrics.\n• Check whether you stated numbers or edge cases explicitly.\n• Follow-up: How does your design behave under a 10x traffic spike or partial failure?`;
+  }
+
+  private static tryParseCoachJson(raw: string): StructuredCoachPayload | null {
+    try {
+      const cleaned = raw
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      const candidate =
+        firstBrace !== -1 && lastBrace > firstBrace
+          ? cleaned.slice(firstBrace, lastBrace + 1)
+          : cleaned;
+      return JSON.parse(candidate) as StructuredCoachPayload;
+    } catch {
+      return null;
+    }
   }
 
   private static async callGeminiCoach(
@@ -267,22 +479,71 @@ Keep total output concise (under 220 words).`;
     apiKey: string
   ): Promise<{ text: string | null; errorReason?: string }> {
     const isSql = req.category === 'SQL';
-    const prompt = this.buildCoachingPrompt(req, mode, hintLevel, isSql, analysis);
-    return this.invokeGeminiPrompt(prompt, apiKey, 1000);
+    const systemAndContextPrompt = this.buildCoachingPrompt(req, mode, hintLevel, isSql, analysis);
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+    // Include prior turns cleanly when user asks follow-ups in the drawer
+    if (Array.isArray(req.conversationHistory) && req.conversationHistory.length > 0) {
+      contents.push({
+        role: 'user',
+        parts: [{ text: systemAndContextPrompt }],
+      });
+      const recentTurns = req.conversationHistory.slice(-6);
+      for (const turn of recentTurns) {
+        contents.push({
+          role: turn.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: turn.content.slice(0, 1200) }],
+        });
+      }
+      if (req.userQuestion?.trim()) {
+        contents.push({
+          role: 'user',
+          parts: [
+            {
+              text: `${req.userQuestion.trim()}\n\nRemember: return STRICT JSON matching the schema with updated complexity, exact line mistakes (if any), and concise "feedback".`,
+            },
+          ],
+        });
+      }
+    } else {
+      contents.push({
+        role: 'user',
+        parts: [{ text: systemAndContextPrompt }],
+      });
+    }
+
+    return this.invokeGeminiContents(contents, apiKey, 1800, {
+      jsonMode: true,
+      thinkingBudget: 1024,
+    });
   }
 
   private static async invokeGeminiPrompt(
     prompt: string,
     apiKey: string,
     maxOutputTokens: number,
-    options?: { jsonMode?: boolean }
+    options?: { jsonMode?: boolean; thinkingBudget?: number }
+  ): Promise<{ text: string | null; errorReason?: string }> {
+    return this.invokeGeminiContents(
+      [{ role: 'user', parts: [{ text: prompt }] }],
+      apiKey,
+      maxOutputTokens,
+      options
+    );
+  }
+
+  private static async invokeGeminiContents(
+    contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
+    apiKey: string,
+    maxOutputTokens: number,
+    options?: { jsonMode?: boolean; thinkingBudget?: number }
   ): Promise<{ text: string | null; errorReason?: string }> {
     const modelCandidates = Array.from(
       new Set([
         env.AI_MODEL_NAME || 'gemini-2.5-flash',
         'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
         'gemini-2.0-flash',
+        'gemini-2.5-flash-lite',
       ])
     );
 
@@ -291,7 +552,7 @@ Keep total output concise (under 220 words).`;
       const encodedModel = encodeURIComponent(model);
       const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodedModel}:generateContent`;
       const vertexExpressUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodedModel}:generateContent`;
-      return isExpressAuthKey ? [vertexExpressUrl, studioUrl] : [studioUrl, vertexExpressUrl];
+      return isExpressAuthKey ? [vertexExpressUrl, studioUrl] : [studioUrl];
     };
 
     let lastErrorReason = 'Gemini API request failed.';
@@ -300,14 +561,16 @@ Keep total output concise (under 220 words).`;
       for (const baseUrl of endpointsForModel(model)) {
         const sendRequest = async (includeThinkingConfig: boolean) => {
           const generationConfig: Record<string, unknown> = {
-            temperature: options?.jsonMode ? 0.2 : 0.35,
+            temperature: options?.jsonMode ? 0.15 : 0.35,
             maxOutputTokens,
           };
           if (options?.jsonMode) {
             generationConfig.responseMimeType = 'application/json';
           }
           if (includeThinkingConfig && model.includes('2.5')) {
-            generationConfig.thinkingConfig = { thinkingBudget: 0 };
+            generationConfig.thinkingConfig = {
+              thinkingBudget: options?.thinkingBudget ?? 512,
+            };
           }
 
           return fetch(`${baseUrl}?key=${encodeURIComponent(apiKey)}`, {
@@ -316,9 +579,9 @@ Keep total output concise (under 220 words).`;
               'Content-Type': 'application/json',
               'x-goog-api-key': apiKey,
             },
-            signal: AbortSignal.timeout(15000),
+            signal: AbortSignal.timeout(18000),
             body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              contents,
               generationConfig,
             }),
           });
@@ -328,7 +591,7 @@ Keep total output concise (under 220 words).`;
           let res = await sendRequest(true);
           if (res.status === 400 && model.includes('2.5')) {
             const firstErr = await res.text().catch(() => '');
-            if (firstErr.toLowerCase().includes('thinking')) {
+            if (firstErr.toLowerCase().includes('thinking') || firstErr.toLowerCase().includes('json')) {
               res = await sendRequest(false);
             } else {
               lastErrorReason = `Gemini HTTP 400 on ${model}: ${firstErr.slice(0, 140)}`;
@@ -340,7 +603,10 @@ Keep total output concise (under 220 words).`;
           if (!res.ok) {
             const errBody = await res.text().catch(() => '');
             lastErrorReason = `Gemini HTTP ${res.status} on ${model}: ${errBody.slice(0, 140)}`;
-            Logger.warn('AiTeacherService', `Gemini request failed (${res.status}) on '${model}'; trying next model/endpoint.`);
+            Logger.warn(
+              'AiTeacherService',
+              `Gemini request failed (${res.status}) on '${model}'; trying next model.`
+            );
             continue;
           }
 
@@ -356,7 +622,11 @@ Keep total output concise (under 220 words).`;
             ? `Gemini returned no text (${candidate.finishReason}).`
             : 'Empty response returned by Gemini model.';
         } catch (error) {
-          Logger.warn('AiTeacherService', `Gemini request error on '${model}'. Trying fallback.`, error);
+          Logger.warn(
+            'AiTeacherService',
+            `Gemini request error on '${model}'. Trying fallback.`,
+            error
+          );
           lastErrorReason = 'Network or timeout calling Gemini API.';
         }
       }
@@ -374,13 +644,21 @@ Keep total output concise (under 220 words).`;
   ): string {
     const langLabel = isSql ? 'SQLite SQL' : 'C++17';
     const statementSnippet = (req.problemStatement || '').slice(0, 1400);
-    const schemaSnippet = isSql && req.schemaDdl ? `\nDatabase Schema DDL:\n${req.schemaDdl.slice(0, 900)}\n` : '';
+    const schemaSnippet =
+      isSql && req.schemaDdl ? `\nDatabase Schema DDL:\n${req.schemaDdl.slice(0, 900)}\n` : '';
+    const examplesSnippet =
+      Array.isArray(req.examples) && req.examples.length > 0
+        ? `\nExamples:\n${req.examples
+            .slice(0, 2)
+            .map((e, i) => `Example ${i + 1}: Input: ${e.input || ''} | Expected: ${e.output || ''}`)
+            .join('\n')}\n`
+        : '';
     const numberedCode = (req.userCode || '')
       .split(/\r?\n/)
-      .slice(0, 120)
+      .slice(0, 140)
       .map((line, idx) => `${idx + 1}: ${line}`)
       .join('\n')
-      .slice(0, 3400);
+      .slice(0, 4200);
 
     const execResult = req.executionResult as
       | (ExecutionResult & {
@@ -393,7 +671,9 @@ Keep total output concise (under 220 words).`;
       | undefined;
 
     const progressLine =
-      typeof execResult?.passedTestCases === 'number' && typeof execResult?.totalTestCases === 'number' && execResult.totalTestCases > 0
+      typeof execResult?.passedTestCases === 'number' &&
+      typeof execResult?.totalTestCases === 'number' &&
+      execResult.totalTestCases > 0
         ? `Test Cases Passed: ${execResult.passedTestCases} / ${execResult.totalTestCases}\n`
         : '';
 
@@ -406,53 +686,60 @@ Keep total output concise (under 220 words).`;
           : execResult?.rows && execResult?.expectedRows && req.verdict === 'Wrong Answer'
             ? `${progressLine}SQL Wrong Answer:\nActual columns: ${JSON.stringify(execResult.columns || [])}\nExpected columns: ${JSON.stringify(execResult.expectedColumns || [])}\nActual rows (${execResult.rows.length}): ${JSON.stringify(execResult.rows.slice(0, 4))}\nExpected rows (${execResult.expectedRows.length}): ${JSON.stringify(execResult.expectedRows.slice(0, 4))}`
             : req.verdict
-              ? `${progressLine}Latest Verdict: ${req.verdict}`
+              ? `${progressLine}Latest Verdict: ${req.verdict}${typeof execResult?.runtimeMs === 'number' ? ` (${execResult.runtimeMs}ms)` : ''}`
               : 'Not executed yet against test cases — inspect logic directly.';
 
-    const staticFindings = analysis.mistakes.length > 0
-      ? analysis.mistakes.map((m) => `- ${m.line ? `Line ${m.line}: ` : ''}${m.title} (${m.detail})`).join('\n')
-      : 'No regex syntax issues caught, so DO YOUR OWN DEEP SEMANTIC & LINE-BY-LINE LOGIC CHECK.';
+    const staticFindings =
+      analysis.mistakes.length > 0
+        ? analysis.mistakes
+            .map((m) => `- ${m.line ? `Line ${m.line}: ` : ''}${m.title} (${m.detail})`)
+            .join('\n')
+        : 'None caught by regex pre-check; inspect semantics line-by-line.';
 
     const roleDirective =
       mode === 'analyze' || mode === 'coach'
-        ? `Perform a strict real-time code audit of the candidate's current code. Pinpoint EVERY concrete logical mistake, syntax/runtime bug, off-by-one error, missing edge case, or SQL join/NULL/alias error by exact line number. If execution failed on a test case, trace the candidate's actual code step-by-step on that input to explain WHY it produced the wrong output (Actual vs Expected). Evaluate true Time & Space complexity vs target (${analysis.targetComplexity}) without sugarcoating.`
+        ? `Perform a strict real-time code audit. Pinpoint EVERY logical mistake, off-by-one bug, wrong data structure invariant, overflow risk, or SQL join/NULL/group bug by exact line number. If execution failed, trace their exact code step-by-step on the failing input to explain why Actual != Expected. State true Time & Space complexity honestly.`
         : mode === 'optimizer'
-          ? 'The current code passed all test cases (Verdict: Accepted). Give a crisp senior-engineer critique: exact Time & Space complexity of their code, subtle edge-case risks if any, and 1-2 concrete optimizations.'
+          ? `The code passed all tests (Accepted). Compute exact Time & Space complexity, verify whether it matches optimal constraints (${req.constraints || 'standard'}), and suggest 1-2 concrete algorithmic or C++/SQL optimizations.`
           : hintLevel === 1
-            ? 'Give Hint Level 1 (subtle intuition/pattern nudge + point out any clear bug in their current draft without spoiling the full solution).'
+            ? `Give Hint 1: high-level pattern/intuition nudge tailored to their current draft without revealing code.`
             : hintLevel === 2
-              ? 'Give Hint Level 2 (key data structure, invariant, or SQL join/window strategy + flag any logical mistake in their draft without pasting the full code).'
-              : 'Give Hint Level 3 (clear numbered step-by-step plan + edge cases to handle, keeping code snippets minimal).';
+              ? `Give Hint 2: key invariant, data structure, or SQL clause strategy + point out any mistake in their current draft without giving full solution.`
+              : `Give Hint 3: clear numbered algorithm steps and edge cases tailored to their current draft.`;
 
-    return `You are a strict, accurate principal engineer coaching a candidate on a ${langLabel} problem in CodePrep.
+    return `You are a senior software engineer coaching a candidate on a ${langLabel} coding problem.
 
-CRITICAL TRUTHFULNESS RULES:
-1. NEVER praise code or say "looks good", "clean", "correct", or "solid" if Latest Verdict is NOT Accepted, if the body is incomplete/stubbed, or if you find any logical bug!
-2. NEVER label incomplete, uncompilable, or trivially stubbed code as "O(1)" — state the true complexity (or "Incomplete / Does not compile").
-3. Base your critique ONLY on the exact lines in Candidate's current code below, citing line numbers (e.g. Line 6) and exact variable/column names.
-4. Keep output crisp (under 250 words) using these headings:
-- Verdict & Real Complexity
-- Exact Mistakes Found (with Line Numbers)
-- Trace / Why It Fails & How to Fix
+RULES:
+1. NEVER falsely praise broken, failing, or incomplete/stubbed code. Never report "O(1)" for empty stubs or failing drafts.
+2. Inspect the candidate's actual code line by line, citing exact line numbers and variable/column names.
+3. Return STRICT JSON ONLY (no markdown fences) with this exact schema:
+{
+  "verdictSummary": "1 crisp sentence summarizing current correctness & status",
+  "detectedMethod": "Specific algorithm/approach detected in user's code",
+  "timeComplexity": "Exact Big-O time complexity of user's current code",
+  "spaceComplexity": "Exact auxiliary Big-O space complexity of user's current code",
+  "targetComplexity": "Optimal Big-O time & space for problem constraints",
+  "mistakes": [
+    { "line": 12, "title": "Short bug title", "detail": "Why it fails on specific input/edge case", "fixHint": "Exact change needed" }
+  ],
+  "feedback": "Concise markdown explanation (under 220 words): failure trace or optimization advice or progressive hint"
+}
 
 Problem: #${req.problemId} ${req.problemTitle}
 Category: ${req.category || 'DSA'} | Topic: ${req.topic || 'General'} | Pattern: ${req.pattern || 'General'}
-${req.functionSignature ? `Required Signature: ${req.functionSignature}\n` : ''}Constraints: ${req.constraints || 'Standard limits'}
-${req.userQuestion?.trim() ? `\nCandidate's Question: ${req.userQuestion.trim()}\n` : ''}
-Statement summary:
-${statementSnippet}
-${schemaSnippet}
+${req.functionSignature ? `Signature: ${req.functionSignature}\n` : ''}Constraints: ${req.constraints || 'Standard limits'}
+Statement: ${statementSnippet}
+${examplesSnippet}${schemaSnippet}
 Candidate's current ${langLabel} code (with line numbers):
 ${numberedCode || '(empty editor)'}
 
 Static pre-check notes:
-Detected heuristic: ${analysis.detectedMethod} (${analysis.estimatedComplexity})
 ${staticFindings}
 
 Execution status:
 ${failureDetails}
-
-Coaching goal:
+${req.userQuestion?.trim() ? `\nCandidate question: ${req.userQuestion.trim()}\n` : ''}
+Task:
 ${roleDirective}`;
   }
 
@@ -465,7 +752,6 @@ ${roleDirective}`;
     const isCurrentAccepted = req.verdict === 'Accepted';
     const hasFailureVerdict = Boolean(req.verdict && req.verdict !== 'Accepted');
 
-    // Always prioritize concrete mistake/failure diagnostics when analyzing, failing, or when static mistakes exist
     if (mode === 'analyze' || hasFailureVerdict || analysis.mistakes.length > 0) {
       return {
         message: analysis.summary,

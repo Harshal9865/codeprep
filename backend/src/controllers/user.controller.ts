@@ -149,5 +149,49 @@ export class UserController {
       });
     }
   }
+
+  static async getMockHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      const attempts = await UserService.getMockHistory(userId);
+      res.json({ attempts });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to load mock interview history.' });
+    }
+  }
+
+  static async saveMockAttempt(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      const attempt = await UserService.saveMockAttempt(userId, req.body);
+      res.json({ attempt });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : 'Failed to save mock attempt.',
+      });
+    }
+  }
+
+  static async clearMockHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      await UserService.clearMockHistory(userId);
+      res.json({ cleared: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to clear mock interview history.' });
+    }
+  }
 }
 

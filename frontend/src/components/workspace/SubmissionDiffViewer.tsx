@@ -27,6 +27,8 @@ export const SubmissionDiffViewer: React.FC<SubmissionDiffViewerProps> = ({
       return {
         label: 'Current Editor',
         code: currentCode,
+        runtimeDelta: null as number | null,
+        memoryDelta: null as number | null,
       };
     }
     const found = otherSubmissions.find((s) => s.id === compareTarget)!;
@@ -34,11 +36,26 @@ export const SubmissionDiffViewer: React.FC<SubmissionDiffViewerProps> = ({
       hour: '2-digit',
       minute: '2-digit',
     });
+    const runtimeDelta =
+      typeof baseSubmission.runtimeMs === 'number' && typeof found.runtimeMs === 'number'
+        ? Math.round((baseSubmission.runtimeMs - found.runtimeMs) * 10) / 10
+        : null;
+    const memoryDelta =
+      typeof baseSubmission.memoryKb === 'number' &&
+      baseSubmission.memoryKb > 0 &&
+      typeof found.memoryKb === 'number' &&
+      found.memoryKb > 0
+        ? Math.round(((baseSubmission.memoryKb - found.memoryKb) / 1024) * 100) / 100
+        : null;
     return {
       label: `${found.verdict} (${dateStr})`,
       code: found.code,
+      otherRuntimeMs: found.runtimeMs,
+      otherMemoryKb: found.memoryKb,
+      runtimeDelta,
+      memoryDelta,
     };
-  }, [compareTarget, currentCode, otherSubmissions]);
+  }, [compareTarget, currentCode, otherSubmissions, baseSubmission.runtimeMs, baseSubmission.memoryKb]);
 
   const diffLines = useMemo(
     () => buildSimpleLineDiff(baseSubmission.code, targetMeta.code),
@@ -57,7 +74,7 @@ export const SubmissionDiffViewer: React.FC<SubmissionDiffViewerProps> = ({
   return (
     <div className="border-t border-border-subtle bg-canvas">
       <div className="px-3 py-2 bg-surface flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle text-[11px] font-mono text-text-muted">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <span className="text-danger">− This Submission</span>
           <span>vs</span>
           <span className="text-success truncate">+ {targetMeta.label}</span>
@@ -65,6 +82,38 @@ export const SubmissionDiffViewer: React.FC<SubmissionDiffViewerProps> = ({
             <span className="text-success">+{addedCount}</span>{' '}
             <span className="text-danger">−{removedCount}</span>
           </span>
+          {targetMeta.runtimeDelta !== undefined && targetMeta.runtimeDelta !== null && (
+            <span
+              className={`px-1.5 py-0.5 rounded border text-[10px] ${
+                targetMeta.runtimeDelta < 0
+                  ? 'bg-success-subtle text-success border-success/30'
+                  : targetMeta.runtimeDelta > 0
+                  ? 'bg-warning-subtle text-warning border-warning/30'
+                  : 'bg-surface-elevated text-text-muted border-border-subtle'
+              }`}
+            >
+              {targetMeta.runtimeDelta === 0
+                ? 'Same runtime'
+                : targetMeta.runtimeDelta < 0
+                ? `${Math.abs(targetMeta.runtimeDelta)} ms faster`
+                : `+${targetMeta.runtimeDelta} ms slower`}
+            </span>
+          )}
+          {targetMeta.memoryDelta !== undefined &&
+            targetMeta.memoryDelta !== null &&
+            targetMeta.memoryDelta !== 0 && (
+              <span
+                className={`px-1.5 py-0.5 rounded border text-[10px] ${
+                  targetMeta.memoryDelta < 0
+                    ? 'bg-success-subtle text-success border-success/30'
+                    : 'bg-warning-subtle text-warning border-warning/30'
+                }`}
+              >
+                {targetMeta.memoryDelta < 0
+                  ? `−${Math.abs(targetMeta.memoryDelta)} MB`
+                  : `+${targetMeta.memoryDelta} MB`}
+              </span>
+            )}
         </div>
 
         {(otherSubmissions.length > 0 || Boolean(currentCode)) && (

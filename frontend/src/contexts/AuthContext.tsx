@@ -139,7 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.accessToken) {
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
-    applyUserSession(res.user, true);
+    applyUserSession(res.user);
     postAuthSyncMessage('LOGIN');
   };
 
@@ -151,7 +151,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.accessToken) {
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
-    applyUserSession(res.user, true);
+    applyUserSession(res.user);
     await fetchAuthStatus();
     postAuthSyncMessage('LOGIN');
   };
@@ -164,7 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.accessToken) {
       try { localStorage.setItem('codeprep_access_token', res.accessToken); } catch { }
     }
-    applyUserSession(res.user, true);
+    applyUserSession(res.user);
     postAuthSyncMessage('LOGIN');
   };
 

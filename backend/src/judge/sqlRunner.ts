@@ -448,4 +448,90 @@ export class SqlRunner {
     const expectedSet = expectedRows.map(serializeRow).sort();
     return JSON.stringify(actualSet) === JSON.stringify(expectedSet);
   }
+
+  /**
+   * Executes custom user-supplied schema DDL + read-only SELECT/WITH query inside the isolated sandbox.
+   */
+  static async executeScratchQuery(
+    schemaDdl: string,
+    userQuery: string,
+    options?: { explainOnly?: boolean }
+  ): Promise<SqlExecutionResult> {
+    const security = SqlRunner.validateQuerySecurity(userQuery);
+    if (!security.safe) {
+      return {
+        verdict: 'Query Error',
+        columns: [],
+        rows: [],
+        runtimeMs: 1,
+        error: security.error,
+      };
+    }
+
+    const unscopedSchema = SqlRunner.stripCommentsAndStrings(schemaDdl || '').toUpperCase();
+    for (const kw of ['ATTACH', 'DETACH', 'PRAGMA', 'VACUUM', 'LOAD_EXTENSION']) {
+      if (new RegExp(`\\b${kw}\\b`, 'i').test(unscopedSchema)) {
+        return {
+          verdict: 'Query Error',
+          columns: [],
+          rows: [],
+          runtimeMs: 1,
+          error: `Prohibited keyword "${kw}" in schema setup.`,
+        };
+      }
+    }
+
+    const runIsolatedScratch = async (): Promise<SqlExecutionResult> => {
+      let sandboxDb: PrismaClient;
+      try {
+        sandboxDb = await SqlRunner.getWarmClient();
+      } catch {
+        SqlRunner.warmClient = null;
+        sandboxDb = await SqlRunner.getWarmClient();
+      }
+
+      try {
+        await SqlRunner.resetWarmSchema(sandboxDb);
+        const ddlSource = schemaDdl && schemaDdl.trim().length > 0 ? schemaDdl : DEFAULT_EMPLOYEE_DDL;
+        const ddlStatements = SqlRunner.splitSqlStatements(SqlRunner.normalizePostgresDdl(ddlSource));
+        for (const stmt of ddlStatements.slice(0, 60)) {
+          await sandboxDb.$executeRawUnsafe(stmt);
+        }
+
+        const cleanedUserSql = SqlRunner.normalizePostgresQuery(SqlRunner.stripComments(userQuery));
+        const sqlToExecute = options?.explainOnly
+          ? `EXPLAIN QUERY PLAN ${cleanedUserSql}`
+          : cleanedUserSql;
+        const execStartNs = process.hrtime.bigint();
+        const rawRows = await sandboxDb.$queryRawUnsafe<Array<Record<string, unknown>>>(sqlToExecute);
+        const runtimeMs = Math.max(1, Number((process.hrtime.bigint() - execStartNs) / 1000000n));
+        const rows = SqlRunner.sanitizeRows(rawRows);
+        const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+        return {
+          verdict: options?.explainOnly ? 'Query Plan' : 'Accepted',
+          columns,
+          rows,
+          runtimeMs,
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Scratch SQL execution failed.';
+        const conciseError = msg.replace(/[\s\S]*Message:\s*/i, '').trim() || msg;
+        return {
+          verdict: 'Query Error',
+          columns: [],
+          rows: [],
+          runtimeMs: 1,
+          error: conciseError,
+        };
+      }
+    };
+
+    const resultPromise = SqlRunner.executionChain.then(runIsolatedScratch, runIsolatedScratch);
+    SqlRunner.executionChain = resultPromise.then(
+      () => undefined,
+      () => undefined
+    );
+    return resultPromise;
+  }
 }

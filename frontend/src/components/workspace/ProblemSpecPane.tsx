@@ -834,8 +834,16 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
               </div>
             ) : (
               <div className="space-y-2.5">
-                {problem.recentSubmissions.map((sub) => {
+                {(() => {
+                  const acceptedRuntimes = (problem.recentSubmissions || [])
+                    .filter((s) => s.verdict === 'Accepted' && typeof s.runtimeMs === 'number')
+                    .map((s) => s.runtimeMs as number);
+                  const bestRuntimeMs =
+                    acceptedRuntimes.length > 1 ? Math.min(...acceptedRuntimes) : null;
+                  return problem.recentSubmissions.map((sub) => {
                   const isAccepted = sub.verdict === 'Accepted';
+                  const isFastest =
+                    bestRuntimeMs !== null && isAccepted && sub.runtimeMs === bestRuntimeMs;
                   const isPreviewing = previewSubmissionId === sub.id;
                   const isDiffing = diffSubmissionId === sub.id;
                   return (
@@ -853,6 +861,11 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                             >
                               {sub.verdict}
                             </span>
+                            {isFastest && (
+                              <span className="px-1.5 py-0.5 rounded bg-success-subtle text-success border border-success/30 text-[10px] font-mono font-semibold">
+                                Fastest
+                              </span>
+                            )}
                             {typeof sub.runtimeMs === 'number' && (
                               <span className="text-xs font-mono text-text-muted">
                                 {sub.runtimeMs} ms
@@ -957,7 +970,8 @@ export const ProblemSpecPane: React.FC<ProblemSpecPaneProps> = ({
                       )}
                     </div>
                   );
-                })}
+                });
+                })()}
               </div>
             )}
           </div>

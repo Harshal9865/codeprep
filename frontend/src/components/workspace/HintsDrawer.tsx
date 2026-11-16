@@ -1,15 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   Lightbulb,
   HelpCircle,
   Compass,
   CheckCircle2,
-  Sparkles,
   AlertTriangle,
   ScanSearch,
   Send,
   Gauge,
+  RotateCcw,
+  Cpu,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 
@@ -24,18 +25,27 @@ export interface MethodAnalysisData {
   detectedMethod: string;
   estimatedComplexity: string;
   targetComplexity: string;
+  spaceComplexity?: string;
   mistakes: AnalysisMistake[];
   guidanceSteps: string[];
   summary: string;
+}
+
+export interface CoachMessageItem {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export interface HintsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   guidanceMessage: string;
+  chatMessages?: CoachMessageItem[];
+  onClearChat?: () => void;
   isLoading: boolean;
   onRequestHint: (hintLevel: number) => void;
   onAnalyzeMethod?: (question?: string) => void;
+  onJumpToLine?: (line: number) => void;
   analysis?: MethodAnalysisData | null;
   provider?: 'gemini' | 'local';
   providerNote?: string;
@@ -48,9 +58,12 @@ export const HintsDrawer: React.FC<HintsDrawerProps> = ({
   isOpen,
   onClose,
   guidanceMessage,
+  chatMessages,
+  onClearChat,
   isLoading,
   onRequestHint,
   onAnalyzeMethod,
+  onJumpToLine,
   analysis,
   provider,
   providerNote,
@@ -59,6 +72,8 @@ export const HintsDrawer: React.FC<HintsDrawerProps> = ({
   category = 'DSA',
 }) => {
   const [question, setQuestion] = useState('');
+  const [showAllMistakes, setShowAllMistakes] = useState(true);
+  const scrollEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -69,38 +84,52 @@ export const HintsDrawer: React.FC<HintsDrawerProps> = ({
     return () => window.removeEventListener('keydown', handleEsc);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (isOpen) {
+      scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [isOpen, chatMessages?.length, guidanceMessage, isLoading]);
+
   if (!isOpen) return null;
 
   const handleAskSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!onAnalyzeMethod || isLoading) return;
     const trimmed = question.trim();
-    onAnalyzeMethod(trimmed || undefined);
+    if (!trimmed) return;
+    onAnalyzeMethod(trimmed);
     setQuestion('');
   };
 
   const quickPrompts =
     category === 'SQL'
-      ? ['Find query bugs', 'Why wrong rows?', 'Optimize joins']
+      ? ['Find query bugs', 'Why wrong rows?', 'Optimize query']
       : category === 'OOP'
-      ? ['Check class invariants', 'RAII & virtual destructor', 'SOLID & design pattern']
-      : ['Find my bugs', 'Check complexity', 'Optimize approach'];
+      ? ['Check class invariants', 'Memory & virtuals', 'Optimize design']
+      : ['Find my bugs', 'Trace failing test', 'Optimize complexity'];
+
+  const displayedMessages: CoachMessageItem[] =
+    chatMessages && chatMessages.length > 0
+      ? chatMessages
+      : guidanceMessage
+        ? [{ role: 'assistant', content: guidanceMessage }]
+        : [];
 
   return (
     <aside
-      aria-label="AI Code Coach and Diagnostics"
-      className="fixed inset-y-0 right-0 w-full sm:w-[420px] z-50 bg-surface border-l border-border-subtle shadow-2xl flex flex-col animate-slide-in-right"
+      aria-label="AI Code Coach"
+      className="fixed inset-y-0 right-0 w-full sm:w-[440px] z-50 bg-surface border-l border-border-subtle shadow-2xl flex flex-col animate-slide-in-right"
     >
-      {/* Header */}
-      <div className="px-4 py-3.5 border-b border-border-subtle bg-surface-elevated flex items-center justify-between gap-2 shrink-0">
+      {/* Top Bar */}
+      <div className="px-4 py-3 border-b border-border-subtle bg-surface-elevated flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-primary-subtle border border-primary/25 flex items-center justify-center text-primary shrink-0">
-            <Sparkles className="w-4 h-4" />
+            <Cpu className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-bold text-text-primary tracking-wide uppercase font-mono truncate">
-                AI Code Coach
+                AI Coach
               </h3>
               {provider && (
                 <span
@@ -110,244 +139,258 @@ export const HintsDrawer: React.FC<HintsDrawerProps> = ({
                       : 'bg-surface-high text-text-muted border-border-subtle'
                   }`}
                 >
-                  {provider === 'gemini' ? 'Gemini AI' : 'Local Analyzer'}
+                  {provider === 'gemini' ? 'Gemini' : 'Offline'}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-text-muted truncate">
-              Method analyzer, mistake finder &amp; step guidance
+              Code audit, Big-O check &amp; interactive hints
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close AI Coach drawer"
-          className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-high transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {onClearChat && displayedMessages.length > 0 && (
+            <button
+              type="button"
+              onClick={onClearChat}
+              title="Reset coach conversation"
+              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-high transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close AI Coach drawer"
+            className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-high transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Primary Method Analysis Trigger */}
-      {onAnalyzeMethod && (
-        <div className="p-3.5 border-b border-border-subtle bg-surface-subtle/70 space-y-2.5 shrink-0">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => onAnalyzeMethod()}
-            isLoading={isLoading}
-            className="w-full justify-center text-xs font-semibold"
-            icon={<ScanSearch className="w-3.5 h-3.5" />}
-          >
-            {category === 'SQL' ? 'Analyze My Query & Find Mistakes' : 'Analyze My Method & Find Mistakes'}
-          </Button>
-
-          <form onSubmit={handleAskSubmit} className="flex items-center gap-1.5">
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder={
-                category === 'SQL'
-                  ? 'Ask about joins, grouping, or wrong output...'
-                  : 'Ask: "Why TLE?" or "Is my DP state right?"'
-              }
-              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-canvas border border-border-default text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
-            />
-            <button
-              type="submit"
-              disabled={isLoading}
-              aria-label="Ask AI Coach"
-              className="p-1.5 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-primary disabled:opacity-40 transition-colors"
+      {/* Action Bar: Full Code Audit + Hint Pills */}
+      <div className="p-3 border-b border-border-subtle bg-surface-subtle/60 space-y-2 shrink-0">
+        <div className="flex items-center gap-2">
+          {onAnalyzeMethod && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => onAnalyzeMethod()}
+              isLoading={isLoading}
+              className="flex-1 justify-center text-xs font-semibold"
+              icon={<ScanSearch className="w-3.5 h-3.5" />}
             >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </form>
+              {category === 'SQL' ? 'Audit SQL Query' : 'Audit Code & Complexity'}
+            </Button>
+          )}
+        </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {quickPrompts.map((chip) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {currentVerdict !== 'Accepted' && (
+            <>
               <button
-                key={chip}
                 type="button"
                 disabled={isLoading}
-                onClick={() => onAnalyzeMethod(chip)}
-                className="px-2 py-0.5 rounded-md bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[10px] font-mono text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40"
+                onClick={() => onRequestHint(1)}
+                className="px-2 py-1 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[11px] text-text-secondary hover:text-text-primary inline-flex items-center gap-1 transition-colors disabled:opacity-40"
               >
-                {chip}
+                <Lightbulb className="w-3 h-3 text-primary" />
+                <span>Hint 1</span>
               </button>
-            ))}
-          </div>
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => onRequestHint(2)}
+                className="px-2 py-1 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[11px] text-text-secondary hover:text-text-primary inline-flex items-center gap-1 transition-colors disabled:opacity-40"
+              >
+                <HelpCircle className="w-3 h-3 text-sky-400" />
+                <span>Hint 2</span>
+              </button>
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => onRequestHint(3)}
+                className="px-2 py-1 rounded-lg bg-surface-elevated hover:bg-surface-high border border-border-subtle text-[11px] text-text-secondary hover:text-text-primary inline-flex items-center gap-1 transition-colors disabled:opacity-40"
+              >
+                <Compass className="w-3 h-3 text-success" />
+                <span>Plan</span>
+              </button>
+            </>
+          )}
+          {quickPrompts.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              disabled={isLoading}
+              onClick={() => onAnalyzeMethod?.(chip)}
+              className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-high border border-border-subtle text-[10px] font-mono text-text-muted hover:text-text-primary transition-colors disabled:opacity-40"
+            >
+              {chip}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      {/* Diagnostic / Analysis Output */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Scrollable Body: Verdict, Complexity Card, Line Mistakes & Chat Thread */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
         {provider === 'local' && providerNote && (
           <div className="px-3 py-2 rounded-lg bg-surface-elevated border border-border-subtle text-[11px] font-mono text-text-muted">
-            Note: {providerNote}
+            {providerNote}
           </div>
         )}
 
         {currentVerdict && currentVerdict !== 'Accepted' ? (
-          <div className="p-3 rounded-xl bg-danger-subtle border border-danger/30 flex items-start gap-2.5 text-xs text-danger">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">Current Code Verdict: {currentVerdict}</p>
-              <p className="text-text-secondary mt-0.5">
-                Inspect detected mistakes and trace steps below before re-submitting.
-              </p>
-            </div>
+          <div className="p-2.5 rounded-xl bg-danger-subtle border border-danger/30 flex items-center gap-2 text-xs text-danger font-medium">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>Latest Run: {currentVerdict}</span>
           </div>
         ) : currentVerdict === 'Accepted' || (isSolved && !currentVerdict) ? (
-          <div className="p-3 rounded-xl bg-success-subtle border border-success/30 flex items-start gap-2.5 text-xs text-success">
-            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">
-                {currentVerdict === 'Accepted' ? 'Current Submission Accepted' : 'Previously Solved Problem'}
-              </p>
-              <p className="text-text-secondary mt-0.5">
-                {currentVerdict === 'Accepted'
-                  ? 'Analyze complexity trade-offs above or compare with the Reference Solution.'
-                  : 'Edit or run your current draft and click Analyze My Method for real-time checks.'}
-              </p>
-            </div>
+          <div className="p-2.5 rounded-xl bg-success-subtle border border-success/30 flex items-center gap-2 text-xs text-success font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>
+              {currentVerdict === 'Accepted'
+                ? 'Current Code Accepted'
+                : 'Previously Solved — Ready for Optimization Check'}
+            </span>
           </div>
         ) : null}
 
-        {/* Structured Method Analysis Card */}
-        {!isLoading && analysis && (
-          <div className="space-y-3">
-            <div className="p-3.5 rounded-xl bg-surface-elevated border border-border-subtle space-y-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-primary font-semibold">
+        {/* Complexity & Method Card */}
+        {analysis && (
+          <div className="p-3.5 rounded-xl bg-surface-elevated border border-border-subtle space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-primary font-semibold">
                 <Gauge className="w-3.5 h-3.5" />
-                <span>Detected Method &amp; Complexity</span>
+                <span>Approach &amp; Complexity</span>
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-text-primary">{analysis.detectedMethod}</p>
+            <div className="grid grid-cols-1 gap-1 pt-0.5 text-[11px] font-mono">
+              <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-canvas/70 border border-border-subtle">
+                <span className="text-text-muted">Yours:</span>
+                <span className="text-text-primary text-right">{analysis.estimatedComplexity}</span>
               </div>
-              <p className="text-xs font-semibold text-text-primary">{analysis.detectedMethod}</p>
-              <div className="grid grid-cols-1 gap-1 pt-1 text-[11px] font-mono">
-                <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-canvas/70 border border-border-subtle">
-                  <span className="text-text-muted">Yours:</span>
-                  <span className="text-text-primary truncate">{analysis.estimatedComplexity}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-canvas/70 border border-border-subtle">
-                  <span className="text-text-muted">Target:</span>
-                  <span className="text-success truncate">{analysis.targetComplexity}</span>
-                </div>
+              <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-canvas/70 border border-border-subtle">
+                <span className="text-text-muted">Optimal:</span>
+                <span className="text-success text-right">{analysis.targetComplexity}</span>
               </div>
             </div>
-
-            {analysis.mistakes.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-warning font-semibold">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Detected Mistakes ({analysis.mistakes.length})</span>
-                </div>
-                {analysis.mistakes.map((mistake, idx) => (
-                  <div
-                    key={`${mistake.title}-${idx}`}
-                    className="p-3 rounded-xl bg-warning-subtle/40 border border-warning/30 space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-text-primary">{mistake.title}</span>
-                      {typeof mistake.line === 'number' && (
-                        <span className="px-1.5 py-0.5 rounded bg-canvas border border-warning/40 text-[10px] font-mono text-warning shrink-0">
-                          Line {mistake.line}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-text-secondary leading-relaxed">{mistake.detail}</p>
-                    <p className="text-[11px] text-primary font-medium leading-relaxed">
-                      Fix: {mistake.fixHint}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
-        {/* Coach Guidance Message */}
-        <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] font-mono text-text-muted uppercase tracking-wider">
-            <span>Coach Feedback</span>
-            {isLoading && <span className="text-primary animate-pulse">Analyzing your code...</span>}
-          </div>
+        {/* Detected Line-Level Mistakes */}
+        {analysis && analysis.mistakes.length > 0 && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setShowAllMistakes((p) => !p)}
+              className="w-full flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-warning font-semibold"
+            >
+              <span className="flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Issues Found ({analysis.mistakes.length})</span>
+              </span>
+              <span className="text-[10px] text-text-muted">
+                {showAllMistakes ? 'Hide' : 'Show'}
+              </span>
+            </button>
 
-          {isLoading ? (
-            <div className="space-y-2 py-2">
-              <div className="h-3 rounded bg-surface-high animate-pulse w-5/6" />
-              <div className="h-3 rounded bg-surface-high animate-pulse w-4/6" />
-              <div className="h-3 rounded bg-surface-high animate-pulse w-3/4" />
-            </div>
-          ) : guidanceMessage ? (
-            <div className="text-xs sm:text-[13px] text-text-primary leading-relaxed whitespace-pre-line font-body">
-              {guidanceMessage}
+            {showAllMistakes &&
+              analysis.mistakes.map((mistake, idx) => (
+                <div
+                  key={`${mistake.title}-${idx}`}
+                  className="p-3 rounded-xl bg-warning-subtle/35 border border-warning/30 space-y-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-text-primary">
+                      {mistake.title}
+                    </span>
+                    {typeof mistake.line === 'number' && (
+                      <button
+                        type="button"
+                        onClick={() => onJumpToLine?.(mistake.line!)}
+                        className="px-1.5 py-0.5 rounded bg-canvas hover:bg-surface-high border border-warning/40 text-[10px] font-mono text-warning shrink-0 transition-colors"
+                        title="Jump to line in editor"
+                      >
+                        Line {mistake.line}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-secondary leading-relaxed">{mistake.detail}</p>
+                  <p className="text-[11px] text-primary font-medium leading-relaxed">
+                    Fix: {mistake.fixHint}
+                  </p>
+                </div>
+              ))}
+          </div>
+        )}
+
+        {/* Chat Conversation Thread */}
+        <div className="space-y-2.5">
+          {displayedMessages.length === 0 && !isLoading ? (
+            <div className="p-4 rounded-xl bg-surface-elevated/60 border border-border-subtle text-xs text-text-secondary leading-relaxed">
+              Click <strong className="text-text-primary">Audit Code &amp; Complexity</strong> or ask a question below to trace bugs, verify edge cases, and check Big-O efficiency.
             </div>
           ) : (
-            <div className="text-xs text-text-secondary leading-relaxed">
-              Click{' '}
-              <span className="font-semibold text-text-primary">
-                {category === 'SQL' ? 'Analyze My Query & Find Mistakes' : 'Analyze My Method & Find Mistakes'}
-              </span>{' '}
-              to inspect your current code line by line, spot logic or complexity issues, and get targeted next-step guidance.
+            displayedMessages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`p-3.5 rounded-xl border text-xs sm:text-[13px] leading-relaxed whitespace-pre-line ${
+                  msg.role === 'user'
+                    ? 'bg-primary-subtle/35 border-primary/30 text-text-primary ml-6'
+                    : 'bg-surface-elevated border-border-subtle text-text-primary'
+                }`}
+              >
+                <div className="text-[10px] font-mono uppercase tracking-wider text-text-muted mb-1">
+                  {msg.role === 'user' ? 'You' : provider === 'gemini' ? 'Gemini Coach' : 'Coach'}
+                </div>
+                {msg.content}
+              </div>
+            ))
+          )}
+
+          {isLoading && (
+            <div className="p-3.5 rounded-xl bg-surface-elevated border border-border-subtle space-y-2">
+              <div className="text-[11px] font-mono text-primary animate-pulse">
+                Analyzing code with {category === 'SQL' ? 'SQL' : 'C++'} coach...
+              </div>
+              <div className="h-2.5 rounded bg-surface-high animate-pulse w-5/6" />
+              <div className="h-2.5 rounded bg-surface-high animate-pulse w-4/6" />
             </div>
           )}
+          <div ref={scrollEndRef} />
         </div>
-
-        {currentVerdict === 'Accepted' && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onRequestHint(3)}
-            isLoading={isLoading}
-            className="w-full justify-start text-xs"
-            icon={<Sparkles className="w-3.5 h-3.5 text-primary" />}
-          >
-            Review Optimization Checklist
-          </Button>
-        )}
       </div>
 
-      {/* Footer: Progressive Hint Triggers */}
-      {currentVerdict !== 'Accepted' && (
-        <div className="p-4 border-t border-border-subtle bg-surface-subtle space-y-2.5 shrink-0">
-          <p className="text-xs font-mono uppercase tracking-wider text-text-muted">
-            Progressive Hints (No Spoilers)
-          </p>
-          <div className="grid grid-cols-1 gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onRequestHint(1)}
-              isLoading={isLoading}
-              className="justify-start text-xs"
-              icon={<Lightbulb className="w-3.5 h-3.5 text-primary" />}
-            >
-              1. Pattern Nudge
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onRequestHint(2)}
-              isLoading={isLoading}
-              className="justify-start text-xs"
-              icon={<HelpCircle className="w-3.5 h-3.5 text-sky-400" />}
-            >
-              2. Key Observation
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onRequestHint(3)}
-              isLoading={isLoading}
-              className="justify-start text-xs"
-              icon={<Compass className="w-3.5 h-3.5 text-success" />}
-            >
-              3. Strategy Overview
-            </Button>
-          </div>
-        </div>
+      {/* Pinned Follow-Up Question Bar */}
+      {onAnalyzeMethod && (
+        <form
+          onSubmit={handleAskSubmit}
+          className="p-3 border-t border-border-subtle bg-surface-elevated flex items-center gap-2 shrink-0"
+        >
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder={
+              category === 'SQL'
+                ? 'Ask about joins, NULLs, or grouping...'
+                : 'Ask a follow-up (e.g. "Why did case 2 fail?")...'
+            }
+            className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-canvas border border-border-default text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
+          />
+          <button
+            type="submit"
+            disabled={isLoading || !question.trim()}
+            aria-label="Send message to AI Coach"
+            className="px-3 py-2 rounded-xl bg-primary hover:bg-primary-hover text-black disabled:opacity-40 transition-colors"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </form>
       )}
     </aside>
   );
