@@ -15,6 +15,7 @@ type SplashPhase = 'ignite' | 'surge' | 'closing';
 const PixelFireCodeEmblem: React.FC<{ isSurge: boolean }> = ({ isSurge }) => (
   <svg
     viewBox="0 0 16 16"
+    className={`w-20 h-20 transition-transform duration-300 ${
       isSurge ? 'scale-110 drop-shadow-[0_0_24px_rgba(251,146,60,0.9)]' : 'drop-shadow-[0_0_14px_rgba(250,204,21,0.6)]'
     }`}
     shapeRendering="crispEdges"
@@ -232,7 +233,7 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
         }}
       />
 
-      {/* Fullscreen Crisp Pixelated Red & White Fire Canvas */}
+      {/* Fullscreen Crisp Pixelated Orange, Yellow & White Fire Canvas */}
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute inset-0 w-full h-full opacity-90"
@@ -244,14 +245,14 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
         {CODE_TOKENS.map((tok, idx) => (
           <span
             key={tok}
-            className={`font - mono text - [11px] font - bold px - 1.5 py - 0.5 border animate - pixel - float ${
-  idx % 3 === 0
-    ? 'text-white border-white/35 bg-orange-500/35'
-    : idx % 3 === 1
-      ? 'text-yellow-300 border-amber-400/50 bg-black/55'
-      : 'text-orange-200 border-orange-400/45 bg-orange-950/50'
-} `}
-            style={{ animationDelay: `${ idx * 160 } ms` }}
+            className={`font-mono text-[11px] font-bold px-1.5 py-0.5 border animate-pixel-float ${
+              idx % 3 === 0
+                ? 'text-white border-white/35 bg-orange-500/35'
+                : idx % 3 === 1
+                ? 'text-yellow-300 border-amber-400/50 bg-black/55'
+                : 'text-orange-200 border-orange-400/45 bg-orange-950/50'
+            }`}
+            style={{ animationDelay: `${idx * 160}ms` }}
           >
             {tok}
           </span>
@@ -260,18 +261,18 @@ export const StreakSplashScreen: React.FC<StreakSplashScreenProps> = ({
 
       {/* Center Streak & Code Ignition Card */}
       <div
-        className={`relative z - 10 flex flex - col items - center text - center px - 6 py - 7 rounded - none border - 2 transition - all duration - 300 bg - black / 80 backdrop - blur - sm max - w - sm w - [90 %] ${
-  phase === 'surge'
-      ? 'border-white scale-105 shadow-[0_0_42px_rgba(250,204,21,0.75)]'
-      : 'border-amber-400/75 shadow-[0_0_26px_rgba(249,115,22,0.5)]'
-} `}
+        className={`relative z-10 flex flex-col items-center text-center px-6 py-7 rounded-none border-2 transition-all duration-300 bg-black/80 backdrop-blur-sm max-w-sm w-[90%] ${
+          phase === 'surge'
+            ? 'border-white scale-105 shadow-[0_0_42px_rgba(250,204,21,0.75)]'
+            : 'border-amber-400/75 shadow-[0_0_26px_rgba(249,115,22,0.5)]'
+        }`}
       >
         <PixelFireCodeEmblem isSurge={phase === 'surge'} />
 
         <div className="mt-3 space-y-1">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border border-amber-400/50 bg-orange-950/60 font-mono text-[11px] tracking-widest uppercase text-amber-100">
             <Flame className="w-3 h-3 text-amber-400" />
-            <span>{displayName ? `Welcome, ${ displayName } ` : 'CodePrep Ignited'}</span>
+            <span>{displayName ? `Welcome, ${displayName}` : 'CodePrep Ignited'}</span>
           </div>
 
           <div className="flex items-baseline justify-center gap-2 pt-2 font-mono">
